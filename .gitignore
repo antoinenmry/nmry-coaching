@@ -1,0 +1,10 @@
+# Outils locaux
+.claude/
+.DS_Store
+
+# Dépendances éventuelles (futur)
+node_modules/
+
+# Variables d'environnement (clés Supabase plus tard)
+.env
+.env.local
