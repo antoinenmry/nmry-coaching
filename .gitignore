@@ -2,9 +2,19 @@
 .claude/
 .DS_Store
 
-# Dépendances éventuelles (futur)
-node_modules/
+# Next.js
+/.next/
+/out/
+/build
+next-env.d.ts
 
-# Variables d'environnement (clés Supabase plus tard)
+# Dépendances
+/node_modules
+
+# Variables d'environnement (clés Supabase)
 .env
-.env.local
+.env*.local
+
+# Logs / divers
+npm-debug.log*
+*.tsbuildinfo

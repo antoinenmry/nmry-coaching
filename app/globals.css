@@ -1,0 +1,45 @@
+@import "tailwindcss";
+
+/* Thème NMRY (sombre) — tokens dispo en utilitaires : bg-surface, text-dim... */
+@theme {
+  --color-bg: #0f1115;
+  --color-surface: #1a1d24;
+  --color-surface2: #242832;
+  --color-line: #2e3340;
+  --color-ink: #e7eaf0;
+  --color-dim: #9aa3b2;
+  --color-accent: #ffb300;
+  --color-accent2: #42a5f5;
+  --color-ok: #66bb6a;
+  --color-danger: #ef5350;
+
+  --radius-xl2: 16px;
+}
+
+html, body {
+  margin: 0;
+  background: var(--color-bg);
+  color: var(--color-ink);
+  -webkit-tap-highlight-color: transparent;
+}
+
+* { box-sizing: border-box; }
+
+/* Champs de formulaire — style de base commun */
+input, textarea, select {
+  width: 100%;
+  background: var(--color-surface2);
+  border: 1px solid var(--color-line);
+  border-radius: 10px;
+  color: var(--color-ink);
+  padding: 12px;
+  font-size: 16px;
+  font-family: inherit;
+}
+input[type="range"] { padding: 0; }
+input[type="checkbox"] { width: auto; }
+textarea { min-height: 90px; resize: vertical; }
+
+/* Masque la molette des inputs number sur mobile pour l'esthétique */
+input[type="number"]::-webkit-outer-spin-button,
+input[type="number"]::-webkit-inner-spin-button { -webkit-appearance: none; margin: 0; }
