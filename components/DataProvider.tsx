@@ -10,7 +10,20 @@ import {
 } from "react";
 import { useRouter } from "next/navigation";
 import { createClient } from "@/lib/supabase/client";
+import { AUTH_ENABLED } from "@/lib/config";
 import { emptyState, type AppState, type Profile } from "@/lib/types";
+
+// --- Mode local (sans connexion) : persistance dans le navigateur ---
+const LOCAL_KEY = "nmry-local-state";
+const LOCAL_PROFILE: Profile = { id: "local", email: "", name: "Moi", role: "client" };
+function loadLocal(): AppState {
+  if (typeof window === "undefined") return emptyState();
+  try {
+    return { ...emptyState(), ...JSON.parse(localStorage.getItem(LOCAL_KEY) || "{}") };
+  } catch {
+    return emptyState();
+  }
+}
 
 interface DataContextValue {
   me: Profile | null;
@@ -65,6 +78,15 @@ export function DataProvider({ children }: { children: React.ReactNode }) {
 
   // Chargement initial : profil + (clients si coach) + état
   useEffect(() => {
+    // Mode local : pas de Supabase, on lit le navigateur.
+    if (!AUTH_ENABLED) {
+      setMe(LOCAL_PROFILE);
+      setActiveUserId(LOCAL_PROFILE.id);
+      setState(loadLocal());
+      setLoading(false);
+      return;
+    }
+
     (async () => {
       const {
         data: { user },
@@ -102,6 +124,13 @@ export function DataProvider({ children }: { children: React.ReactNode }) {
   const pushNow = useCallback(async () => {
     const userId = activeRef.current;
     if (!userId) return;
+
+    // Mode local : on écrit dans le navigateur.
+    if (!AUTH_ENABLED) {
+      localStorage.setItem(LOCAL_KEY, JSON.stringify(stateRef.current));
+      return;
+    }
+
     setSaving(true);
     const { error } = await supabase.from("app_state").upsert({
       user_id: userId,
@@ -135,6 +164,7 @@ export function DataProvider({ children }: { children: React.ReactNode }) {
   );
 
   const signOut = useCallback(async () => {
+    if (!AUTH_ENABLED) return; // pas de connexion en mode local
     await supabase.auth.signOut();
     router.replace("/login");
   }, [supabase, router]);

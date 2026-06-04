@@ -2,6 +2,7 @@
 
 import Link from "next/link";
 import { useData } from "@/components/DataProvider";
+import { AUTH_ENABLED } from "@/lib/config";
 
 const CARDS = [
   { href: "/profile", icon: "👤", label: "Profil & Diète", sub: "Infos perso, objectif poids, plan alimentaire", color: "var(--color-accent)" },
@@ -25,19 +26,21 @@ export default function Dashboard() {
               isCoach ? "bg-accent/20 text-accent" : "bg-accent2/20 text-[#90caf9]"
             }`}
           >
-            {isCoach ? "Coach" : "Client"}
+            {!AUTH_ENABLED ? "Mode local" : isCoach ? "Coach" : "Client"}
           </span>
         </div>
-        <button
-          onClick={signOut}
-          className="rounded-lg bg-surface2 px-3 py-1.5 text-[13px] font-semibold"
-        >
-          Déconnexion
-        </button>
+        {AUTH_ENABLED && (
+          <button
+            onClick={signOut}
+            className="rounded-lg bg-surface2 px-3 py-1.5 text-[13px] font-semibold"
+          >
+            Déconnexion
+          </button>
+        )}
       </div>
 
       {/* Sélecteur de client (coach) */}
-      {isCoach && (
+      {AUTH_ENABLED && isCoach && (
         <label className="mb-3 block rounded-xl border border-line bg-surface px-4 py-2.5">
           <span className="mb-1 block text-[11px] text-dim">Client affiché</span>
           <select

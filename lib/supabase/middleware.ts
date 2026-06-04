@@ -1,11 +1,15 @@
 import { createServerClient, type CookieOptions } from "@supabase/ssr";
 import { NextResponse, type NextRequest } from "next/server";
+import { AUTH_ENABLED } from "@/lib/config";
 
 type CookieToSet = { name: string; value: string; options: CookieOptions };
 
 /** Rafraîchit la session (cookies) et protège les routes de l'app. */
 export async function updateSession(request: NextRequest) {
   let response = NextResponse.next({ request });
+
+  // Mode local : aucune protection, on laisse tout passer.
+  if (!AUTH_ENABLED) return response;
 
   const supabase = createServerClient(
     process.env.NEXT_PUBLIC_SUPABASE_URL!,
