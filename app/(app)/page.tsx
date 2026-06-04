@@ -9,6 +9,7 @@ const CARDS = [
   { href: "/plan", icon: "🗓️", label: "Plan d'entraînement", sub: "Vue mois / semaine, glisser-déposer", color: "var(--color-accent2)" },
   { href: "/goals", icon: "🎯", label: "Objectifs", sub: "Compétitions & performances visées", color: "var(--color-ok)" },
   { href: "/followup", icon: "📝", label: "Suivi perso", sub: "Commentaires, blessures, ressenti", color: "var(--color-danger)" },
+  { href: "/library", icon: "📚", label: "Bibliothèque", sub: "Exercices & filtres personnalisables", color: "var(--color-accent)" },
 ];
 
 export default function Dashboard() {

@@ -9,6 +9,7 @@ const TITLES: Record<string, string> = {
   "/plan": "Planning",
   "/goals": "Objectifs",
   "/followup": "Suivi",
+  "/library": "Bibliothèque",
 };
 
 export default function Header() {
