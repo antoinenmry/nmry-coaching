@@ -54,6 +54,7 @@ function renderHome() {
     { key: 'followup', icon: '📝', label: 'Suivi perso',     sub: 'Commentaires, blessures, ressenti' },
   ];
   view.innerHTML = `
+    ${userBar()}
     <div class="home-grid">
       ${cards.map((c) => `
         <div class="home-card" data-key="${c.key}">
@@ -66,6 +67,35 @@ function renderHome() {
     </div>`;
   view.querySelectorAll('.home-card').forEach((el) =>
     el.addEventListener('click', () => go(el.dataset.key)));
+  bindUserBar();
+}
+
+// Barre du haut : qui est connecté + déconnexion (+ sélecteur de client si coach)
+function userBar() {
+  const me = Store.me();
+  if (!me) return '';
+  let selector = '';
+  if (me.role === 'coach') {
+    const opts = clientsCache.map((c) =>
+      `<option value="${c.id}" ${c.id === Store.activeUserId() ? 'selected' : ''}>${esc(c.name || c.email)}${c.role === 'coach' ? ' (moi)' : ''}</option>`).join('');
+    selector = `<label class="client-sel"><span>Client affiché</span>
+      <select id="clientSel">${opts || '<option>Aucun client</option>'}</select></label>`;
+  }
+  return `<div class="userbar">
+      <div class="who"><strong>${esc(me.name || me.email)}</strong><span class="role ${me.role}">${me.role === 'coach' ? 'Coach' : 'Client'}</span></div>
+      <button class="btn small secondary" id="logoutBtn">Déconnexion</button>
+    </div>${selector ? `<div class="userbar">${selector}</div>` : ''}`;
+}
+
+function bindUserBar() {
+  const out = view.querySelector('#logoutBtn');
+  if (out) out.addEventListener('click', async () => { await Store.signOut(); renderAuth(); });
+  const sel = view.querySelector('#clientSel');
+  if (sel) sel.addEventListener('change', async () => {
+    view.innerHTML = '<div class="empty">Chargement…</div>';
+    await Store.loadStateFor(sel.value);
+    go('home');
+  });
 }
 
 // =========================================================================
@@ -464,5 +494,82 @@ function toast(msg) {
   toastTimer = setTimeout(() => { t.style.opacity = '0'; }, 1800);
 }
 
-// Démarrage
-go('home');
+// =========================================================================
+// AUTHENTIFICATION + DÉMARRAGE
+// =========================================================================
+let clientsCache = []; // liste des comptes (pour le sélecteur coach)
+
+function renderAuth() {
+  backBtn.classList.remove('show');
+  appTitle.textContent = 'NMRY';
+  let mode = 'signin'; // 'signin' | 'signup'
+
+  function draw() {
+    view.innerHTML = `
+      <div class="card" style="max-width:380px;margin:24px auto">
+        <div class="section-title">${mode === 'signin' ? 'Connexion' : 'Créer un compte'}</div>
+        <label class="field" id="nameField" style="${mode === 'signup' ? '' : 'display:none'}">
+          <span>Nom</span><input id="au-name" placeholder="Prénom Nom"></label>
+        <label class="field"><span>Email</span><input id="au-email" type="email" autocomplete="email"></label>
+        <label class="field"><span>Mot de passe</span><input id="au-pw" type="password" autocomplete="current-password"></label>
+        <button class="btn full" id="au-submit">${mode === 'signin' ? 'Se connecter' : "S'inscrire"}</button>
+        <p id="au-msg" style="font-size:13px;margin-top:10px"></p>
+        <p style="text-align:center;margin-top:12px;font-size:14px">
+          <a href="#" id="au-toggle" style="color:var(--accent-2)">
+            ${mode === 'signin' ? 'Pas de compte ? Créer un compte' : "J'ai déjà un compte"}</a>
+        </p>
+      </div>`;
+
+    view.querySelector('#au-toggle').addEventListener('click', (e) => {
+      e.preventDefault(); mode = mode === 'signin' ? 'signup' : 'signin'; draw();
+    });
+    view.querySelector('#au-submit').addEventListener('click', submit);
+    view.querySelector('#au-pw').addEventListener('keydown', (e) => { if (e.key === 'Enter') submit(); });
+  }
+
+  async function submit() {
+    const email = view.querySelector('#au-email').value.trim();
+    const pw = view.querySelector('#au-pw').value;
+    const msg = view.querySelector('#au-msg');
+    msg.style.color = 'var(--danger)';
+    if (!email || !pw) { msg.textContent = 'Email et mot de passe requis.'; return; }
+    view.querySelector('#au-submit').disabled = true;
+
+    if (mode === 'signup') {
+      const name = view.querySelector('#au-name').value.trim();
+      const { data, error } = await Store.signUp(email, pw, name);
+      if (error) { msg.textContent = error.message; view.querySelector('#au-submit').disabled = false; return; }
+      if (data.session) { await Store.afterLogin(data.session.user); await mountApp(); return; }
+      // Confirmation email activée : pas de session immédiate
+      msg.style.color = 'var(--ok)';
+      msg.textContent = 'Compte créé ✓ Si la confirmation email est activée, confirme via ton email puis connecte-toi.';
+      mode = 'signin'; setTimeout(draw, 2500);
+    } else {
+      const { data, error } = await Store.signIn(email, pw);
+      if (error) { msg.textContent = error.message; view.querySelector('#au-submit').disabled = false; return; }
+      await Store.afterLogin(data.user); await mountApp();
+    }
+  }
+
+  draw();
+}
+
+async function mountApp() {
+  const me = Store.me();
+  if (me && me.role === 'coach') {
+    clientsCache = await Store.listClients();
+    const firstClient = clientsCache.find((c) => c.role === 'client');
+    if (firstClient) await Store.loadStateFor(firstClient.id);
+  }
+  go('home');
+}
+
+async function boot() {
+  appTitle.textContent = 'NMRY';
+  view.innerHTML = '<div class="empty">Chargement…</div>';
+  const logged = await Store.init();
+  if (logged) await mountApp();
+  else renderAuth();
+}
+
+boot();
