@@ -1,9 +1,10 @@
 "use client";
 
-import { useState } from "react";
+import { useMemo, useState } from "react";
 import { useData } from "@/components/DataProvider";
 import SessionEditor from "@/components/SessionEditor";
 import { SESSION_TEMPLATES, instanceFromTemplate } from "@/lib/data";
+import type { Goal } from "@/lib/types";
 
 const MONTHS = ["Janvier","Février","Mars","Avril","Mai","Juin","Juillet","Août","Septembre","Octobre","Novembre","Décembre"];
 const DOW = ["Lun","Mar","Mer","Jeu","Ven","Sam","Dim"];
@@ -19,6 +20,15 @@ export default function PlanPage() {
   const [editing, setEditing] = useState<{ dateKey: string; sessionId: string } | null>(null);
 
   const todayKey = ymd(new Date());
+
+  // Objectifs (compétitions) indexés par date, pour les mettre en surbrillance.
+  const goalsByDate = useMemo(() => {
+    const m: Record<string, Goal[]> = {};
+    state.goals.forEach((g) => {
+      if (g.date) (m[g.date] ??= []).push(g);
+    });
+    return m;
+  }, [state.goals]);
 
   function shiftPeriod(dir: number) {
     const d = new Date(cursor);
@@ -92,6 +102,7 @@ export default function PlanPage() {
           cursor={cursor}
           todayKey={todayKey}
           planning={state.planning}
+          goalsByDate={goalsByDate}
           pendingTpl={pendingTpl}
           onPlace={place}
           onOpen={(dateKey, sessionId) => setEditing({ dateKey, sessionId })}
@@ -101,10 +112,18 @@ export default function PlanPage() {
           cursor={cursor}
           todayKey={todayKey}
           planning={state.planning}
+          goalsByDate={goalsByDate}
           pendingTpl={pendingTpl}
           onPlace={place}
           onOpen={(dateKey, sessionId) => setEditing({ dateKey, sessionId })}
         />
+      )}
+
+      {/* Légende */}
+      {state.goals.some((g) => g.date) && (
+        <p className="mt-3 flex items-center gap-1.5 text-xs text-dim">
+          <span className="inline-block h-3 w-3 rounded border border-ok bg-ok/20" /> 🎯 Jour de compétition (objectif déclaré)
+        </p>
       )}
 
       {editing && editingSession && (
@@ -131,6 +150,7 @@ interface ViewProps {
   cursor: Date;
   todayKey: string;
   planning: ReturnType<typeof useData>["state"]["planning"];
+  goalsByDate: Record<string, Goal[]>;
   pendingTpl: string | null;
   onPlace: (dateKey: string, tplId: string | null) => void;
   onOpen: (dateKey: string, sessionId: string) => void;
@@ -149,7 +169,7 @@ function dayHandlers(dateKey: string, pendingTpl: string | null, onPlace: ViewPr
   };
 }
 
-function MonthView({ cursor, todayKey, planning, pendingTpl, onPlace, onOpen }: ViewProps) {
+function MonthView({ cursor, todayKey, planning, goalsByDate, pendingTpl, onPlace, onOpen }: ViewProps) {
   const first = new Date(cursor.getFullYear(), cursor.getMonth(), 1);
   const startOffset = (first.getDay() + 6) % 7;
   const daysInMonth = new Date(cursor.getFullYear(), cursor.getMonth() + 1, 0).getDate();
@@ -163,15 +183,30 @@ function MonthView({ cursor, todayKey, planning, pendingTpl, onPlace, onOpen }: 
     const date = new Date(cursor.getFullYear(), cursor.getMonth(), day);
     const key = ymd(date);
     const sessions = planning[key] ?? [];
+    const goals = goalsByDate[key] ?? [];
+    const isGoal = goals.length > 0;
     cells.push(
       <div
         key={key}
         {...dayHandlers(key, pendingTpl, onPlace)}
-        className={`flex min-h-[78px] flex-col gap-1 rounded-lg border bg-surface p-1 ${
-          key === todayKey ? "border-accent" : "border-line"
+        className={`flex min-h-[78px] flex-col gap-1 rounded-lg border p-1 ${
+          isGoal
+            ? "border-ok bg-ok/10 ring-1 ring-ok/50"
+            : `bg-surface ${key === todayKey ? "border-accent" : "border-line"}`
         }`}
       >
-        <span className="text-[11px] text-dim">{day}</span>
+        <span className="flex items-center justify-between text-[11px] text-dim">
+          {day}
+          {isGoal && <span title={goals.map((g) => g.competition).join(", ")}>🎯</span>}
+        </span>
+        {isGoal && (
+          <span
+            className="truncate rounded-md bg-ok/25 px-1.5 py-0.5 text-[10px] font-semibold text-ok"
+            title={goals.map((g) => g.competition).join(", ")}
+          >
+            {goals[0].competition}
+          </span>
+        )}
         {sessions.map((s) => (
           <button
             key={s.id}
@@ -189,7 +224,7 @@ function MonthView({ cursor, todayKey, planning, pendingTpl, onPlace, onOpen }: 
   return <div className="grid grid-cols-7 gap-1.5">{cells}</div>;
 }
 
-function WeekView({ cursor, todayKey, planning, pendingTpl, onPlace, onOpen }: ViewProps) {
+function WeekView({ cursor, todayKey, planning, goalsByDate, pendingTpl, onPlace, onOpen }: ViewProps) {
   const monday = new Date(cursor);
   monday.setDate(cursor.getDate() - ((cursor.getDay() + 6) % 7));
 
@@ -200,11 +235,15 @@ function WeekView({ cursor, todayKey, planning, pendingTpl, onPlace, onOpen }: V
         date.setDate(monday.getDate() + i);
         const key = ymd(date);
         const sessions = planning[key] ?? [];
+        const goals = goalsByDate[key] ?? [];
+        const isGoal = goals.length > 0;
         return (
           <div
             key={key}
             {...dayHandlers(key, pendingTpl, onPlace)}
-            className={`rounded-xl border bg-surface p-3 ${key === todayKey ? "border-accent" : "border-line"}`}
+            className={`rounded-xl border p-3 ${
+              isGoal ? "border-ok bg-ok/10" : `bg-surface ${key === todayKey ? "border-accent" : "border-line"}`
+            }`}
           >
             <h3 className="mb-2 flex justify-between text-sm font-semibold">
               {DOW[i]}
@@ -212,6 +251,15 @@ function WeekView({ cursor, todayKey, planning, pendingTpl, onPlace, onOpen }: V
                 {date.getDate()} {MONTHS[date.getMonth()].slice(0, 3)}
               </span>
             </h3>
+            {goals.map((g) => (
+              <div
+                key={g.id}
+                className="mb-2 flex items-center gap-1.5 rounded-md bg-ok/20 px-2 py-1 text-[13px] font-semibold text-ok"
+              >
+                🎯 {g.competition}
+                {g.place && <span className="font-normal opacity-80">· {g.place}</span>}
+              </div>
+            ))}
             <div className="flex flex-col gap-1.5">
               {sessions.length === 0 ? (
                 <span className="text-[13px] italic text-dim">Repos / rien de prévu</span>
