@@ -1,6 +1,17 @@
 export type Role = "coach" | "client";
 export type AthleteStatus = "active" | "inactive";
 
+/** Données enrichies retournées par GET /api/coach/athletes */
+export interface AthleteAdminData {
+  id: string;
+  name: string;
+  email: string;
+  status: AthleteStatus;
+  last_sign_in_at: string | null;
+  updated_by_coach_at: string | null;
+  updated_by_client_at: string | null;
+}
+
 export interface Profile {
   id: string;
   email: string;
