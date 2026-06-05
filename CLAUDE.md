@@ -29,20 +29,14 @@ npx tsc --noEmit # type-check seul (sûr, ne touche pas au cache)
   un vrai build prod sans le fichier.
 
 ## Authentification & modes d'accès
-`lib/config.ts` → `AUTH_ENABLED = true` (activé).
+`lib/config.ts` → `AUTH_ENABLED = true` (activé). **Le mode invité a été supprimé.**
 
-### 3 modes
+### 2 modes
 | Mode | Déclenchement | Données |
 |---|---|---|
 | **Auth (compte)** | Login email/mdp | Supabase (`app_state`) |
-| **Invité** | Bouton « Continuer en invité » sur `/login` | localStorage (`nmry-local-state`) |
 | **Local forcé** | `AUTH_ENABLED = false` | localStorage — bypass total du login |
 
-- Le mode **invité** est marqué par un cookie `nmry-guest=1` (`lib/guest.ts`).
-  Le middleware et le layout (`app/(app)/layout.tsx`) vérifient ce cookie pour autoriser l'accès
-  sans session Supabase.
-- En mode **invité**, le toggle Coach ⇄ Client est disponible (accueil + planning).
-  Le rôle est persisté dans `localStorage` (`nmry-local-role`).
 - Pour basculer en **mode local forcé** : `AUTH_ENABLED = false` dans `lib/config.ts`.
 
 ### Auth flow complet (AUTH_ENABLED = true)
@@ -50,7 +44,7 @@ npx tsc --noEmit # type-check seul (sûr, ne touche pas au cache)
 2. **Confirmation email** : lien → `/auth/callback?code=…` → échange PKCE → session → redirect `/`.
 3. **Connexion** : email + mdp → `signInWithPassword` → `/`
 4. **Reset mdp** : email → `/auth/callback?next=/auth/reset-password` → `updateUser({ password })` → `/`
-5. **Déconnexion** : `supabase.auth.signOut()` → `/login`
+5. **Déconnexion** : `supabase.auth.signOut()` → `/login` (bouton dans `/settings`)
 
 ### ⚠️ Configuration Vercel/Supabase requise
 - **Vercel** : `NEXT_PUBLIC_SUPABASE_URL` + `NEXT_PUBLIC_SUPABASE_ANON_KEY` dans les env vars.
@@ -59,101 +53,116 @@ npx tsc --noEmit # type-check seul (sûr, ne touche pas au cache)
   - Redirect URLs : `https://nmry-coaching.vercel.app/auth/callback` + `http://localhost:3000/auth/callback`
 - Après changement d'env vars Vercel : **redéployer manuellement**.
 
+### ⚠️ Limite emails Supabase (plan gratuit : 2-3 emails/heure)
+Le plan gratuit Supabase bloque les envois d'emails auth après 2-3 emails/heure.
+**Symptôme** : "email rate limit exceeded" sur reset password / magic link.
+
+**Fix immédiat — changer le mdp sans email (SQL Editor Supabase) :**
+```sql
+UPDATE auth.users
+SET encrypted_password = crypt('nouveau_mdp', gen_salt('bf'))
+WHERE email = 'user@email.com';
+```
+
+**Fix permanent — SMTP Resend (gratuit, 100 emails/jour) :**
+1. Créer un compte sur **resend.com** → API Keys → créer une clé
+2. Supabase → **Authentication → Emails → SMTP Settings** → activer "Custom SMTP"
+   - Host : `smtp.resend.com` · Port : `465`
+   - User : `resend` · Password : clé API Resend
+   - Sender : adresse email avec ton domaine (ou `onboarding@resend.dev` pour tester)
+
+**Augmenter la durée des liens OTP :**
+Supabase → Authentication → Email → "OTP Expiry" → mettre `86400` (24h au lieu de 1h).
+
 ### ⚠️ Piège middleware — `MIDDLEWARE_INVOCATION_FAILED`
 Le middleware vérifie la présence des variables avant de créer le client Supabase ; sinon, dégrade
 proprement. Les routes `/auth/*` sont exclues de la protection.
+Le middleware intercepte aussi `?error=access_denied` sur la racine `/` (erreur OTP expiré de Supabase)
+et redirige vers `/login?error=lien_invalide`.
 
 ### État Supabase
 - Projet ref : `zhvfqcxdifribggyzxgk`
-- Schéma : `supabase/schema.sql` (tables `profiles` + `app_state`, RLS, trigger inscription)
-- Pour devenir coach : `update public.profiles set role = 'coach' where email = 'TON_EMAIL_ICI';`
+- Schéma : `supabase/schema.sql` (tables `profiles`, `app_state`, `library_state`, RLS, triggers)
+- **Pour ajouter un coach** (après inscription dans l'app) :
+  `update public.profiles set role = 'coach' where email = 'EMAIL';`
+  L'architecture supporte plusieurs coachs simultanément.
+
+## Sécurité
+- **RLS** : `state_self_all` (client → ses données), `state_coach_all` (coach → tout le monde),
+  `library_read_all` (tous → lecture), `library_coach_write` (coach → écriture).
+- **Trigger `prevent_role_escalation`** : empêche un client de se passer coach via l'API.
+- **Guard applicatif** : `update()` dans DataProvider refuse si `role=client` et `activeUserId ≠ me.id`.
+- **`updateLibrary()`** refuse si `role !== 'coach'` en mode auth.
+- **Open redirect** : le paramètre `?next=` des callbacks est validé (chemin relatif uniquement).
 
 ## Rôles coach / client
-Exposés par `useData()` : `role`, `setRole`, `isGuest`.
+Exposés par `useData()` : `role`, `me`, `clients`, `activeUserId`, `switchClient`, `library`, `updateLibrary`.
 
-- **Coach** : crée et édite les séances (séries/reps/poids/RPE/commentaires), gère la bibliothèque.
-  Peut créer des exercices inline. Voit un sélecteur de client sur l'accueil.
-  Dans le SessionEditor, boutons bas de page : **Valider** (ferme) + **Supprimer** (supprime la séance).
-- **Client** : place les séances, renseigne ressenti (emoji 1-5), RPE client, commentaire, et peut
-  **valider une séance** (bouton dédié). La prescription est en lecture seule.
-- **Invité** : toggle Coach ⇄ Client visible sur l'accueil et dans le planning.
+- **Coach** : crée et édite les séances, gère la bibliothèque partagée, peut dupliquer des semaines.
+  Voit un `ClientSelector` dans le header pour naviguer entre les clients.
+  Le client sélectionné est persisté dans `localStorage` (`nmry-coach-selected-client`).
+- **Client** : place les séances, renseigne ressenti (emoji 1-5), RPE client, commentaire, valide une séance.
+  La prescription est en lecture seule. La bibliothèque est en lecture seule.
 
 ## Modèle de données (`lib/types.ts` → `AppState`)
-Document unique par client (JSON local ou `app_state.data` Supabase) :
+Document unique par client (JSON dans `app_state.data` Supabase) :
 
 - `profile: UserProfileData` :
-  - `name`, `photo` (base64), `birthDate` (YYYY-MM-DD), `gender` (homme/femme/""),
-    `height` (cm), `weight` (kg), `sports: string[]`, `diet`.
-  - La photo s'affiche dans la barre utilisateur de l'accueil.
+  `name`, `photo` (base64), `birthDate`, `gender`, `height`, `weight`, `sports[]`, `diet`.
 
 - `sessions: SessionInstance[]` — **liste à plat** :
-  - `date = null` → dans la banque « À placer ».
-  - `date = "YYYY-MM-DD"` → placée ce jour par le client.
-  - Champs : `id`, `name`, `color`, `emoji` (0-5), `done` (booléen — validée par client),
-    `coachComment`, `tplId`, `exercises: ExerciseInstance[]`.
-  - `ExerciseInstance` : `uid`, `exId`, `name` (figé à l'ajout), `sets`, `reps`, `weight`,
-    `rpeCoach`, `rpeClient` (0 = non renseigné), `coachComment`, `clientComment`.
-  - **`weight = 0`** → pas de charge prescrite. **`rpeCoach = 0`** → RPE non renseigné.
-  - Sur le calendrier : ✅ si séance validée (+ RPE moyen + emoji en vue semaine), ❌ si date
-    passée et non validée.
+  - `date = null` → banque « À placer » ; `date = "YYYY-MM-DD"` → placée.
+  - `ExerciseInstance` : `uid`, `exId`, `name`, `sets`, `reps`, `weight`, `rpeCoach`, `rpeClient`,
+    `coachComment`, `clientComment`. `weight/rpeCoach = 0` → non renseigné.
 
 - `goals: Goal[]` : `competition`, `date`, `place`, `expected`.
 - `followups: Followup[]` : `date`, `type` (`"note"|"injury"`), `text`.
-- `library: ExerciseLibrary` :
-  - `categories: FilterCategory[]` : catégories de filtres personnalisables.
-  - `exercises: LibraryExercise[]` : `id`, `name`, `tags` (map catId→optId), `video`.
-  - **La prescription vit dans le plan, PAS dans la bibliothèque.**
-  - Filtres : **multi-sélection** par catégorie (OR dans une catégorie, AND entre catégories).
+- `records: RecordsData` : force (max 3 par exercice), CAP, Hyrox.
+- `preferences: UserPreferences` : `cardColors` (href→hex), `cardColorMode` (`"arc"|"full"`).
+- `library` : **ignoré en mode auth** — la bibliothèque vient de `library_state` (table dédiée, singleton).
 
-- `records: RecordsData` :
-  - `strength: ExerciseRecords[]` : records de force par exercice (max 3 par exercice).
-    Chaque entrée : `date`, `weight` (kg), `reps`. Toggle affiché/masqué par exercice.
-  - `cap: Record<CapDistance, CardioRecord[]>` : records course (1km/5km/10km/21km/42km), max 3.
-  - `hyrox: Record<HyroxCategory, CardioRecord[]>` : records Hyrox (pro/open), max 3.
-  - Onglet **Tendances** : courbe SVG par discipline, meilleur record mis en vert.
+### Bibliothèque partagée (`library_state`)
+Table Supabase singleton (id=1), lisible par tous les comptes auth, éditable seulement par le coach.
+`tags: Record<string, string[]>` — **multi-sélection** par catégorie (OR dans une catégorie, AND entre).
+En mode local/invité, la bibliothèque reste dans `state.library` (localStorage).
 
 ## Carte des fichiers
 | Chemin | Rôle |
 |---|---|
-| `app/login/` | Connexion / inscription / "Continuer en invité" / mot de passe oublié |
+| `app/login/` | Connexion / inscription / mot de passe oublié (pas de mode invité) |
 | `app/auth/callback/` | Route handler PKCE : échange `code` → session |
 | `app/auth/confirm/` | Route handler OTP : vérifie `token_hash` |
 | `app/auth/reset-password/` | Page de saisie du nouveau mot de passe |
-| `app/(app)/layout.tsx` | Zone protégée : vérifie session Supabase OU cookie invité |
-| `app/(app)/page.tsx` | Accueil : 6 cartes (Profil, Programmation, Objectifs, Records, Suivi, Biblio) + avatar photo |
-| `app/(app)/plan/` | Planning mois/sem, banque « À placer », compose séance, glisser-déposer, badges ✅/❌ |
+| `app/(app)/layout.tsx` | Zone protégée : vérifie session Supabase uniquement |
+| `app/(app)/page.tsx` | Accueil : 6 cartes avec couleurs personnalisables (arc ou fond) |
+| `app/(app)/plan/` | Planning mois/sem, banque « À placer », glisser-déposer, duplication de semaine |
+| `app/(app)/settings/` | Réglages : compte, dark/light mode, couleurs cartes |
 | `app/(app)/goals/` | Objectifs (tri par date, décompte J-X, édition) |
 | `app/(app)/profile/` | Profil : photo, nom, date naissance, genre, taille, poids, sports, diète |
 | `app/(app)/followup/` | Suivi (notes/blessures) |
-| `app/(app)/library/` | Bibliothèque d'exercices + filtres multi-sélection |
-| `app/(app)/records/` | Records force (muscu) + CAP + Hyrox + courbes de tendance SVG |
-| `components/DataProvider.tsx` | Contexte : 3 modes (auth/invité/local), chargement, sauvegarde, `me`, `role`, `isGuest` |
-| `components/SessionEditor.tsx` | Édition séance : coach = tout éditer + commentaires ; client = feedback + validation |
-| `components/ExerciseMultiSelect.tsx` | Filtres multi-sélection + liste d'exercices à cocher (réutilisable) |
-| `components/ExercisePicker.tsx` | Modale picker + création inline d'exercices |
-| `components/GoalInfoModal.tsx` | Fiche objectif en lecture seule (depuis le plan) |
-| `components/Header.tsx` | En-tête (titre par route, bouton retour, indicateur sauvegarde) |
-| `lib/types.ts` | Tous les types TypeScript + `emptyState()` + `emptyRecords()` + bibliothèque par défaut |
-| `lib/data.ts` | Fabriques : `newSession`, `exerciseInstanceFromLibrary`, `instanceFromTemplate`, `SESSION_COLORS` |
-| `lib/dates.ts` | `daysUntil`, `countdownLabel`, `frenchDate` |
-| `lib/config.ts` | `AUTH_ENABLED` |
-| `lib/guest.ts` | `GUEST_COOKIE`, `isGuestClient()`, `setGuest()` |
-| `lib/supabase/client.ts` | Client Supabase navigateur (repli placeholder si env vars absentes) |
-| `lib/supabase/server.ts` | Client Supabase serveur |
-| `lib/supabase/middleware.ts` | Refresh session + garde routes (dégrade proprement si vars absentes) |
-| `middleware.ts` | Entry-point Next.js pour le middleware Supabase |
-| `supabase/schema.sql` | Schéma + RLS + trigger d'inscription automatique |
+| `app/(app)/library/` | Bibliothèque partagée + filtres multi-sélection + recherche texte |
+| `app/(app)/records/` | Records force + CAP + Hyrox + courbes de tendance SVG |
+| `components/DataProvider.tsx` | Contexte : modes auth/local, `library`+`updateLibrary` séparés du state client |
+| `components/ClientSelector.tsx` | Dropdown coach pour changer de client actif |
+| `components/Header.tsx` | En-tête + bandeau `[ClientSelector] [⚙]` |
+| `components/ThemeProvider.tsx` | Dark/light mode — lit/écrit `localStorage` + `data-theme` sur `<html>` |
+| `components/SessionEditor.tsx` | Édition séance : coach = tout éditer ; client = feedback + validation |
+| `components/ExerciseMultiSelect.tsx` | Filtres + recherche texte + liste d'exercices à cocher |
+| `components/ExercisePicker.tsx` | Modale picker + création inline |
+| `lib/types.ts` | Tous les types TypeScript + `emptyState()` + `emptyRecords()` |
+| `lib/supabase/middleware.ts` | Refresh session + garde routes + intercepte erreurs Supabase OTP |
+| `supabase/schema.sql` | Schéma complet : profiles, app_state, library_state, RLS, triggers |
 
 ## Conventions
 - **Tokens couleurs Tailwind v4** : `bg-bg`, `bg-surface`, `bg-surface2`, `border-line`, `text-ink`,
   `text-dim`, `text-accent`, `bg-accent`, `text-ok`, `bg-ok`, `text-danger`, `bg-danger`,
-  `bg-accent2`, `text-accent2`.
+  `bg-accent2`, `text-accent2`. Couleur violette (bouton dupliquer) : `#a855f7` inline.
+- **Thème clair/sombre** : `[data-theme="light"]` dans `globals.css`. Script anti-flash dans `app/layout.tsx`.
 - **Modales** : `fixed inset-0 z-50 flex items-end justify-center bg-black/60 sm:items-center`
   + contenu `rounded-t-3xl sm:rounded-3xl border-t border-line bg-surface p-5`.
-- **Mutations d'état** : toujours via `update((draft) => { ... })` de `useData()` — immuable
-  (`structuredClone`) + sauvegarde différée 500 ms.
-- **Imports** : alias `@/` = racine du projet.
-- UI entièrement **en français**.
+- **Mutations d'état client** : `update((draft) => { ... })` — immuable + sauvegarde différée 500 ms.
+- **Mutations bibliothèque** : `updateLibrary((lib) => { ... })` — sauvegarde dans `library_state`.
+- **Imports** : alias `@/` = racine du projet. UI entièrement **en français**.
 
 ## Infra
 - GitHub : `github.com/antoinenmry/nmry-coaching` — SSH (`~/.ssh/github_tridash`), remote
@@ -162,5 +171,6 @@ Document unique par client (JSON local ou `app_state.data` Supabase) :
 - Commits : message en français, signés `Co-Authored-By: Claude Sonnet 4.6 <noreply@anthropic.com>`.
 
 ## Roadmap / prochaines étapes connues
+- [ ] Configurer SMTP Resend pour lever la limite 2 emails/h (voir section Auth ci-dessus)
 - [ ] Tests Supabase bout en bout (schema.sql + RLS + multi-client)
-- [ ] Migration : `library`, `sessions` et `records` en tables Supabase dédiées (scope coach) plutôt que blob
+- [ ] Migration : `sessions` et `records` en tables Supabase dédiées (scope coach) plutôt que blob
