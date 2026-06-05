@@ -101,7 +101,11 @@ export default function Dashboard() {
               style={{ background: c.color }}
             />
            <div className="flex items-start justify-between">
-                  <span className="text-3xl">{c.icon}</span>
+                 {c.href === "/profile" && state.profile.photo ? (
+  <img src={state.profile.photo} alt="avatar" className="h-10 w-10 shrink-0 rounded-full object-cover border border-line" />
+) : (
+  <span className="text-3xl">{c.icon}</span>
+)}
   
   {/* Le badge "J-X" centré et gros au milieu de la case */}
   {c.href === "/goals" && nextGoal && (
