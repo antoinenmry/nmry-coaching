@@ -87,9 +87,9 @@ export default function Dashboard() {
               )}
           </div>
             {/* On ferme la div correctement et on ajoute le label */}
-            <div className="mt-2 font-semibold">
-              {c.label}
-            </div>
+          <div className="mt-2 font-semibold text-lg">
+  {c.label}
+</div>
           </Link>
         ))}
       </div>
