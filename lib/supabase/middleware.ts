@@ -36,14 +36,15 @@ export async function updateSession(request: NextRequest) {
 
   const path = request.nextUrl.pathname;
   const isAuthPage = path === "/login";
+  const guest = request.cookies.get("nmry-guest")?.value === "1";
 
-  // Non connecté + page protégée -> /login
-  if (!user && !isAuthPage) {
+  // Ni connecté ni invité + page protégée -> /login
+  if (!user && !guest && !isAuthPage) {
     const url = request.nextUrl.clone();
     url.pathname = "/login";
     return NextResponse.redirect(url);
   }
-  // Connecté + page de login -> accueil
+  // Connecté (vrai compte) + page de login -> accueil
   if (user && isAuthPage) {
     const url = request.nextUrl.clone();
     url.pathname = "/";

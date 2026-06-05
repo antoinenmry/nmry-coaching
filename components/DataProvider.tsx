@@ -12,6 +12,9 @@ import { useRouter } from "next/navigation";
 import { createClient } from "@/lib/supabase/client";
 import { AUTH_ENABLED } from "@/lib/config";
 import { emptyState, type AppState, type Profile, type Role } from "@/lib/types";
+import { isGuestClient, setGuest } from "@/lib/guest";
+
+type Mode = "auth" | "guest" | "local";
 
 // --- Mode local (sans connexion) : persistance dans le navigateur ---
 const LOCAL_KEY = "nmry-local-state";

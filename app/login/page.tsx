@@ -3,6 +3,7 @@
 import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { createClient } from "@/lib/supabase/client";
+import { setGuest } from "@/lib/guest";
 
 export default function LoginPage() {
   const supabase = createClient();
@@ -119,6 +120,23 @@ export default function LoginPage() {
           </button>
         </p>
       </form>
+
+      {/* Mode invité */}
+      <div className="mt-4 flex items-center gap-3 text-xs text-dim">
+        <span className="h-px flex-1 bg-line" /> ou <span className="h-px flex-1 bg-line" />
+      </div>
+      <button
+        type="button"
+        onClick={() => {
+          setGuest(true);
+          router.replace("/");
+          router.refresh();
+        }}
+        className="mt-4 w-full rounded-xl border border-line bg-surface2 py-3 font-semibold"
+      >
+        Continuer en invité
+      </button>
+      <p className="mt-2 text-center text-xs text-dim">Sans compte — données gardées sur cet appareil.</p>
     </main>
   );
 }
