@@ -34,7 +34,7 @@ export default function Dashboard() {
             className="relative flex aspect-square flex-col justify-between overflow-hidden rounded-2xl border border-line bg-surface p-4 transition active:scale-95"
           >
             <span
-              className="absolute -right-7 -top-7 h-[90px] w-[90px] rounded-full opacity-15"
+              className="absolute inset-0 opacity-20"
               style={{ background: cardColors[c.href] || c.color }}
             />
            <div className="flex items-start justify-between">
