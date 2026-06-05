@@ -114,7 +114,7 @@ export default function Dashboard() {
       
       {/* 2. Le nom (Bypass TypeScript avec 'as any') */}
       <span className="mt-1 text-xs font-bold truncate w-full px-1">
-        {(nextGoal as any).title || (nextGoal as any).text || (nextGoal as any).name || "Objectif"}
+  {(nextGoal as any).title || (nextGoal as any).text || (nextGoal as any).name || (nextGoal as any).description || (nextGoal as any).label || "Objectif"}
       </span>
       
       {/* 3. Le lieu (Bypass TypeScript avec 'as any') */}
