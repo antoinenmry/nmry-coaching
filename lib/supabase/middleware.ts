@@ -24,10 +24,9 @@ function redirectSupabaseError(request: NextRequest) {
   return NextResponse.redirect(url);
 }
 
-/** Redirige vers /login si la route est protégée et qu'on n'est ni connecté ni invité. */
+/** Redirige vers /login si la route est protégée et qu'il n'y a pas de session. */
 function guardWithoutSession(request: NextRequest, response: NextResponse) {
-  const guest = request.cookies.get("nmry-guest")?.value === "1";
-  if (!guest && !isPublicPath(request.nextUrl.pathname)) {
+  if (!isPublicPath(request.nextUrl.pathname)) {
     const url = request.nextUrl.clone();
     url.pathname = "/login";
     return NextResponse.redirect(url);
@@ -86,10 +85,9 @@ export async function updateSession(request: NextRequest) {
   }
 
   const path = request.nextUrl.pathname;
-  const guest = request.cookies.get("nmry-guest")?.value === "1";
 
-  // Ni connecté ni invité + page protégée -> /login
-  if (!user && !guest && !isPublicPath(path)) {
+  // Pas de session + page protégée -> /login
+  if (!user && !isPublicPath(path)) {
     const url = request.nextUrl.clone();
     url.pathname = "/login";
     return NextResponse.redirect(url);

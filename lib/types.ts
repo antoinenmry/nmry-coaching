@@ -118,6 +118,11 @@ export interface RecordsData {
   hyrox: Record<HyroxCategory, CardioRecord[]>;
 }
 
+/** Préférences visuelles par compte (couleurs cartes accueil…). */
+export interface UserPreferences {
+  cardColors: Record<string, string>; // href → couleur hex
+}
+
 /** Document complet d'un client (stocké en JSON dans app_state.data). */
 export interface AppState {
   profile: UserProfileData;
@@ -126,6 +131,7 @@ export interface AppState {
   followups: Followup[];
   library: ExerciseLibrary;
   records: RecordsData;
+  preferences: UserPreferences;
 }
 
 // Bibliothèque de départ (catégories muscu modifiables/supprimables).
@@ -185,4 +191,5 @@ export const emptyState = (): AppState => ({
   followups: [],
   library: defaultLibrary(),
   records: emptyRecords(),
+  preferences: { cardColors: {} },
 });

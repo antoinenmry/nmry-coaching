@@ -12,9 +12,7 @@ import { useRouter } from "next/navigation";
 import { createClient } from "@/lib/supabase/client";
 import { AUTH_ENABLED } from "@/lib/config";
 import { emptyState, type AppState, type ExerciseLibrary, type Profile, type Role } from "@/lib/types";
-import { isGuestClient, setGuest } from "@/lib/guest";
-
-type Mode = "auth" | "guest" | "local";
+type Mode = "auth" | "local";
 
 const LOCAL_KEY = "nmry-local-state";
 const LOCAL_ROLE_KEY = "nmry-local-role";
@@ -50,7 +48,6 @@ interface DataContextValue {
   signOut: () => Promise<void>;
   role: Role;
   setRole: (r: Role) => void;
-  isGuest: boolean;
 }
 
 const DataContext = createContext<DataContextValue | null>(null);
@@ -125,20 +122,7 @@ export function DataProvider({ children }: { children: React.ReactNode }) {
         data: { user },
       } = await supabase.auth.getUser();
 
-      // --- Mode invité ---
-      if (!user && isGuestClient()) {
-        const local = loadLocal();
-        setMode("guest");
-        setMe(LOCAL_PROFILE);
-        setActiveUserId(LOCAL_PROFILE.id);
-        setState(local);
-        setLibraryState(local.library);
-        setRoleState(savedRole());
-        setLoading(false);
-        return;
-      }
-
-      // --- Non connecté et pas invité ---
+      // --- Non connecté ---
       if (!user) {
         router.replace("/login");
         return;
@@ -270,19 +254,13 @@ export function DataProvider({ children }: { children: React.ReactNode }) {
   );
 
   const signOut = useCallback(async () => {
-    if (modeRef.current === "guest") {
-      setGuest(false);
-    } else if (modeRef.current === "auth") {
-      await supabase.auth.signOut();
-    }
+    if (modeRef.current === "auth") await supabase.auth.signOut();
     router.replace("/login");
   }, [supabase, router]);
 
-  const isGuest = mode === "guest";
-
   return (
     <DataContext.Provider
-      value={{ me, state, update, library, updateLibrary, loading, saving, activeUserId, clients, switchClient, signOut, role, setRole, isGuest }}
+      value={{ me, state, update, library, updateLibrary, loading, saving, activeUserId, clients, switchClient, signOut, role, setRole }}
     >
       {children}
     </DataContext.Provider>

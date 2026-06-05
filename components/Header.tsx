@@ -1,5 +1,6 @@
 "use client";
 
+import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import { useData } from "./DataProvider";
 import ClientSelector from "./ClientSelector";
@@ -11,6 +12,7 @@ const TITLES: Record<string, string> = {
   "/goals": "Objectifs",
   "/followup": "Suivi",
   "/library": "Bibliothèque",
+  "/settings": "Réglages",
 };
 
 export default function Header() {
@@ -41,12 +43,18 @@ export default function Header() {
         </div>
       </div>
 
-      {/* Bandeau de sélection client — visible uniquement pour le coach */}
-      {role === "coach" && (
-        <div className="flex items-center justify-center border-t border-line/50 px-4 py-2">
-          <ClientSelector />
-        </div>
-      )}
+      {/* Bandeau inférieur : sélecteur client (coach) + lien Réglages */}
+      <div className="flex items-center border-t border-line/50 px-4 py-2">
+        {role === "coach" ? (
+          <>
+            <ClientSelector />
+            <div className="flex-1" />
+            <Link href="/settings" className="text-sm text-dim">⚙ Réglages</Link>
+          </>
+        ) : (
+          <Link href="/settings" className="mx-auto text-sm text-dim">⚙ Réglages</Link>
+        )}
+      </div>
     </header>
   );
 }

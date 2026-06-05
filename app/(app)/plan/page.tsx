@@ -20,7 +20,7 @@ const EMOJIS = ["😫", "😕", "😐", "🙂", "🤩"];
 const emojiOf = (n: number) => (n >= 1 && n <= 5 ? EMOJIS[n - 1] + " " : "");
 
 export default function PlanPage() {
-  const { state, update, role, setRole, loading, isGuest } = useData();
+  const { state, update, role, setRole, loading } = useData();
   const isCoach = role === "coach";
 
   const [mode, setMode] = useState<"month" | "week">("month");
@@ -75,7 +75,7 @@ export default function PlanPage() {
   return (
     <div>
       {/* Bascule de rôle (mode local ou invité) */}
-      {(!AUTH_ENABLED || isGuest) && (
+      {!AUTH_ENABLED && (
         <div className="mb-3 flex items-center gap-2 rounded-xl border border-line bg-surface px-3 py-2">
           <span className="text-[13px] text-dim">Vue :</span>
           <div className="flex rounded-lg bg-surface2 p-1">
