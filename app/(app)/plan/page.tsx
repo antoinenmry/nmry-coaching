@@ -4,6 +4,7 @@ import { useMemo, useState } from "react";
 import { useData } from "@/components/DataProvider";
 import SessionEditor from "@/components/SessionEditor";
 import ExerciseMultiSelect from "@/components/ExerciseMultiSelect";
+import type { InlineExercise } from "@/components/ExercisePicker";
 import GoalInfoModal from "@/components/GoalInfoModal";
 import { AUTH_ENABLED } from "@/lib/config";
 import { SESSION_COLORS, newSession, exerciseInstanceFromLibrary } from "@/lib/data";
@@ -225,22 +226,45 @@ function ComposeModal({ onClose, onCreated }: { onClose: () => void; onCreated: 
   const [name, setName] = useState("Séance");
   const [color, setColor] = useState(SESSION_COLORS[0]);
   const [picked, setPicked] = useState<string[]>([]);
+  const [newName, setNewName] = useState("");
+  const [inlineExercises, setInlineExercises] = useState<InlineExercise[]>([]);
+  const [saveToLib, setSaveToLib] = useState(true);
 
   const toggle = (id: string) => setPicked((p) => (p.includes(id) ? p.filter((x) => x !== id) : [...p, id]));
+
+  function addInline() {
+    const trimmed = newName.trim();
+    if (!trimmed) return;
+    setInlineExercises((prev) => [...prev, { id: crypto.randomUUID(), name: trimmed }]);
+    setNewName("");
+  }
 
   function create() {
     let newId = "";
     update((d) => {
+      if (saveToLib) {
+        inlineExercises.forEach(({ id, name: exName }) => {
+          if (!d.library.exercises.find((e) => e.id === id)) {
+            d.library.exercises.push({ id, name: exName, tags: {}, video: "" });
+          }
+        });
+      }
       const s = newSession(name.trim() || "Séance", color);
       newId = s.id;
       picked.forEach((id) => {
         const libEx = d.library.exercises.find((e) => e.id === id);
         s.exercises.push(exerciseInstanceFromLibrary({ id, name: libEx?.name ?? "Exercice" }));
       });
+      inlineExercises.forEach(({ id, name: exName }) => {
+        const libEx = d.library.exercises.find((e) => e.id === id);
+        s.exercises.push(exerciseInstanceFromLibrary({ id, name: libEx?.name ?? exName }));
+      });
       d.sessions.push(s);
     });
     onCreated(newId);
   }
+
+  const totalExercises = picked.length + inlineExercises.length;
 
   return (
     <div className="fixed inset-0 z-50 flex items-end justify-center bg-black/60 sm:items-center" onClick={(e) => e.target === e.currentTarget && onClose()}>
@@ -264,10 +288,63 @@ function ComposeModal({ onClose, onCreated }: { onClose: () => void; onCreated: 
           </div>
         </div>
 
-        <span className="mb-1.5 block text-[13px] text-dim">Exercices ({picked.length} sélectionné{picked.length > 1 ? "s" : ""})</span>
+        <span className="mb-1.5 block text-[13px] text-dim">
+          Exercices de la bibliothèque ({picked.length} sélectionné{picked.length > 1 ? "s" : ""})
+        </span>
         <ExerciseMultiSelect picked={picked} onToggle={toggle} />
 
-        <button onClick={create} className="mt-4 w-full rounded-xl bg-accent py-3 font-semibold text-[#1a1500]">Créer la séance</button>
+        {/* Création d'exercices inline */}
+        <div className="mt-4 rounded-xl border border-dashed border-line bg-surface2 p-3">
+          <p className="mb-2 text-[13px] font-semibold text-dim">Nouvel exercice</p>
+          <div className="flex gap-2">
+            <input
+              value={newName}
+              onChange={(e) => setNewName(e.target.value)}
+              onKeyDown={(e) => e.key === "Enter" && addInline()}
+              placeholder="Nom de l'exercice…"
+              className="flex-1"
+            />
+            <button
+              onClick={addInline}
+              disabled={!newName.trim()}
+              className="rounded-lg bg-accent px-3 py-2 text-sm font-semibold text-[#1a1500] disabled:opacity-40"
+            >
+              Ajouter
+            </button>
+          </div>
+
+          {inlineExercises.length > 0 && (
+            <>
+              <ul className="mt-2.5 space-y-1.5">
+                {inlineExercises.map((ex) => (
+                  <li key={ex.id} className="flex items-center justify-between rounded-lg bg-surface px-2.5 py-1.5 text-sm">
+                    <span className="font-medium">{ex.name}</span>
+                    <button onClick={() => setInlineExercises((p) => p.filter((e) => e.id !== ex.id))} className="text-dim">✕</button>
+                  </li>
+                ))}
+              </ul>
+              <label className="mt-2.5 flex cursor-pointer items-center gap-2 text-[13px]">
+                <span
+                  className={`grid h-5 w-5 shrink-0 place-items-center rounded border text-xs font-bold transition ${
+                    saveToLib ? "border-ok bg-ok text-[#06210a]" : "border-line bg-surface"
+                  }`}
+                  onClick={() => setSaveToLib((v) => !v)}
+                >
+                  {saveToLib ? "✓" : ""}
+                </span>
+                <input type="checkbox" className="sr-only" checked={saveToLib} onChange={(e) => setSaveToLib(e.target.checked)} />
+                Ajouter aussi à la bibliothèque
+              </label>
+            </>
+          )}
+        </div>
+
+        <button
+          onClick={create}
+          className="mt-4 w-full rounded-xl bg-accent py-3 font-semibold text-[#1a1500]"
+        >
+          Créer la séance {totalExercises > 0 ? `(${totalExercises} exercice${totalExercises > 1 ? "s" : ""})` : ""}
+        </button>
       </div>
     </div>
   );

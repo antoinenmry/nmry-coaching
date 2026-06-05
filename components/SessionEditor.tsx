@@ -2,7 +2,7 @@
 
 import { useState } from "react";
 import { useData } from "./DataProvider";
-import ExercisePicker from "./ExercisePicker";
+import ExercisePicker, { type InlineExercise } from "./ExercisePicker";
 import { exerciseInstanceFromLibrary, SESSION_COLORS } from "@/lib/data";
 import type { ExerciseInstance, Role } from "@/lib/types";
 
@@ -42,13 +42,17 @@ export default function SessionEditor({
       if (ex) Object.assign(ex, patch);
     });
 
-  const addExercises = (ids: string[]) =>
+  const addExercises = (libIds: string[], inline: InlineExercise[] = []) =>
     update((d) => {
       const s = d.sessions.find((x) => x.id === sessionId);
       if (!s) return;
-      ids.forEach((id) => {
+      libIds.forEach((id) => {
         const libEx = d.library.exercises.find((e) => e.id === id);
         s.exercises.push(exerciseInstanceFromLibrary({ id, name: libEx?.name ?? "Exercice" }));
+      });
+      inline.forEach(({ id, name }) => {
+        const libEx = d.library.exercises.find((e) => e.id === id);
+        s.exercises.push(exerciseInstanceFromLibrary({ id, name: libEx?.name ?? name }));
       });
     });
 
@@ -163,7 +167,7 @@ export default function SessionEditor({
             >
               + Ajouter des exercices
             </button>
-            {picking && <ExercisePicker onConfirm={addExercises} onClose={() => setPicking(false)} />}
+            {picking && <ExercisePicker onConfirm={(libIds, inline) => addExercises(libIds, inline)} onClose={() => setPicking(false)} />}
             <button onClick={deleteSession} className="mt-4 w-full rounded-xl bg-danger py-3 font-semibold text-white">
               Supprimer la séance
             </button>
