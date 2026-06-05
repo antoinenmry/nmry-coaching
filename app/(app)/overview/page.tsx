@@ -87,12 +87,34 @@ export default function OverviewPage() {
       return futureA ? da - db : db - da;
     });
 
+  const today = new Date().toISOString().slice(0, 10);
+  const activeInjuries = allInjuries.filter(
+    (f) => f.date <= today && (!f.dateEnd || f.dateEnd >= today),
+  );
   const injuryCount = allInjuries.length;
   const goalCount = allGoals.filter((g) => (daysUntil(g.date) ?? -1) >= 0).length;
 
   return (
     <div>
       <p className="mb-4 text-sm text-dim">{data.length} sportif{data.length > 1 ? "s" : ""}</p>
+
+      {/* Bandeau blessures actives */}
+      {activeInjuries.length > 0 && (
+        <div className="mb-4 rounded-2xl border border-danger/50 bg-danger/8 p-4">
+          <p className="mb-2.5 flex items-center gap-2 font-bold text-danger">
+            🩹 {activeInjuries.length} blessure{activeInjuries.length > 1 ? "s" : ""} active{activeInjuries.length > 1 ? "s" : ""}
+          </p>
+          <div className="space-y-2">
+            {activeInjuries.map((f) => (
+              <div key={f.id} className="flex items-start gap-2 rounded-xl bg-danger/10 px-3 py-2">
+                <span className="mt-0.5 shrink-0 text-[13px] font-bold text-danger">{f.clientName}</span>
+                <span className="text-dim">—</span>
+                <span className="text-[13px] leading-snug">{f.text.split("\n")[0].slice(0, 80)}</span>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
 
       {/* Onglets */}
       <div className="mb-4 flex rounded-lg bg-surface2 p-1">

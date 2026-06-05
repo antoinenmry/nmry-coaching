@@ -19,7 +19,7 @@ function isInjuryActive(f: Followup): boolean {
   const today = todayKey();
   if (f.type !== "injury") return false;
   if (f.date > today) return false;
-  if (!f.dateEnd) return true; // pas de fin déclarée = toujours active
+  if (!f.dateEnd) return true;
   return f.dateEnd >= today;
 }
 
@@ -29,6 +29,7 @@ export default function FollowupPage() {
   const [text, setText] = useState("");
   const [dateStart, setDateStart] = useState(todayKey());
   const [dateEnd, setDateEnd] = useState("");
+  const [editingId, setEditingId] = useState<string | null>(null);
 
   function add() {
     if (!text.trim()) return;
@@ -49,6 +50,7 @@ export default function FollowupPage() {
 
   const injuries = state.followups.filter((f) => f.type === "injury");
   const notes = state.followups.filter((f) => f.type === "note");
+  const editingFollowup = state.followups.find((f) => f.id === editingId) ?? null;
 
   return (
     <div className="space-y-4">
@@ -85,7 +87,7 @@ export default function FollowupPage() {
               <input type="date" value={dateStart} onChange={(e) => setDateStart(e.target.value)} />
             </label>
             <label className="block">
-              <span className="mb-1.5 block text-[13px] text-dim">Date de fin <span className="text-dim opacity-60">(optionnel)</span></span>
+              <span className="mb-1.5 block text-[13px] text-dim">Date de fin <span className="opacity-60">(optionnel)</span></span>
               <input type="date" value={dateEnd} onChange={(e) => setDateEnd(e.target.value)} min={dateStart} />
             </label>
           </div>
@@ -111,19 +113,23 @@ export default function FollowupPage() {
                 <div key={f.id} className={`rounded-xl border p-3.5 ${active ? "border-danger/50 bg-danger/5" : "border-line bg-surface"}`}>
                   <div className="flex items-center justify-between gap-2">
                     <div className="flex items-center gap-2">
-                      <span className="rounded-full bg-danger/20 px-2 py-0.5 text-[11px] font-bold text-danger">
-                        🩹 Blessure
-                      </span>
-                      {active && (
-                        <span className="rounded-full bg-danger px-2 py-0.5 text-[11px] font-bold text-white">Active</span>
-                      )}
+                      <span className="rounded-full bg-danger/20 px-2 py-0.5 text-[11px] font-bold text-danger">🩹 Blessure</span>
+                      {active && <span className="rounded-full bg-danger px-2 py-0.5 text-[11px] font-bold text-white">Active</span>}
                     </div>
-                    <button
-                      onClick={() => update((d) => { d.followups = d.followups.filter((x) => x.id !== f.id); })}
-                      className="rounded-lg bg-surface2 px-2.5 py-1 text-[12px] text-dim"
-                    >
-                      Suppr.
-                    </button>
+                    <div className="flex items-center gap-2">
+                      <button
+                        onClick={() => setEditingId(f.id)}
+                        className="rounded-lg bg-surface2 px-2.5 py-1 text-[12px] text-dim"
+                      >
+                        Modifier
+                      </button>
+                      <button
+                        onClick={() => update((d) => { d.followups = d.followups.filter((x) => x.id !== f.id); })}
+                        className="rounded-lg bg-surface2 px-2.5 py-1 text-[12px] text-dim"
+                      >
+                        Suppr.
+                      </button>
+                    </div>
                   </div>
                   <div className="mt-1.5 text-[12px] text-dim">
                     {f.dateEnd
@@ -165,6 +171,66 @@ export default function FollowupPage() {
       {state.followups.length === 0 && (
         <p className="py-8 text-center text-dim">Aucune entrée pour l&apos;instant.</p>
       )}
+
+      {/* Modale édition blessure */}
+      {editingFollowup && (
+        <EditInjuryModal
+          followup={editingFollowup}
+          onClose={() => setEditingId(null)}
+        />
+      )}
+    </div>
+  );
+}
+
+function EditInjuryModal({ followup, onClose }: { followup: Followup; onClose: () => void }) {
+  const { update } = useData();
+  const [dateStart, setDateStart] = useState(followup.date);
+  const [dateEnd, setDateEnd] = useState(followup.dateEnd ?? "");
+  const [text, setText] = useState(followup.text);
+
+  function save() {
+    update((d) => {
+      const f = d.followups.find((x) => x.id === followup.id);
+      if (!f) return;
+      f.date = dateStart;
+      f.dateEnd = dateEnd || undefined;
+      f.text = text.trim() || f.text;
+    });
+    onClose();
+  }
+
+  return (
+    <div
+      className="fixed inset-0 z-50 flex items-end justify-center bg-black/60 sm:items-center"
+      onClick={(e) => e.target === e.currentTarget && onClose()}
+    >
+      <div className="w-full max-w-md rounded-t-3xl border-t border-line bg-surface p-5 sm:rounded-3xl sm:border">
+        <div className="mb-4 flex items-center justify-between">
+          <h2 className="text-lg font-bold">Modifier la blessure</h2>
+          <button onClick={onClose} className="grid h-9 w-9 place-items-center rounded-lg bg-surface2">✕</button>
+        </div>
+
+        <div className="mb-3 grid grid-cols-2 gap-3">
+          <label className="block">
+            <span className="mb-1.5 block text-[13px] text-dim">Date de début</span>
+            <input type="date" value={dateStart} onChange={(e) => setDateStart(e.target.value)} />
+          </label>
+          <label className="block">
+            <span className="mb-1.5 block text-[13px] text-dim">Date de fin <span className="opacity-60">(optionnel)</span></span>
+            <input type="date" value={dateEnd} onChange={(e) => setDateEnd(e.target.value)} min={dateStart} />
+          </label>
+        </div>
+
+        <label className="mb-4 block">
+          <span className="mb-1.5 block text-[13px] text-dim">Détails</span>
+          <textarea value={text} onChange={(e) => setText(e.target.value)} className="min-h-[80px]" />
+        </label>
+
+        <button onClick={save} className="w-full rounded-xl bg-accent py-3 font-semibold text-[#1a1500]">
+          Enregistrer
+        </button>
+      </div>
     </div>
   );
 }
