@@ -7,11 +7,11 @@ import { daysUntil, countdownLabel } from "@/lib/dates";
 
 const CARDS = [
   { href: "/profile", icon: "👤", label: "Mon Profil" },
-  { href: "/plan", icon: "🗓️", label: "Programmation", color: "var(--color-accent2)" },
-  { href: "/goals", icon: "🎯", label: "Objectifs", color: "var(--color-ok)" },
-  { href: "/records", icon: "🏆", label: "Records", color: "var(--color-accent)" },
+  { href: "/plan", icon: "🗓️", label: "Ma Programmation", color: "var(--color-accent2)" },
+  { href: "/goals", icon: "🎯", label: "Mes Objectifs", color: "var(--color-ok)" },
+  { href: "/records", icon: "🏆", label: "Mes Records", color: "var(--color-accent)" },
   { href: "/followup", icon: "📝", label: "Mon Suivi", color: "var(--color-danger)" },
-  { href: "/library", icon: "📚", label: "Bibliothèque", color: "var(--color-accent)" },
+  { href: "/library", icon: "📚", label: "Ma Bibliothèque", color: "var(--color-accent)" },
 ];
 
 export default function Dashboard() {
@@ -110,9 +110,9 @@ export default function Dashboard() {
     </div>
   )}
 </div>
-            {/* On ferme la div correctement et on ajoute le label */}
-          <div className="mt-2 font-semibold text-lg">
-  {c.label}
+            {/* On affiche le nom de l'utilisateur à la place de "Mon Profil" */}
+          <div className="mt-2 font-semibold text-lg truncate w-full">
+  {c.href === "/profile" ? displayName : c.label}
 </div>
           </Link>
         ))}
