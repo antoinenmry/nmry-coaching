@@ -104,13 +104,29 @@ export default function Dashboard() {
   <span className="text-3xl">{c.icon}</span>
 )}
   
-  {/* Le badge "J-X" centré et gros au milieu de la case */}
+  {/* Le badge avec J-X, Nom et Lieu de la compétition au centre */}
   {c.href === "/goals" && nextGoal && (
-    <div className="absolute inset-0 flex items-center justify-center text-3xl font-black text-ok">
-      {countdownLabel(nextGoal.date)}
+    <div className="absolute inset-0 flex flex-col items-center justify-center p-4 text-center">
+      {/* 1. Le J-X */}
+      <span className="text-2xl font-black text-ok">
+        {countdownLabel(nextGoal.date)}
+      </span>
+      
+      {/* 2. Le nom (avec sécurité anti-dépassement) */}
+      <span className="mt-1 text-xs font-bold truncate w-full px-1">
+        {nextGoal.title || nextGoal.text || "Objectif"}
+      </span>
+      
+      {/* 3. Le lieu (si renseigné en BDD) */}
+      {(nextGoal.location || nextGoal.place) && (
+        <span className="mt-0.5 text-[11px] text-dim truncate w-full px-1">
+          📍 {nextGoal.location || nextGoal.place}
+        </span>
+      )}
     </div>
   )}
 </div>
+            
             {/* On affiche le nom de l'utilisateur à la place de "Mon Profil" */}
           <div className="mt-2 font-semibold text-lg truncate w-full">
   {c.href === "/profile" ? displayName : c.label}
