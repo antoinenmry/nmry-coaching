@@ -43,17 +43,19 @@ export default function Header() {
         </div>
       </div>
 
-      {/* Bandeau inférieur : sélecteur client (coach) + lien Réglages */}
-      <div className="flex items-center border-t border-line/50 px-4 py-2">
-        {role === "coach" ? (
-          <>
-            <ClientSelector />
-            <div className="flex-1" />
-            <Link href="/settings" className="text-sm text-dim">⚙ Réglages</Link>
-          </>
-        ) : (
-          <Link href="/settings" className="mx-auto text-sm text-dim">⚙ Réglages</Link>
-        )}
+      {/* Bandeau inférieur — même grille 3 colonnes que la ligne titre */}
+      <div className="flex items-center gap-2 border-t border-line/50 px-4 py-2">
+        <div className="w-10 shrink-0" />
+        <div className="flex flex-1 justify-center">
+          {role === "coach" ? <ClientSelector /> : null}
+        </div>
+        <Link
+          href="/settings"
+          aria-label="Réglages"
+          className="grid h-10 w-10 shrink-0 place-items-center rounded-lg bg-surface2 text-base"
+        >
+          ⚙
+        </Link>
       </div>
     </header>
   );

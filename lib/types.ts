@@ -121,6 +121,7 @@ export interface RecordsData {
 /** Préférences visuelles par compte (couleurs cartes accueil…). */
 export interface UserPreferences {
   cardColors: Record<string, string>; // href → couleur hex
+  cardColorMode: "arc" | "full";      // arc de cercle ou fond entier
 }
 
 /** Document complet d'un client (stocké en JSON dans app_state.data). */
@@ -191,5 +192,5 @@ export const emptyState = (): AppState => ({
   followups: [],
   library: defaultLibrary(),
   records: emptyRecords(),
-  preferences: { cardColors: {} },
+  preferences: { cardColors: {}, cardColorMode: "arc" },
 });

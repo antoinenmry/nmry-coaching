@@ -17,6 +17,7 @@ export default function Dashboard() {
   const { me, state, loading } = useData();
   const displayName = state.profile.name || me?.name || me?.email || "Moi";
   const cardColors = state.preferences?.cardColors ?? {};
+  const cardColorMode = state.preferences?.cardColorMode ?? "arc";
 
   // Prochain objectif à venir (le plus proche dans le futur).
   const nextGoal = state.goals
@@ -33,10 +34,11 @@ export default function Dashboard() {
             href={c.href}
             className="relative flex aspect-square flex-col justify-between overflow-hidden rounded-2xl border border-line bg-surface p-4 transition active:scale-95"
           >
-            <span
-              className="absolute inset-0 opacity-20"
-              style={{ background: cardColors[c.href] || c.color }}
-            />
+            {cardColorMode === "full" ? (
+              <span className="absolute inset-0 opacity-20" style={{ background: cardColors[c.href] || c.color }} />
+            ) : (
+              <span className="absolute -right-7 -top-7 h-[90px] w-[90px] rounded-full opacity-15" style={{ background: cardColors[c.href] || c.color }} />
+            )}
            <div className="flex items-start justify-between">
                  {c.href === "/profile" && state.profile.photo ? (
   <img src={state.profile.photo} alt="avatar" className="h-10 w-10 shrink-0 rounded-full object-cover border border-line" />

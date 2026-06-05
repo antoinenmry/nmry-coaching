@@ -16,16 +16,17 @@ export default function SettingsPage() {
   const { me, role, signOut, state, update } = useData();
   const { theme, toggleTheme } = useTheme();
   const cardColors = state.preferences?.cardColors ?? {};
+  const cardColorMode = state.preferences?.cardColorMode ?? "arc";
 
   function setCardColor(href: string, color: string) {
     update((s) => {
-      if (!s.preferences) s.preferences = { cardColors: {} };
+      if (!s.preferences) s.preferences = { cardColors: {}, cardColorMode: "arc" };
       s.preferences.cardColors[href] = color;
     });
   }
 
   function resetColors() {
-    update((s) => { s.preferences = { cardColors: {} }; });
+    update((s) => { s.preferences = { cardColors: {}, cardColorMode: s.preferences?.cardColorMode ?? "arc" }; });
   }
 
   return (
@@ -69,8 +70,22 @@ export default function SettingsPage() {
 
       {/* Couleurs des cartes */}
       <section className="rounded-2xl border border-line bg-surface p-4">
-        <h2 className="mb-1 font-bold">Couleurs des cartes</h2>
-        <p className="mb-4 text-xs text-dim">Arc de cercle sur chaque carte de l&apos;accueil.</p>
+        <h2 className="mb-3 font-bold">Couleurs des cartes</h2>
+
+        {/* Toggle arc / fond complet */}
+        <div className="mb-4 flex rounded-xl bg-surface2 p-1">
+          {(["arc", "full"] as const).map((m) => (
+            <button
+              key={m}
+              onClick={() => update((s) => { s.preferences.cardColorMode = m; })}
+              className={`flex-1 rounded-lg py-1.5 text-sm font-semibold transition ${
+                cardColorMode === m ? "bg-accent text-[#1a1500]" : "text-dim"
+              }`}
+            >
+              {m === "arc" ? "Arc de cercle" : "Fond complet"}
+            </button>
+          ))}
+        </div>
         <div className="space-y-3">
           {CARDS.map((card) => (
             <div key={card.href} className="flex items-center justify-between gap-3">
