@@ -2,7 +2,7 @@
 
 import { countdownLabel, daysUntil, frenchDate } from "@/lib/dates";
 import type { Goal } from "@/lib/types";
-import { EventsDisplay } from "@/app/(app)/goals/page";
+import EventsDisplay from "@/components/EventsDisplay";
 
 /** Fiche objectif en lecture seule (utilisée depuis le planning). */
 export default function GoalInfoModal({ goals, onClose }: { goals: Goal[]; onClose: () => void }) {
