@@ -30,7 +30,7 @@ export default function Dashboard() {
         <div className="flex items-center gap-2 text-sm">
           <strong>{displayName}</strong>
           <span
-            className={`rounded-full px-2 py-0.5 text-[11px] font-bold ${
+            className={`rounded-full px-2 py-0.5 text-[14px] font-bold ${
               isCoach ? "bg-accent/20 text-accent" : "bg-accent2/20 text-[#90caf9]"
             }`}
           >
