@@ -28,6 +28,7 @@ export default function PlanPage() {
   const [pending, setPending] = useState<string | null>(null); // séance à placer (tap-to-place)
   const [editing, setEditing] = useState<string | null>(null); // sessionId
   const [composing, setComposing] = useState(false);
+  const [duplicating, setDuplicating] = useState(false);
   const [viewingGoals, setViewingGoals] = useState<Goal[] | null>(null);
 
   const todayKey = ymd(new Date());
@@ -130,9 +131,14 @@ export default function PlanPage() {
         <div className="mb-2 flex items-center justify-between">
           <span className="text-sm font-bold">À placer ({bank.length})</span>
           {isCoach && (
-            <button onClick={() => setComposing(true)} className="rounded-lg bg-ok px-3 py-1.5 text-[13px] font-semibold text-[#06210a]">
-              + Créer une séance
-            </button>
+            <div className="flex gap-2">
+              <button onClick={() => setComposing(true)} className="rounded-lg bg-ok px-3 py-1.5 text-[13px] font-semibold text-[#06210a]">
+                + Créer une séance
+              </button>
+              <button onClick={() => setDuplicating(true)} className="rounded-lg px-3 py-1.5 text-[13px] font-semibold text-white" style={{ background: "#a855f7" }}>
+                Dupliquer la semaine
+              </button>
+            </div>
           )}
         </div>
         {bank.length === 0 ? (
@@ -210,10 +216,15 @@ export default function PlanPage() {
       {composing && (
         <ComposeModal
           onClose={() => setComposing(false)}
-          onCreated={(id) => {
-            setComposing(false);
-            setEditing(id);
-          }}
+          onCreated={(id) => { setComposing(false); setEditing(id); }}
+        />
+      )}
+
+      {duplicating && (
+        <DuplicateWeekModal
+          cursor={cursor}
+          sessionsByDate={sessionsByDate}
+          onClose={() => setDuplicating(false)}
         />
       )}
     </div>
@@ -344,6 +355,127 @@ function ComposeModal({ onClose, onCreated }: { onClose: () => void; onCreated: 
           className="mt-4 w-full rounded-xl bg-accent py-3 font-semibold text-[#1a1500]"
         >
           Créer la séance {totalExercises > 0 ? `(${totalExercises} exercice${totalExercises > 1 ? "s" : ""})` : ""}
+        </button>
+      </div>
+    </div>
+  );
+}
+
+function getMonday(d: Date) {
+  const m = new Date(d);
+  m.setDate(d.getDate() - ((d.getDay() + 6) % 7));
+  m.setHours(0, 0, 0, 0);
+  return m;
+}
+
+function weekLabel(monday: Date) {
+  const sunday = new Date(monday);
+  sunday.setDate(monday.getDate() + 6);
+  return `${monday.getDate()} ${MONTHS[monday.getMonth()].slice(0, 3)} – ${sunday.getDate()} ${MONTHS[sunday.getMonth()].slice(0, 3)} ${sunday.getFullYear()}`;
+}
+
+function DuplicateWeekModal({
+  cursor,
+  sessionsByDate,
+  onClose,
+}: {
+  cursor: Date;
+  sessionsByDate: Record<string, SessionInstance[]>;
+  onClose: () => void;
+}) {
+  const { update } = useData();
+  const [sourceMonday, setSourceMonday] = useState(() => getMonday(cursor));
+  const [numWeeks, setNumWeeks] = useState(1);
+
+  // Séances placées dans la semaine source
+  const sourceSessions = useMemo(() => {
+    const days: string[] = [];
+    for (let i = 0; i < 7; i++) {
+      const d = new Date(sourceMonday);
+      d.setDate(sourceMonday.getDate() + i);
+      days.push(ymd(d));
+    }
+    return days.flatMap((day) => (sessionsByDate[day] ?? []).map((s) => ({ ...s, sourceDay: day })));
+  }, [sourceMonday, sessionsByDate]);
+
+  function shiftSource(dir: number) {
+    setSourceMonday((prev) => {
+      const next = new Date(prev);
+      next.setDate(prev.getDate() + dir * 7);
+      return next;
+    });
+  }
+
+  function duplicate() {
+    update((d) => {
+      for (let week = 1; week <= numWeeks; week++) {
+        sourceSessions.forEach(({ sourceDay, ...session }) => {
+          const srcDate = new Date(sourceDay);
+          const targetDate = new Date(srcDate);
+          targetDate.setDate(srcDate.getDate() + week * 7);
+          const copy: SessionInstance = {
+            ...structuredClone(session),
+            id: crypto.randomUUID(),
+            date: ymd(targetDate),
+            done: false,
+            emoji: 0,
+            coachComment: session.coachComment,
+            exercises: session.exercises.map((ex) => ({
+              ...structuredClone(ex),
+              uid: crypto.randomUUID(),
+              rpeClient: 0,
+              clientComment: "",
+            })),
+          };
+          d.sessions.push(copy);
+        });
+      }
+    });
+    onClose();
+  }
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-end justify-center bg-black/60 sm:items-center" onClick={(e) => e.target === e.currentTarget && onClose()}>
+      <div className="w-full max-w-sm rounded-t-3xl border-t border-line bg-surface p-5 sm:rounded-3xl sm:border">
+        <div className="mb-4 flex items-center justify-between">
+          <h2 className="text-lg font-bold">Dupliquer la semaine</h2>
+          <button onClick={onClose} className="grid h-9 w-9 place-items-center rounded-lg bg-surface2">✕</button>
+        </div>
+
+        {/* Sélecteur de semaine source */}
+        <p className="mb-1.5 text-[13px] text-dim">Semaine à dupliquer</p>
+        <div className="mb-1 flex items-center gap-2">
+          <button onClick={() => shiftSource(-1)} className="grid h-9 w-9 shrink-0 place-items-center rounded-lg bg-surface2 text-lg">‹</button>
+          <span className="flex-1 text-center text-sm font-semibold">{weekLabel(sourceMonday)}</span>
+          <button onClick={() => shiftSource(1)} className="grid h-9 w-9 shrink-0 place-items-center rounded-lg bg-surface2 text-lg">›</button>
+        </div>
+        <p className="mb-4 text-center text-[13px] text-dim">
+          {sourceSessions.length === 0
+            ? "Aucune séance placée cette semaine"
+            : `${sourceSessions.length} séance${sourceSessions.length > 1 ? "s" : ""} à copier`}
+        </p>
+
+        {/* Nombre de semaines */}
+        <p className="mb-2 text-[13px] text-dim">Sur combien de semaines suivantes ?</p>
+        <div className="mb-5 flex items-center justify-center gap-4">
+          <button
+            onClick={() => setNumWeeks((n) => Math.max(1, n - 1))}
+            className="grid h-10 w-10 place-items-center rounded-xl bg-surface2 text-xl font-bold"
+          >−</button>
+          <span className="w-12 text-center text-2xl font-extrabold">{numWeeks}</span>
+          <button
+            onClick={() => setNumWeeks((n) => Math.min(12, n + 1))}
+            className="grid h-10 w-10 place-items-center rounded-xl bg-surface2 text-xl font-bold"
+          >+</button>
+        </div>
+
+        <button
+          onClick={duplicate}
+          disabled={sourceSessions.length === 0}
+          className="w-full rounded-xl py-3 font-semibold text-white disabled:opacity-40"
+          style={{ background: "#a855f7" }}
+        >
+          Dupliquer sur {numWeeks} semaine{numWeeks > 1 ? "s" : ""}
         </button>
       </div>
     </div>
