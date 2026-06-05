@@ -200,9 +200,14 @@ export default function SessionEditor({
               + Ajouter des exercices
             </button>
             {picking && <ExercisePicker onConfirm={(libIds, inline) => addExercises(libIds, inline)} onClose={() => setPicking(false)} />}
-            <button onClick={deleteSession} className="mt-4 w-full rounded-xl bg-danger py-3 font-semibold text-white">
-              Supprimer la séance
-            </button>
+            <div className="mt-4 grid grid-cols-2 gap-3">
+              <button onClick={onClose} className="rounded-xl bg-surface2 py-3 font-semibold">
+                Valider
+              </button>
+              <button onClick={deleteSession} className="rounded-xl bg-danger py-3 font-semibold text-white">
+                Supprimer
+              </button>
+            </div>
           </>
         )}
       </div>
@@ -252,10 +257,7 @@ function ExerciseBlock({
           </div>
           <div className="mt-2.5">
             <span className="mb-1 block text-[13px] text-dim">Poids (kg)</span>
-            <div className="flex items-center gap-2.5">
-              <input type="range" min={0} max={300} step={1} value={ex.weight} onChange={(e) => onPatch({ weight: +e.target.value })} className="flex-1" />
-              <input type="number" min={0} value={ex.weight} onChange={(e) => onPatch({ weight: +e.target.value || 0 })} className="w-20" />
-            </div>
+            <input type="number" min={0} value={ex.weight} onChange={(e) => onPatch({ weight: +e.target.value || 0 })} />
           </div>
           <div className="mt-2.5 flex items-center gap-2">
             <span className="w-24 shrink-0 text-[13px] text-dim">RPE coach</span>
