@@ -527,8 +527,15 @@ interface ViewProps {
   onOpenGoal: (goals: Goal[]) => void;
 }
 
+const TODAY = ymd(new Date());
+
 function injuriesForDate(key: string, injuries: Followup[]): Followup[] {
-  return injuries.filter((f) => f.date <= key && (!f.dateEnd || f.dateEnd >= key));
+  return injuries.filter((f) => {
+    if (f.date > key) return false;
+    // Pas de date de fin → on colore jusqu'à aujourd'hui uniquement
+    const end = f.dateEnd ?? TODAY;
+    return end >= key;
+  });
 }
 
 function dayDrop(key: string, pending: string | null, onPlace: ViewProps["onPlace"]) {
