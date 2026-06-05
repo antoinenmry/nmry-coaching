@@ -160,6 +160,20 @@ export default function SessionEditor({
           </div>
         </div>
 
+        {/* Valider la séance (client) */}
+        {!isCoach && session.date && (
+          <button
+            onClick={() => patchSession({ done: !session.done })}
+            className={`mt-3 w-full rounded-xl py-3 font-semibold transition ${
+              session.done
+                ? "bg-ok text-[#06210a]"
+                : "border border-dashed border-ok text-ok"
+            }`}
+          >
+            {session.done ? "✅ Séance validée · toucher pour annuler" : "✅ Marquer comme effectuée"}
+          </button>
+        )}
+
         <div className="mt-3 space-y-2.5">
           {session.exercises.map((ex) => (
             <ExerciseBlock

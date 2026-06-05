@@ -28,6 +28,7 @@ export interface SessionInstance {
   name: string;
   color: string;
   emoji: number; // ressenti global de la séance (0 = non noté, 1-5)
+  done: boolean; // séance validée par le client
   coachComment: string; // commentaire global du coach pour la séance
   date: string | null; // "YYYY-MM-DD" si placée, null si dans la banque
   exercises: ExerciseInstance[];

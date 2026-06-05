@@ -384,16 +384,29 @@ function dayDrop(key: string, pending: string | null, onPlace: ViewProps["onPlac
   };
 }
 
-function SessionPill({ s, onOpen, big }: { s: SessionInstance; onOpen: (id: string) => void; big?: boolean }) {
+function SessionPill({ s, onOpen, big, todayKey }: { s: SessionInstance; onOpen: (id: string) => void; big?: boolean; todayKey: string }) {
+  const isPast = !!s.date && s.date < todayKey;
+  const rpes = s.exercises.map((e) => e.rpeClient).filter((r) => r > 0);
+  const avgRpe = rpes.length > 0 ? Math.round(rpes.reduce((a, b) => a + b, 0) / rpes.length) : 0;
+
+  const badge = s.done
+    ? <span className="shrink-0 leading-none">{big && avgRpe > 0 ? `✅ RPE ${avgRpe}${s.emoji > 0 ? " " + EMOJIS[s.emoji - 1] : ""}` : "✅"}</span>
+    : isPast
+    ? <span className="shrink-0 leading-none">❌</span>
+    : null;
+
   return (
     <button
       draggable
       onDragStart={(e) => { e.stopPropagation(); e.dataTransfer.setData("text/session", s.id); }}
       onClick={(e) => { e.stopPropagation(); onOpen(s.id); }}
-      className={`truncate rounded-md px-1.5 text-left font-semibold text-[#06121f] ${big ? "py-1.5 text-[13px]" : "py-1 text-[11px]"}`}
+      className={`w-full rounded-md px-1.5 text-left font-semibold text-[#06121f] ${big ? "py-1.5 text-[13px]" : "py-1 text-[11px]"}`}
       style={{ background: s.color }}
     >
-      {emojiOf(s.emoji)}{big ? s.name : shortName(s.name)}
+      <span className="flex items-center justify-between gap-1">
+        <span className="min-w-0 flex-1 truncate">{emojiOf(s.emoji)}{big ? s.name : shortName(s.name)}</span>
+        {badge}
+      </span>
     </button>
   );
 }
@@ -435,7 +448,7 @@ function MonthView({ cursor, todayKey, sessionsByDate, goalsByDate, pending, onP
             {goals[0].competition}
           </button>
         )}
-        {sessions.map((s) => <SessionPill key={s.id} s={s} onOpen={onOpen} />)}
+        {sessions.map((s) => <SessionPill key={s.id} s={s} onOpen={onOpen} todayKey={todayKey} />)}
       </div>,
     );
   }
@@ -480,7 +493,7 @@ function WeekView({ cursor, todayKey, sessionsByDate, goalsByDate, pending, onPl
               {sessions.length === 0 ? (
                 <span className="text-[13px] italic text-dim">Repos / rien de prévu</span>
               ) : (
-                sessions.map((s) => <SessionPill key={s.id} s={s} onOpen={onOpen} big />)
+                sessions.map((s) => <SessionPill key={s.id} s={s} onOpen={onOpen} big todayKey={todayKey} />)
               )}
             </div>
           </div>
