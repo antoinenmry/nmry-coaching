@@ -12,12 +12,12 @@ export async function GET(request: NextRequest) {
   const type = searchParams.get("type") as EmailOtpType | null;
   const next = searchParams.get("next") ?? "/";
 
-  if (token_hash && type) {
+  const url = process.env.NEXT_PUBLIC_SUPABASE_URL;
+  const anonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
+
+  if (token_hash && type && url && anonKey) {
     const response = NextResponse.redirect(new URL(next, request.url));
-    const supabase = createServerClient(
-      process.env.NEXT_PUBLIC_SUPABASE_URL!,
-      process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
-      {
+    const supabase = createServerClient(url, anonKey, {
         cookies: {
           getAll() {
             return request.cookies.getAll();

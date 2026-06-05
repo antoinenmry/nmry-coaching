@@ -4,16 +4,45 @@ import { AUTH_ENABLED } from "@/lib/config";
 
 type CookieToSet = { name: string; value: string; options: CookieOptions };
 
+const SUPABASE_URL = process.env.NEXT_PUBLIC_SUPABASE_URL;
+const SUPABASE_ANON_KEY = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
+
+/** Route publique : /login et les routes de callback /auth/* (confirmation email,
+ *  reset mot de passe) qui s'exécutent AVANT que la session existe. */
+function isPublicPath(path: string) {
+  return path === "/login" || path.startsWith("/auth/");
+}
+
+/** Redirige vers /login si la route est protégée et qu'on n'est ni connecté ni invité. */
+function guardWithoutSession(request: NextRequest, response: NextResponse) {
+  const guest = request.cookies.get("nmry-guest")?.value === "1";
+  if (!guest && !isPublicPath(request.nextUrl.pathname)) {
+    const url = request.nextUrl.clone();
+    url.pathname = "/login";
+    return NextResponse.redirect(url);
+  }
+  return response;
+}
+
 /** Rafraîchit la session (cookies) et protège les routes de l'app. */
 export async function updateSession(request: NextRequest) {
-  let response = NextResponse.next({ request });
+  const response = NextResponse.next({ request });
 
   // Mode local : aucune protection, on laisse tout passer.
   if (!AUTH_ENABLED) return response;
 
+  // Supabase non configuré (variables d'env absentes, ex. déploiement sans
+  // NEXT_PUBLIC_SUPABASE_*) : NE PAS construire le client (il lèverait une
+  // exception → MIDDLEWARE_INVOCATION_FAILED). On dégrade en mode déconnecté :
+  // login + invité restent accessibles, le reste redirige vers /login.
+  if (!SUPABASE_URL || !SUPABASE_ANON_KEY) {
+    return guardWithoutSession(request, response);
+  }
+
+  let sessionResponse = response;
   const supabase = createServerClient(
-    process.env.NEXT_PUBLIC_SUPABASE_URL!,
-    process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
+    SUPABASE_URL,
+    SUPABASE_ANON_KEY,
     {
       cookies: {
         getAll() {
@@ -21,35 +50,41 @@ export async function updateSession(request: NextRequest) {
         },
         setAll(cookiesToSet: CookieToSet[]) {
           cookiesToSet.forEach(({ name, value }) => request.cookies.set(name, value));
-          response = NextResponse.next({ request });
+          sessionResponse = NextResponse.next({ request });
           cookiesToSet.forEach(({ name, value, options }) =>
-            response.cookies.set(name, value, options),
+            sessionResponse.cookies.set(name, value, options),
           );
         },
       },
     },
   );
 
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
+  // Supabase mal configuré ou injoignable : ne pas laisser l'exception remonter
+  // (sinon MIDDLEWARE_INVOCATION_FAILED). On dégrade en mode déconnecté.
+  let user = null;
+  try {
+    ({
+      data: { user },
+    } = await supabase.auth.getUser());
+  } catch {
+    return guardWithoutSession(request, sessionResponse);
+  }
 
   const path = request.nextUrl.pathname;
-  const isAuthPage = path === "/login";
   const guest = request.cookies.get("nmry-guest")?.value === "1";
 
   // Ni connecté ni invité + page protégée -> /login
-  if (!user && !guest && !isAuthPage) {
+  if (!user && !guest && !isPublicPath(path)) {
     const url = request.nextUrl.clone();
     url.pathname = "/login";
     return NextResponse.redirect(url);
   }
   // Connecté (vrai compte) + page de login -> accueil
-  if (user && isAuthPage) {
+  if (user && path === "/login") {
     const url = request.nextUrl.clone();
     url.pathname = "/";
     return NextResponse.redirect(url);
   }
 
-  return response;
+  return sessionResponse;
 }
