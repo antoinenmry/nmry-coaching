@@ -6,7 +6,7 @@ import { AUTH_ENABLED } from "@/lib/config";
 import { daysUntil, countdownLabel } from "@/lib/dates";
 
 const CARDS = [
-  { href: "/profile", icon: "👤", label: "Profil",color: "var(--color-accent1)" },
+  { href: "/profile", icon: "👤", label: "Profil",color: "var(--color-accent2)" },
   { href: "/plan", icon: "🗓️", label: "Programmation", color: "var(--color-accent2)" },
   { href: "/goals", icon: "🎯", label: "Objectifs", color: "var(--color-ok)" },
   { href: "/followup", icon: "📝", label: "Suivi perso",  color: "var(--color-danger)" },
