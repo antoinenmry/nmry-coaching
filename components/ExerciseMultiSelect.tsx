@@ -11,8 +11,8 @@ export default function ExerciseMultiSelect({
   picked: string[];
   onToggle: (id: string) => void;
 }) {
-  const { state } = useData();
-  const { categories, exercises } = state.library;
+  const { library } = useData();
+  const { categories, exercises } = library;
   const [sel, setSel] = useState<Record<string, string[]>>({});
 
   const filtered = useMemo(
@@ -20,7 +20,7 @@ export default function ExerciseMultiSelect({
       exercises.filter((ex) =>
         categories.every((c) => {
           const sels = sel[c.id] ?? [];
-          return sels.length === 0 || sels.includes(ex.tags[c.id]);
+          return sels.length === 0 || (ex.tags[c.id] ?? []).some((t) => sels.includes(t));
         }),
       ),
     [exercises, categories, sel],

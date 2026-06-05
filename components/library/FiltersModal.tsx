@@ -12,43 +12,46 @@ export default function FiltersModal({
   categories: FilterCategory[];
   onClose: () => void;
 }) {
-  const { update } = useData();
+  const { updateLibrary } = useData();
 
   const renameCategory = (catId: string, name: string) =>
-    update((s) => {
-      const c = s.library.categories.find((c) => c.id === catId);
+    updateLibrary((lib) => {
+      const c = lib.categories.find((c) => c.id === catId);
       if (c) c.name = name;
     });
 
   const deleteCategory = (catId: string) =>
-    update((s) => {
-      s.library.categories = s.library.categories.filter((c) => c.id !== catId);
-      // nettoie les tags des exercices
-      s.library.exercises.forEach((e) => delete e.tags[catId]);
+    updateLibrary((lib) => {
+      lib.categories = lib.categories.filter((c) => c.id !== catId);
+      lib.exercises.forEach((e) => delete e.tags[catId]);
     });
 
   const addCategory = () =>
-    update((s) => {
-      s.library.categories.push({ id: uid(), name: "Nouvelle catégorie", options: [] });
+    updateLibrary((lib) => {
+      lib.categories.push({ id: uid(), name: "Nouvelle catégorie", options: [] });
     });
 
   const addOption = (catId: string) =>
-    update((s) => {
-      s.library.categories.find((c) => c.id === catId)?.options.push({ id: uid(), label: "Nouvelle option" });
+    updateLibrary((lib) => {
+      lib.categories.find((c) => c.id === catId)?.options.push({ id: uid(), label: "Nouvelle option" });
     });
 
   const renameOption = (catId: string, optId: string, label: string) =>
-    update((s) => {
-      const o = s.library.categories.find((c) => c.id === catId)?.options.find((o) => o.id === optId);
+    updateLibrary((lib) => {
+      const o = lib.categories.find((c) => c.id === catId)?.options.find((o) => o.id === optId);
       if (o) o.label = label;
     });
 
   const deleteOption = (catId: string, optId: string) =>
-    update((s) => {
-      const c = s.library.categories.find((c) => c.id === catId);
+    updateLibrary((lib) => {
+      const c = lib.categories.find((c) => c.id === catId);
       if (c) c.options = c.options.filter((o) => o.id !== optId);
-      s.library.exercises.forEach((e) => {
-        if (e.tags[catId] === optId) delete e.tags[catId];
+      lib.exercises.forEach((e) => {
+        const current = e.tags[catId];
+        if (!current) return;
+        const next = current.filter((id) => id !== optId);
+        if (next.length === 0) delete e.tags[catId];
+        else e.tags[catId] = next;
       });
     });
 

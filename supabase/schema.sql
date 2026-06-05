@@ -68,7 +68,46 @@ create trigger on_auth_user_created
   for each row execute procedure public.handle_new_user();
 
 -- =========================================================================
--- 7) ⚠️ TE DÉSIGNER COMME COACH
+-- 7) BIBLIOTHÈQUE PARTAGÉE — singleton lisible par tous, éditable par le coach
+-- =========================================================================
+
+create table if not exists public.library_state (
+  id         int primary key default 1 check (id = 1), -- ligne unique
+  data       jsonb not null default '{"categories":[],"exercises":[]}'::jsonb,
+  updated_at timestamptz default now()
+);
+
+alter table public.library_state enable row level security;
+
+drop policy if exists library_read_all    on public.library_state;
+drop policy if exists library_coach_write on public.library_state;
+create policy library_read_all    on public.library_state for select using (auth.role() = 'authenticated');
+create policy library_coach_write on public.library_state for all   using (public.is_coach()) with check (public.is_coach());
+
+-- =========================================================================
+-- 8) SÉCURITÉ — Empêcher l'auto-élévation de rôle
+--    Sans ce trigger, un client pourrait se passer lui-même en 'coach' via
+--    l'API (la policy profiles_self_update n'a pas de WITH CHECK sur role).
+-- =========================================================================
+
+create or replace function public.prevent_role_escalation()
+returns trigger language plpgsql security definer
+set search_path = public as $$
+begin
+  if OLD.role != NEW.role and not public.is_coach() then
+    raise exception 'Modification du rôle non autorisée';
+  end if;
+  return NEW;
+end;
+$$;
+
+drop trigger if exists check_role_escalation on public.profiles;
+create trigger check_role_escalation
+  before update on public.profiles
+  for each row execute function public.prevent_role_escalation();
+
+-- =========================================================================
+-- 8) ⚠️ TE DÉSIGNER COMME COACH
 --    Inscris-toi d'abord dans l'app avec ton email, PUIS lance cette ligne
 --    (remplace l'email) pour passer ton compte en coach :
 --

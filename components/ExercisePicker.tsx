@@ -17,7 +17,7 @@ export default function ExercisePicker({
   onConfirm: (libIds: string[], inline: InlineExercise[]) => void;
   onClose: () => void;
 }) {
-  const { update } = useData();
+  const { updateLibrary } = useData();
   const [picked, setPicked] = useState<string[]>([]);
   const [newName, setNewName] = useState("");
   const [inlineExercises, setInlineExercises] = useState<InlineExercise[]>([]);
@@ -40,10 +40,10 @@ export default function ExercisePicker({
 
   function confirm() {
     if (saveToLib && inlineExercises.length > 0) {
-      update((d) => {
+      updateLibrary((lib) => {
         inlineExercises.forEach(({ id, name }) => {
-          if (!d.library.exercises.find((e) => e.id === id)) {
-            d.library.exercises.push({ id, name, tags: {}, video: "" });
+          if (!lib.exercises.find((e) => e.id === id)) {
+            lib.exercises.push({ id, name, tags: {}, video: "" });
           }
         });
       });

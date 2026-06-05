@@ -22,25 +22,31 @@ export default function ExerciseModal({
   exercise: LibraryExercise | null; // null = création
   onClose: () => void;
 }) {
-  const { update } = useData();
+  const { updateLibrary } = useData();
   const [draft, setDraft] = useState<LibraryExercise>(exercise ? structuredClone(exercise) : blank());
   const set = <K extends keyof LibraryExercise>(key: K, value: LibraryExercise[K]) =>
     setDraft((d) => ({ ...d, [key]: value }));
 
   const toggleTag = (catId: string, optId: string) =>
     setDraft((d) => {
+      const current = d.tags[catId] ?? [];
       const tags = { ...d.tags };
-      if (tags[catId] === optId) delete tags[catId];
-      else tags[catId] = optId;
+      if (current.includes(optId)) {
+        const next = current.filter((id) => id !== optId);
+        if (next.length === 0) delete tags[catId];
+        else tags[catId] = next;
+      } else {
+        tags[catId] = [...current, optId];
+      }
       return { ...d, tags };
     });
 
   function save() {
     if (!draft.name.trim()) return;
-    update((s) => {
-      const i = s.library.exercises.findIndex((e) => e.id === draft.id);
-      if (i >= 0) s.library.exercises[i] = draft;
-      else s.library.exercises.unshift(draft);
+    updateLibrary((lib) => {
+      const i = lib.exercises.findIndex((e) => e.id === draft.id);
+      if (i >= 0) lib.exercises[i] = draft;
+      else lib.exercises.unshift(draft);
     });
     onClose();
   }
@@ -66,7 +72,7 @@ export default function ExerciseModal({
             <p className="mb-1.5 text-xs uppercase tracking-wide text-dim">{cat.name}</p>
             <div className="flex flex-wrap gap-2">
               {cat.options.map((opt) => {
-                const active = draft.tags[cat.id] === opt.id;
+                const active = (draft.tags[cat.id] ?? []).includes(opt.id);
                 return (
                   <button
                     key={opt.id}

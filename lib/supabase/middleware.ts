@@ -13,6 +13,17 @@ function isPublicPath(path: string) {
   return path === "/login" || path.startsWith("/auth/");
 }
 
+/** Supabase redirige vers la Site URL avec ?error= quand un lien est expiré/invalide.
+ *  On intercepte ça pour renvoyer vers /login avec un message lisible. */
+function redirectSupabaseError(request: NextRequest) {
+  const error = request.nextUrl.searchParams.get("error");
+  if (!error) return null;
+  const url = request.nextUrl.clone();
+  url.pathname = "/login";
+  url.search = "?error=lien_invalide";
+  return NextResponse.redirect(url);
+}
+
 /** Redirige vers /login si la route est protégée et qu'on n'est ni connecté ni invité. */
 function guardWithoutSession(request: NextRequest, response: NextResponse) {
   const guest = request.cookies.get("nmry-guest")?.value === "1";
@@ -30,6 +41,10 @@ export async function updateSession(request: NextRequest) {
 
   // Mode local : aucune protection, on laisse tout passer.
   if (!AUTH_ENABLED) return response;
+
+  // Intercepte les erreurs Supabase renvoyées sur la Site URL (?error=access_denied…)
+  const supabaseError = redirectSupabaseError(request);
+  if (supabaseError) return supabaseError;
 
   // Supabase non configuré (variables d'env absentes, ex. déploiement sans
   // NEXT_PUBLIC_SUPABASE_*) : NE PAS construire le client (il lèverait une

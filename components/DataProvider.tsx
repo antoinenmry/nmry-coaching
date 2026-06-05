@@ -11,13 +11,14 @@ import {
 import { useRouter } from "next/navigation";
 import { createClient } from "@/lib/supabase/client";
 import { AUTH_ENABLED } from "@/lib/config";
-import { emptyState, type AppState, type Profile, type Role } from "@/lib/types";
+import { emptyState, type AppState, type ExerciseLibrary, type Profile, type Role } from "@/lib/types";
 import { isGuestClient, setGuest } from "@/lib/guest";
 
 type Mode = "auth" | "guest" | "local";
 
 const LOCAL_KEY = "nmry-local-state";
 const LOCAL_ROLE_KEY = "nmry-local-role";
+const COACH_CLIENT_KEY = "nmry-coach-selected-client";
 const LOCAL_PROFILE: Profile = { id: "local", email: "", name: "Moi", role: "client" };
 
 function loadLocal(): AppState {
@@ -39,6 +40,8 @@ interface DataContextValue {
   me: Profile | null;
   state: AppState;
   update: (recipe: (draft: AppState) => void) => void;
+  library: ExerciseLibrary;
+  updateLibrary: (recipe: (draft: ExerciseLibrary) => void) => void;
   loading: boolean;
   saving: boolean;
   activeUserId: string | null;
@@ -67,6 +70,7 @@ export function DataProvider({ children }: { children: React.ReactNode }) {
   const [clients, setClients] = useState<Profile[]>([]);
   const [activeUserId, setActiveUserId] = useState<string | null>(null);
   const [state, setState] = useState<AppState>(emptyState());
+  const [library, setLibraryState] = useState<ExerciseLibrary>(emptyState().library);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [role, setRoleState] = useState<Role>("client");
@@ -77,12 +81,17 @@ export function DataProvider({ children }: { children: React.ReactNode }) {
   }, []);
 
   const saveTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const libraryTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const stateRef = useRef(state);
+  const libraryRef = useRef(library);
   const activeRef = useRef(activeUserId);
   const modeRef = useRef(mode);
+  const meRef = useRef(me);
   stateRef.current = state;
+  libraryRef.current = library;
   activeRef.current = activeUserId;
   modeRef.current = mode;
+  meRef.current = me;
 
   const loadStateFor = useCallback(
     async (userId: string) => {
@@ -100,10 +109,12 @@ export function DataProvider({ children }: { children: React.ReactNode }) {
   useEffect(() => {
     // --- Mode local forcé (AUTH_ENABLED = false) ---
     if (!AUTH_ENABLED) {
+      const local = loadLocal();
       setMode("local");
       setMe(LOCAL_PROFILE);
       setActiveUserId(LOCAL_PROFILE.id);
-      setState(loadLocal());
+      setState(local);
+      setLibraryState(local.library);
       setRoleState(savedRole());
       setLoading(false);
       return;
@@ -116,10 +127,12 @@ export function DataProvider({ children }: { children: React.ReactNode }) {
 
       // --- Mode invité ---
       if (!user && isGuestClient()) {
+        const local = loadLocal();
         setMode("guest");
         setMe(LOCAL_PROFILE);
         setActiveUserId(LOCAL_PROFILE.id);
-        setState(loadLocal());
+        setState(local);
+        setLibraryState(local.library);
         setRoleState(savedRole());
         setLoading(false);
         return;
@@ -143,6 +156,14 @@ export function DataProvider({ children }: { children: React.ReactNode }) {
       setMe(myProfile);
       setRoleState(myProfile.role);
 
+      // Charger la bibliothèque globale (partagée entre tous les comptes)
+      const { data: libRow } = await supabase
+        .from("library_state")
+        .select("data")
+        .eq("id", 1)
+        .maybeSingle();
+      setLibraryState((libRow?.data as ExerciseLibrary | null) ?? emptyState().library);
+
       if (myProfile.role === "coach") {
         const { data: all } = await supabase
           .from("profiles")
@@ -150,8 +171,14 @@ export function DataProvider({ children }: { children: React.ReactNode }) {
           .order("created_at");
         const list = (all ?? []) as Profile[];
         setClients(list);
+        // Restaurer le dernier client sélectionné, sinon prendre le premier client
+        const savedId = typeof window !== "undefined"
+          ? localStorage.getItem(COACH_CLIENT_KEY)
+          : null;
+        const savedClient = savedId ? list.find((c) => c.id === savedId) : null;
         const firstClient = list.find((c) => c.role === "client");
-        await loadStateFor(firstClient ? firstClient.id : user.id);
+        const target = savedClient ?? firstClient;
+        await loadStateFor(target ? target.id : user.id);
       } else {
         await loadStateFor(user.id);
       }
@@ -180,8 +207,25 @@ export function DataProvider({ children }: { children: React.ReactNode }) {
     setSaving(false);
   }, [supabase]);
 
+  const pushLibraryNow = useCallback(async () => {
+    if (modeRef.current !== "auth") return;
+    const { error } = await supabase
+      .from("library_state")
+      .upsert({ id: 1, data: libraryRef.current, updated_at: new Date().toISOString() });
+    if (error) console.error("Sauvegarde bibliothèque échouée", error);
+  }, [supabase]);
+
   const update = useCallback(
     (recipe: (draft: AppState) => void) => {
+      // Guard sécurité : un client ne peut jamais écrire sur les données d'un autre utilisateur.
+      if (
+        modeRef.current === "auth" &&
+        meRef.current?.role === "client" &&
+        activeRef.current !== meRef.current?.id
+      ) {
+        console.error("[NMRY] Écriture refusée : client ne peut modifier que ses propres données.");
+        return;
+      }
       setState((prev) => {
         const next = structuredClone(prev);
         recipe(next);
@@ -193,9 +237,32 @@ export function DataProvider({ children }: { children: React.ReactNode }) {
     [pushNow],
   );
 
+  const updateLibrary = useCallback(
+    (recipe: (draft: ExerciseLibrary) => void) => {
+      if (modeRef.current === "auth" && meRef.current?.role !== "coach") {
+        console.error("[NMRY] Modification bibliothèque refusée : rôle insuffisant.");
+        return;
+      }
+      if (modeRef.current !== "auth") {
+        // Mode invité/local : la bibliothèque vit dans state.library (localStorage)
+        update((s) => { recipe(s.library); });
+        return;
+      }
+      setLibraryState((prev) => {
+        const next = structuredClone(prev);
+        recipe(next);
+        return next;
+      });
+      if (libraryTimer.current) clearTimeout(libraryTimer.current);
+      libraryTimer.current = setTimeout(pushLibraryNow, 500);
+    },
+    [pushLibraryNow, update],
+  );
+
   const switchClient = useCallback(
     async (userId: string) => {
       setLoading(true);
+      if (typeof window !== "undefined") localStorage.setItem(COACH_CLIENT_KEY, userId);
       await loadStateFor(userId);
       setLoading(false);
     },
@@ -215,7 +282,7 @@ export function DataProvider({ children }: { children: React.ReactNode }) {
 
   return (
     <DataContext.Provider
-      value={{ me, state, update, loading, saving, activeUserId, clients, switchClient, signOut, role, setRole, isGuest }}
+      value={{ me, state, update, library, updateLibrary, loading, saving, activeUserId, clients, switchClient, signOut, role, setRole, isGuest }}
     >
       {children}
     </DataContext.Provider>

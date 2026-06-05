@@ -79,7 +79,7 @@ export interface FilterCategory {
 export interface LibraryExercise {
   id: string;
   name: string;
-  tags: Record<string, string>; // categoryId -> optionId
+  tags: Record<string, string[]>; // categoryId -> optionId[] (multi-sélection)
   video: string; // URL
 }
 
@@ -166,9 +166,9 @@ const defaultLibrary = (): ExerciseLibrary => ({
     },
   ],
   exercises: [
-    { id: "ex-bench", name: "Développé couché", tags: { zone: "haut", muscle: "pecs", equip: "barre" }, video: "" },
-    { id: "ex-squat", name: "Squat", tags: { zone: "bas", muscle: "jambes", equip: "barre" }, video: "" },
-    { id: "ex-pullup", name: "Tractions", tags: { zone: "haut", muscle: "dos", equip: "pdc" }, video: "" },
+    { id: "ex-bench", name: "Développé couché", tags: { zone: ["haut"], muscle: ["pecs"], equip: ["barre"] }, video: "" },
+    { id: "ex-squat", name: "Squat", tags: { zone: ["bas"], muscle: ["jambes", "fessiers"], equip: ["barre"] }, video: "" },
+    { id: "ex-pullup", name: "Tractions", tags: { zone: ["haut"], muscle: ["dos", "bras"], equip: ["pdc"] }, video: "" },
   ],
 });
 

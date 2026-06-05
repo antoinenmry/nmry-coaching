@@ -7,8 +7,8 @@ import FiltersModal from "@/components/library/FiltersModal";
 import type { LibraryExercise } from "@/lib/types";
 
 export default function LibraryPage() {
-  const { state, update, loading } = useData();
-  const lib = state.library;
+  const { library: lib, updateLibrary, loading, role } = useData();
+  const isCoach = role === "coach";
 
   // catégorie -> options sélectionnées (tableau vide = "Tous")
   const [selected, setSelected] = useState<Record<string, string[]>>({});
@@ -22,7 +22,7 @@ export default function LibraryPage() {
       lib.exercises.filter((ex) =>
         lib.categories.every((cat) => {
           const sels = selected[cat.id] ?? [];
-          return sels.length === 0 || sels.includes(ex.tags[cat.id]);
+          return sels.length === 0 || (ex.tags[cat.id] ?? []).some((t) => sels.includes(t));
         }),
       ),
     [lib.exercises, lib.categories, selected],
@@ -34,10 +34,10 @@ export default function LibraryPage() {
       lib.categories.every((c) => {
         if (c.id === catId) return true;
         const sels = selected[c.id] ?? [];
-        return sels.length === 0 || sels.includes(ex.tags[c.id]);
+        return sels.length === 0 || (ex.tags[c.id] ?? []).some((t) => sels.includes(t));
       }),
     );
-    return optId ? base.filter((ex) => ex.tags[catId] === optId).length : base.length;
+    return optId ? base.filter((ex) => (ex.tags[catId] ?? []).includes(optId)).length : base.length;
   }
 
   if (loading) return <p className="py-10 text-center text-dim">Chargement…</p>;
@@ -49,20 +49,22 @@ export default function LibraryPage() {
         <h2 className="text-xl font-bold">
           📚 Bibliothèque <span className="text-dim">({lib.exercises.length})</span>
         </h2>
-        <div className="flex gap-2">
-          <button
-            onClick={() => setManagingFilters(true)}
-            className="rounded-lg border border-line bg-surface2 px-3 py-2 text-[13px] font-semibold"
-          >
-            Gérer les filtres
-          </button>
-          <button
-            onClick={() => setCreating(true)}
-            className="rounded-lg bg-ok px-3 py-2 text-[13px] font-semibold text-[#06210a]"
-          >
-            + Créer un exercice
-          </button>
-        </div>
+        {isCoach && (
+          <div className="flex gap-2">
+            <button
+              onClick={() => setManagingFilters(true)}
+              className="rounded-lg border border-line bg-surface2 px-3 py-2 text-[13px] font-semibold"
+            >
+              Gérer les filtres
+            </button>
+            <button
+              onClick={() => setCreating(true)}
+              className="rounded-lg bg-ok px-3 py-2 text-[13px] font-semibold text-[#06210a]"
+            >
+              + Créer un exercice
+            </button>
+          </div>
+        )}
       </div>
 
       {/* Lignes de filtres (une par catégorie) */}
@@ -109,10 +111,11 @@ export default function LibraryPage() {
               key={ex.id}
               ex={ex}
               tagLabels={tagLabels(ex, lib.categories)}
+              isCoach={isCoach}
               onEdit={() => setEditing(ex)}
               onDelete={() =>
-                update((s) => {
-                  s.library.exercises = s.library.exercises.filter((e) => e.id !== ex.id);
+                updateLibrary((lib) => {
+                  lib.exercises = lib.exercises.filter((e) => e.id !== ex.id);
                 })
               }
             />
@@ -137,10 +140,10 @@ export default function LibraryPage() {
   );
 }
 
-function tagLabels(ex: LibraryExercise, categories: ReturnType<typeof useData>["state"]["library"]["categories"]) {
-  return categories
-    .map((c) => c.options.find((o) => o.id === ex.tags[c.id])?.label)
-    .filter(Boolean) as string[];
+function tagLabels(ex: LibraryExercise, categories: ReturnType<typeof useData>["library"]["categories"]) {
+  return categories.flatMap((c) =>
+    (ex.tags[c.id] ?? []).map((tagId) => c.options.find((o) => o.id === tagId)?.label).filter(Boolean),
+  ) as string[];
 }
 
 function Chip({
@@ -170,11 +173,13 @@ function Chip({
 function ExerciseCard({
   ex,
   tagLabels,
+  isCoach,
   onEdit,
   onDelete,
 }: {
   ex: LibraryExercise;
   tagLabels: string[];
+  isCoach: boolean;
   onEdit: () => void;
   onDelete: () => void;
 }) {
@@ -182,10 +187,12 @@ function ExerciseCard({
     <div className="rounded-2xl border border-line bg-surface p-4">
       <div className="flex items-start justify-between gap-2">
         <h3 className="font-bold">{ex.name}</h3>
-        <div className="flex shrink-0 gap-1">
-          <button onClick={onEdit} className="grid h-8 w-8 place-items-center rounded-lg bg-surface2" aria-label="Modifier">✏️</button>
-          <button onClick={onDelete} className="grid h-8 w-8 place-items-center rounded-lg bg-surface2" aria-label="Supprimer">🗑️</button>
-        </div>
+        {isCoach && (
+          <div className="flex shrink-0 gap-1">
+            <button onClick={onEdit} className="grid h-8 w-8 place-items-center rounded-lg bg-surface2" aria-label="Modifier">✏️</button>
+            <button onClick={onDelete} className="grid h-8 w-8 place-items-center rounded-lg bg-surface2" aria-label="Supprimer">🗑️</button>
+          </div>
+        )}
       </div>
 
       {tagLabels.length > 0 && (
