@@ -13,14 +13,14 @@ export default function ExerciseMultiSelect({
 }) {
   const { state } = useData();
   const { categories, exercises } = state.library;
-  const [sel, setSel] = useState<Record<string, string | null>>({});
+  const [sel, setSel] = useState<Record<string, string[]>>({});
 
   const filtered = useMemo(
     () =>
       exercises.filter((ex) =>
         categories.every((c) => {
-          const s = sel[c.id];
-          return !s || ex.tags[c.id] === s;
+          const sels = sel[c.id] ?? [];
+          return sels.length === 0 || sels.includes(ex.tags[c.id]);
         }),
       ),
     [exercises, categories, sel],
@@ -32,13 +32,23 @@ export default function ExerciseMultiSelect({
       <div className="mb-3 space-y-1.5">
         {categories.map((cat) => (
           <div key={cat.id} className="flex flex-wrap gap-1.5">
-            <Chip active={!sel[cat.id]} label="Tous" onClick={() => setSel((s) => ({ ...s, [cat.id]: null }))} />
+            <Chip active={!(sel[cat.id]?.length)} label="Tous" onClick={() => setSel((s) => ({ ...s, [cat.id]: [] }))} />
             {cat.options.map((o) => (
               <Chip
                 key={o.id}
-                active={sel[cat.id] === o.id}
+                active={(sel[cat.id] ?? []).includes(o.id)}
                 label={o.label}
-                onClick={() => setSel((s) => ({ ...s, [cat.id]: s[cat.id] === o.id ? null : o.id }))}
+                onClick={() =>
+                  setSel((s) => {
+                    const cur = s[cat.id] ?? [];
+                    return {
+                      ...s,
+                      [cat.id]: cur.includes(o.id)
+                        ? cur.filter((x) => x !== o.id)
+                        : [...cur, o.id],
+                    };
+                  })
+                }
               />
             ))}
           </div>

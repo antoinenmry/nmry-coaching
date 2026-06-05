@@ -10,19 +10,19 @@ export default function LibraryPage() {
   const { state, update, loading } = useData();
   const lib = state.library;
 
-  // catégorie -> option sélectionnée (null = "Tous")
-  const [selected, setSelected] = useState<Record<string, string | null>>({});
+  // catégorie -> options sélectionnées (tableau vide = "Tous")
+  const [selected, setSelected] = useState<Record<string, string[]>>({});
   const [editing, setEditing] = useState<LibraryExercise | null>(null);
   const [creating, setCreating] = useState(false);
   const [managingFilters, setManagingFilters] = useState(false);
 
-  // Exercices filtrés (tous les filtres actifs combinés)
+  // Exercices filtrés — OR dans une catégorie, AND entre catégories
   const filtered = useMemo(
     () =>
       lib.exercises.filter((ex) =>
         lib.categories.every((cat) => {
-          const sel = selected[cat.id];
-          return !sel || ex.tags[cat.id] === sel;
+          const sels = selected[cat.id] ?? [];
+          return sels.length === 0 || sels.includes(ex.tags[cat.id]);
         }),
       ),
     [lib.exercises, lib.categories, selected],
@@ -33,8 +33,8 @@ export default function LibraryPage() {
     const base = lib.exercises.filter((ex) =>
       lib.categories.every((c) => {
         if (c.id === catId) return true;
-        const sel = selected[c.id];
-        return !sel || ex.tags[c.id] === sel;
+        const sels = selected[c.id] ?? [];
+        return sels.length === 0 || sels.includes(ex.tags[c.id]);
       }),
     );
     return optId ? base.filter((ex) => ex.tags[catId] === optId).length : base.length;
@@ -71,19 +71,27 @@ export default function LibraryPage() {
           <div key={cat.id} className="flex flex-wrap items-center gap-2">
             <span className="mr-1 w-full text-[11px] uppercase tracking-wide text-dim sm:w-auto">{cat.name}</span>
             <Chip
-              active={!selected[cat.id]}
+              active={!(selected[cat.id]?.length)}
               label="Tous"
               count={countFor(cat.id, null)}
-              onClick={() => setSelected((s) => ({ ...s, [cat.id]: null }))}
+              onClick={() => setSelected((s) => ({ ...s, [cat.id]: [] }))}
             />
             {cat.options.map((opt) => (
               <Chip
                 key={opt.id}
-                active={selected[cat.id] === opt.id}
+                active={(selected[cat.id] ?? []).includes(opt.id)}
                 label={opt.label}
                 count={countFor(cat.id, opt.id)}
                 onClick={() =>
-                  setSelected((s) => ({ ...s, [cat.id]: s[cat.id] === opt.id ? null : opt.id }))
+                  setSelected((s) => {
+                    const cur = s[cat.id] ?? [];
+                    return {
+                      ...s,
+                      [cat.id]: cur.includes(opt.id)
+                        ? cur.filter((x) => x !== opt.id)
+                        : [...cur, opt.id],
+                    };
+                  })
                 }
               />
             ))}
