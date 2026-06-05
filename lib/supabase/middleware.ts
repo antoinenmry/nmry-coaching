@@ -14,8 +14,10 @@ function isPublicPath(path: string) {
 }
 
 /** Supabase redirige vers la Site URL avec ?error= quand un lien est expiré/invalide.
- *  On intercepte ça pour renvoyer vers /login avec un message lisible. */
+ *  On intercepte ça uniquement sur la racine "/" pour éviter la boucle infinie
+ *  (si on interceptait /login?error=… on bouclerait indéfiniment). */
 function redirectSupabaseError(request: NextRequest) {
+  if (request.nextUrl.pathname !== "/") return null;
   const error = request.nextUrl.searchParams.get("error");
   if (!error) return null;
   const url = request.nextUrl.clone();
