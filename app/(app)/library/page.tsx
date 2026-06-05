@@ -12,21 +12,25 @@ export default function LibraryPage() {
 
   // catégorie -> options sélectionnées (tableau vide = "Tous")
   const [selected, setSelected] = useState<Record<string, string[]>>({});
+  const [search, setSearch] = useState("");
   const [editing, setEditing] = useState<LibraryExercise | null>(null);
   const [creating, setCreating] = useState(false);
   const [managingFilters, setManagingFilters] = useState(false);
 
-  // Exercices filtrés — OR dans une catégorie, AND entre catégories
-  const filtered = useMemo(
-    () =>
-      lib.exercises.filter((ex) =>
-        lib.categories.every((cat) => {
-          const sels = selected[cat.id] ?? [];
-          return sels.length === 0 || (ex.tags[cat.id] ?? []).some((t) => sels.includes(t));
-        }),
-      ),
-    [lib.exercises, lib.categories, selected],
-  );
+  // Exercices filtrés — recherche texte + OR dans une catégorie, AND entre catégories
+  const filtered = useMemo(() => {
+    const q = search.trim().toLowerCase().normalize("NFD").replace(/[̀-ͯ]/g, "");
+    return lib.exercises.filter((ex) => {
+      if (q) {
+        const name = ex.name.toLowerCase().normalize("NFD").replace(/[̀-ͯ]/g, "");
+        if (!name.includes(q)) return false;
+      }
+      return lib.categories.every((cat) => {
+        const sels = selected[cat.id] ?? [];
+        return sels.length === 0 || (ex.tags[cat.id] ?? []).some((t) => sels.includes(t));
+      });
+    });
+  }, [lib.exercises, lib.categories, selected, search]);
 
   // Compteur facetté : exercices matchant les AUTRES catégories sélectionnées
   function countFor(catId: string, optId: string | null) {
@@ -66,6 +70,15 @@ export default function LibraryPage() {
           </div>
         )}
       </div>
+
+      {/* Recherche textuelle */}
+      <input
+        type="search"
+        value={search}
+        onChange={(e) => setSearch(e.target.value)}
+        placeholder="Rechercher un exercice…"
+        className="mb-4 w-full"
+      />
 
       {/* Lignes de filtres (une par catégorie) */}
       <div className="mb-4 space-y-2">

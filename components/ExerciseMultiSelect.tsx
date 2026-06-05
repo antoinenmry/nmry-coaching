@@ -14,20 +14,33 @@ export default function ExerciseMultiSelect({
   const { library } = useData();
   const { categories, exercises } = library;
   const [sel, setSel] = useState<Record<string, string[]>>({});
+  const [search, setSearch] = useState("");
 
-  const filtered = useMemo(
-    () =>
-      exercises.filter((ex) =>
-        categories.every((c) => {
-          const sels = sel[c.id] ?? [];
-          return sels.length === 0 || (ex.tags[c.id] ?? []).some((t) => sels.includes(t));
-        }),
-      ),
-    [exercises, categories, sel],
-  );
+  const filtered = useMemo(() => {
+    const q = search.trim().toLowerCase().normalize("NFD").replace(/[̀-ͯ]/g, "");
+    return exercises.filter((ex) => {
+      if (q) {
+        const name = ex.name.toLowerCase().normalize("NFD").replace(/[̀-ͯ]/g, "");
+        if (!name.includes(q)) return false;
+      }
+      return categories.every((c) => {
+        const sels = sel[c.id] ?? [];
+        return sels.length === 0 || (ex.tags[c.id] ?? []).some((t) => sels.includes(t));
+      });
+    });
+  }, [exercises, categories, sel, search]);
 
   return (
     <div>
+      {/* Recherche textuelle */}
+      <input
+        type="search"
+        value={search}
+        onChange={(e) => setSearch(e.target.value)}
+        placeholder="Rechercher un exercice…"
+        className="mb-3 w-full"
+      />
+
       {/* Filtres */}
       <div className="mb-3 space-y-1.5">
         {categories.map((cat) => (
