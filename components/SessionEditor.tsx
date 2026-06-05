@@ -170,7 +170,7 @@ export default function SessionEditor({
                 : "border border-dashed border-ok text-ok"
             }`}
           >
-            {session.done ? "✅ Séance validée · toucher pour annuler" : "✅ Marquer comme effectuée"}
+            {session.done ? "✅ Séance validée · toucher pour annuler" : "✅ Valider la séance"}
           </button>
         )}
 
