@@ -14,7 +14,7 @@ const CARDS = [
 ];
 
 export default function Dashboard() {
-  const { me, state, clients, activeUserId, switchClient, signOut, loading } = useData();
+  const { me, state, clients, activeUserId, switchClient, signOut, loading, isGuest, role, setRole } = useData();
   const isCoach = me?.role === "coach";
   const displayName = state.profile.name || me?.name || me?.email || "Moi";
 
@@ -29,13 +29,29 @@ export default function Dashboard() {
       <div className="mb-3 flex items-center justify-between gap-3 rounded-xl border border-line bg-surface px-4 py-2.5">
         <div className="flex items-center gap-2 text-sm">
           <strong>{displayName}</strong>
-          <span
-            className={`rounded-full px-2 py-0.5 text-[14px] font-bold ${
-              isCoach ? "bg-accent/20 text-accent" : "bg-accent2/20 text-[#90caf9]"
-            }`}
-          >
-            {!AUTH_ENABLED ? "Mode local" : isCoach ? "Coach" : "Client"}
-          </span>
+          {isGuest ? (
+            <div className="flex rounded-lg bg-surface2 p-0.5">
+              {(["coach", "client"] as const).map((r) => (
+                <button
+                  key={r}
+                  onClick={() => setRole(r)}
+                  className={`rounded-md px-2.5 py-1 text-[13px] font-semibold capitalize ${
+                    role === r ? "bg-accent text-[#1a1500]" : "text-dim"
+                  }`}
+                >
+                  {r}
+                </button>
+              ))}
+            </div>
+          ) : (
+            <span
+              className={`rounded-full px-2 py-0.5 text-[14px] font-bold ${
+                isCoach ? "bg-accent/20 text-accent" : "bg-accent2/20 text-[#90caf9]"
+              }`}
+            >
+              {!AUTH_ENABLED ? "Mode local" : isCoach ? "Coach" : "Client"}
+            </span>
+          )}
         </div>
         {AUTH_ENABLED && (
           <button

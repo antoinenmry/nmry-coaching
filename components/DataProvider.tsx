@@ -16,10 +16,10 @@ import { isGuestClient, setGuest } from "@/lib/guest";
 
 type Mode = "auth" | "guest" | "local";
 
-// --- Mode local (sans connexion) : persistance dans le navigateur ---
 const LOCAL_KEY = "nmry-local-state";
 const LOCAL_ROLE_KEY = "nmry-local-role";
 const LOCAL_PROFILE: Profile = { id: "local", email: "", name: "Moi", role: "client" };
+
 function loadLocal(): AppState {
   if (typeof window === "undefined") return emptyState();
   try {
@@ -29,19 +29,25 @@ function loadLocal(): AppState {
   }
 }
 
+function savedRole(): Role {
+  if (typeof window === "undefined") return "client";
+  const r = localStorage.getItem(LOCAL_ROLE_KEY);
+  return r === "coach" || r === "client" ? r : "client";
+}
+
 interface DataContextValue {
   me: Profile | null;
   state: AppState;
-  /** Met à jour l'état et déclenche une sauvegarde différée. */
   update: (recipe: (draft: AppState) => void) => void;
   loading: boolean;
   saving: boolean;
   activeUserId: string | null;
-  clients: Profile[]; // non vide seulement pour le coach
+  clients: Profile[];
   switchClient: (userId: string) => Promise<void>;
   signOut: () => Promise<void>;
-  role: Role; // rôle effectif (compte si connecté, sinon bascule locale)
-  setRole: (r: Role) => void; // n'a d'effet qu'en mode local
+  role: Role;
+  setRole: (r: Role) => void;
+  isGuest: boolean;
 }
 
 const DataContext = createContext<DataContextValue | null>(null);
@@ -56,24 +62,27 @@ export function DataProvider({ children }: { children: React.ReactNode }) {
   const supabase = createClient();
   const router = useRouter();
 
+  const [mode, setMode] = useState<Mode>("local");
   const [me, setMe] = useState<Profile | null>(null);
   const [clients, setClients] = useState<Profile[]>([]);
   const [activeUserId, setActiveUserId] = useState<string | null>(null);
   const [state, setState] = useState<AppState>(emptyState());
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
-  const [role, setRoleState] = useState<Role>("coach");
+  const [role, setRoleState] = useState<Role>("client");
 
   const setRole = useCallback((r: Role) => {
     setRoleState(r);
-    if (!AUTH_ENABLED && typeof window !== "undefined") localStorage.setItem(LOCAL_ROLE_KEY, r);
+    if (typeof window !== "undefined") localStorage.setItem(LOCAL_ROLE_KEY, r);
   }, []);
 
   const saveTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const stateRef = useRef(state);
   const activeRef = useRef(activeUserId);
+  const modeRef = useRef(mode);
   stateRef.current = state;
   activeRef.current = activeUserId;
+  modeRef.current = mode;
 
   const loadStateFor = useCallback(
     async (userId: string) => {
@@ -88,15 +97,14 @@ export function DataProvider({ children }: { children: React.ReactNode }) {
     [supabase],
   );
 
-  // Chargement initial : profil + (clients si coach) + état
   useEffect(() => {
-    // Mode local : pas de Supabase, on lit le navigateur.
+    // --- Mode local forcé (AUTH_ENABLED = false) ---
     if (!AUTH_ENABLED) {
+      setMode("local");
       setMe(LOCAL_PROFILE);
       setActiveUserId(LOCAL_PROFILE.id);
       setState(loadLocal());
-      const savedRole = (typeof window !== "undefined" && localStorage.getItem(LOCAL_ROLE_KEY)) as Role | null;
-      setRoleState(savedRole === "client" || savedRole === "coach" ? savedRole : "coach");
+      setRoleState(savedRole());
       setLoading(false);
       return;
     }
@@ -105,10 +113,26 @@ export function DataProvider({ children }: { children: React.ReactNode }) {
       const {
         data: { user },
       } = await supabase.auth.getUser();
+
+      // --- Mode invité ---
+      if (!user && isGuestClient()) {
+        setMode("guest");
+        setMe(LOCAL_PROFILE);
+        setActiveUserId(LOCAL_PROFILE.id);
+        setState(loadLocal());
+        setRoleState(savedRole());
+        setLoading(false);
+        return;
+      }
+
+      // --- Non connecté et pas invité ---
       if (!user) {
         router.replace("/login");
         return;
       }
+
+      // --- Compte Supabase ---
+      setMode("auth");
       const { data: profile } = await supabase
         .from("profiles")
         .select("id,email,name,role")
@@ -140,8 +164,8 @@ export function DataProvider({ children }: { children: React.ReactNode }) {
     const userId = activeRef.current;
     if (!userId) return;
 
-    // Mode local : on écrit dans le navigateur.
-    if (!AUTH_ENABLED) {
+    // Mode local ou invité : persistance navigateur.
+    if (modeRef.current !== "auth") {
       localStorage.setItem(LOCAL_KEY, JSON.stringify(stateRef.current));
       return;
     }
@@ -179,14 +203,19 @@ export function DataProvider({ children }: { children: React.ReactNode }) {
   );
 
   const signOut = useCallback(async () => {
-    if (!AUTH_ENABLED) return; // pas de connexion en mode local
-    await supabase.auth.signOut();
+    if (modeRef.current === "guest") {
+      setGuest(false);
+    } else if (modeRef.current === "auth") {
+      await supabase.auth.signOut();
+    }
     router.replace("/login");
   }, [supabase, router]);
 
+  const isGuest = mode === "guest";
+
   return (
     <DataContext.Provider
-      value={{ me, state, update, loading, saving, activeUserId, clients, switchClient, signOut, role, setRole }}
+      value={{ me, state, update, loading, saving, activeUserId, clients, switchClient, signOut, role, setRole, isGuest }}
     >
       {children}
     </DataContext.Provider>
