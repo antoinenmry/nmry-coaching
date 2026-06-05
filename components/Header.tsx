@@ -43,12 +43,9 @@ export default function Header() {
         </div>
       </div>
 
-      {/* Bandeau inférieur — même grille 3 colonnes que la ligne titre */}
-      <div className="flex items-center gap-2 border-t border-line/50 px-4 py-2">
-        <div className="w-10 shrink-0" />
-        <div className="flex flex-1 justify-center">
-          {role === "coach" ? <ClientSelector /> : null}
-        </div>
+      {/* Bandeau inférieur : sélecteur client à gauche, ⚙ à droite */}
+      <div className="flex items-center justify-between border-t border-line/50 px-4 py-2">
+        {role === "coach" ? <ClientSelector /> : <div />}
         <Link
           href="/settings"
           aria-label="Réglages"
