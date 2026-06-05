@@ -36,10 +36,12 @@ export interface SessionInstance {
 
 export interface UserProfileData {
   name: string;
-  age: string;
-  height: string;
-  weight: string;
-  goalWeight: string;
+  photo: string;      // base64 data URL ou ""
+  birthDate: string;  // "YYYY-MM-DD" ou ""
+  gender: string;     // "homme" | "femme" | ""
+  height: string;     // cm
+  weight: string;     // kg
+  sports: string[];   // sports sélectionnés
   diet: string;
 }
 
@@ -177,7 +179,7 @@ export const emptyRecords = (): RecordsData => ({
 });
 
 export const emptyState = (): AppState => ({
-  profile: { name: "", age: "", height: "", weight: "", goalWeight: "", diet: "" },
+  profile: { name: "", photo: "", birthDate: "", gender: "", height: "", weight: "", sports: [], diet: "" },
   sessions: [],
   goals: [],
   followups: [],

@@ -29,6 +29,11 @@ export default function Dashboard() {
       {/* Barre utilisateur */}
       <div className="mb-3 flex items-center justify-between gap-3 rounded-xl border border-line bg-surface px-4 py-2.5">
         <div className="flex items-center gap-2 text-sm">
+          {state.profile.photo ? (
+            <img src={state.profile.photo} alt="avatar" className="h-8 w-8 shrink-0 rounded-full object-cover" />
+          ) : (
+            <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-surface2 text-base">👤</span>
+          )}
           <strong>{displayName}</strong>
           {isGuest ? (
             <div className="flex rounded-lg bg-surface2 p-0.5">
