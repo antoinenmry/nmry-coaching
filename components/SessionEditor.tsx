@@ -200,14 +200,17 @@ export default function SessionEditor({
               + Ajouter des exercices
             </button>
             {picking && <ExercisePicker onConfirm={(libIds, inline) => addExercises(libIds, inline)} onClose={() => setPicking(false)} />}
-            <div className="mt-4 grid grid-cols-2 gap-3">
-              <button onClick={onClose} className="rounded-xl bg-surface2 py-3 font-semibold">
-                Valider
-              </button>
-              <button onClick={deleteSession} className="rounded-xl bg-danger py-3 font-semibold text-white">
-                Supprimer
-              </button>
-            </div>
+           <div className="mt-4 grid grid-cols-2 gap-3">
+  {/* 1. Supprimer passe en premier (à gauche) */}
+  <button onClick={deleteSession} className="rounded-xl bg-danger py-3 font-semibold text-white">
+    Supprimer
+  </button>
+  
+  {/* 2. Valider passe en deuxième (à droite) et passe au vert avec bg-ok */}
+  <button onClick={onClose} className="rounded-xl bg-ok py-3 font-semibold text-[#06210a]">
+    Valider
+  </button>
+</div>
           </>
         )}
       </div>
