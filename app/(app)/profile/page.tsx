@@ -91,24 +91,14 @@ export default function ProfilePage() {
               onChange={set("birthDate")}
             />
           </label>
-          <div>
+          <label className="block">
             <span className="mb-1.5 block text-[13px] text-dim">Genre</span>
-            <div className="flex gap-2">
-              {["homme", "femme"].map((g) => (
-                <button
-                  key={g}
-                  onClick={() => setGender(g)}
-                  className={`flex-1 rounded-xl border py-2.5 text-sm font-semibold capitalize transition ${
-                    p.gender === g
-                      ? "border-accent bg-accent/15 text-accent"
-                      : "border-line bg-surface2 text-dim"
-                  }`}
-                >
-                  {g}
-                </button>
-              ))}
-            </div>
-          </div>
+            <select value={p.gender ?? ""} onChange={set("gender")}>
+              <option value="">—</option>
+              <option value="homme">Homme</option>
+              <option value="femme">Femme</option>
+            </select>
+          </label>
         </div>
 
         {/* Taille + Poids */}
