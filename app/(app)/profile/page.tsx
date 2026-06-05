@@ -139,20 +139,6 @@ export default function ProfilePage() {
         </div>
       </section>
 
-      <section className="rounded-2xl border border-line bg-surface p-4">
-        <h2 className="mb-4 text-xl font-bold">Diète à suivre</h2>
-        <label className="block">
-          <span className="mb-1.5 block text-[13px] text-dim">
-            Plan alimentaire (modifiable coach ou sportif)
-          </span>
-          <textarea
-            value={p.diet}
-            onChange={set("diet")}
-            placeholder="Petit-déj, déjeuner, collation, dîner, macros..."
-          />
-        </label>
-      </section>
-
       <p className="text-center text-xs text-dim">Les modifications sont enregistrées automatiquement.</p>
     </div>
   );

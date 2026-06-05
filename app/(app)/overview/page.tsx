@@ -116,15 +116,26 @@ export default function OverviewPage() {
           {allInjuries.length === 0 ? (
             <p className="py-10 text-center text-dim">Aucune blessure déclarée.</p>
           ) : (
-            allInjuries.map((f) => (
-              <div key={f.id} className="rounded-xl border border-danger/40 bg-danger/5 p-3.5">
-                <div className="mb-1.5 flex items-center justify-between gap-2">
-                  <span className="font-semibold text-danger">{f.clientName}</span>
-                  <span className="text-[12px] text-dim">{frenchDate(f.date)}</span>
+            allInjuries.map((f) => {
+              const today = new Date().toISOString().slice(0, 10);
+              const active = f.date <= today && (!f.dateEnd || f.dateEnd >= today);
+              return (
+                <div key={f.id} className={`rounded-xl border p-3.5 ${active ? "border-danger/50 bg-danger/5" : "border-line bg-surface"}`}>
+                  <div className="mb-1.5 flex items-center justify-between gap-2 flex-wrap">
+                    <div className="flex items-center gap-2">
+                      <span className="font-semibold text-danger">{f.clientName}</span>
+                      {active && <span className="rounded-full bg-danger px-2 py-0.5 text-[11px] font-bold text-white">Active</span>}
+                    </div>
+                    <span className="text-[12px] text-dim">
+                      {f.dateEnd
+                        ? `${frenchDate(f.date)} → ${frenchDate(f.dateEnd)}`
+                        : `depuis le ${frenchDate(f.date)}`}
+                    </span>
+                  </div>
+                  <p className="whitespace-pre-wrap text-sm">{f.text}</p>
                 </div>
-                <p className="whitespace-pre-wrap text-sm">{f.text}</p>
-              </div>
-            ))
+              );
+            })
           )}
         </div>
       )}

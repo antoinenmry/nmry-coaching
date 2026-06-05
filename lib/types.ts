@@ -55,7 +55,8 @@ export interface Goal {
 
 export interface Followup {
   id: string;
-  date: string;
+  date: string;       // date de début (ou date d'ajout pour les notes)
+  dateEnd?: string;   // date de fin (blessures uniquement)
   type: "note" | "injury";
   text: string;
 }

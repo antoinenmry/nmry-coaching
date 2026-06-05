@@ -9,7 +9,7 @@ import GoalInfoModal from "@/components/GoalInfoModal";
 import { AUTH_ENABLED } from "@/lib/config";
 import { SESSION_COLORS, newSession, exerciseInstanceFromLibrary } from "@/lib/data";
 import { countdownLabel } from "@/lib/dates";
-import type { Goal, SessionInstance } from "@/lib/types";
+import type { Followup, Goal, SessionInstance } from "@/lib/types";
 
 const MONTHS = ["Janvier","Février","Mars","Avril","Mai","Juin","Juillet","Août","Septembre","Octobre","Novembre","Décembre"];
 const DOW = ["Lun","Mar","Mer","Jeu","Ven","Sam","Dim"];
@@ -49,6 +49,11 @@ export default function PlanPage() {
     });
     return m;
   }, [state.goals]);
+
+  const injuries = useMemo(
+    () => state.followups.filter((f) => f.type === "injury"),
+    [state.followups],
+  );
 
   function shiftPeriod(dir: number) {
     const d = new Date(cursor);
@@ -185,6 +190,7 @@ export default function PlanPage() {
           todayKey={todayKey}
           sessionsByDate={sessionsByDate}
           goalsByDate={goalsByDate}
+          injuries={injuries}
           pending={pending}
           onPlace={place}
           onOpen={setEditing}
@@ -196,6 +202,7 @@ export default function PlanPage() {
           todayKey={todayKey}
           sessionsByDate={sessionsByDate}
           goalsByDate={goalsByDate}
+          injuries={injuries}
           pending={pending}
           onPlace={place}
           onOpen={setEditing}
@@ -207,16 +214,24 @@ export default function PlanPage() {
           todayKey={todayKey}
           sessionsByDate={sessionsByDate}
           goalsByDate={goalsByDate}
+          injuries={injuries}
           onOpen={setEditing}
           onOpenGoal={setViewingGoals}
         />
       )}
 
-      {state.goals.some((g) => g.date) && (
-        <p className="mt-3 flex items-center gap-1.5 text-xs text-dim">
-          <span className="inline-block h-3 w-3 rounded border border-ok bg-ok/20" /> 🎯 Jour de compétition (objectif déclaré)
-        </p>
-      )}
+      <div className="mt-3 flex flex-col gap-1">
+        {state.goals.some((g) => g.date) && (
+          <p className="flex items-center gap-1.5 text-xs text-dim">
+            <span className="inline-block h-3 w-3 rounded border border-ok bg-ok/20" /> 🎯 Jour de compétition
+          </p>
+        )}
+        {injuries.length > 0 && (
+          <p className="flex items-center gap-1.5 text-xs text-dim">
+            <span className="inline-block h-3 w-3 rounded border border-danger bg-danger/20" /> 🩹 Blessure active
+          </p>
+        )}
+      </div>
 
       {editing && <SessionEditor sessionId={editing} role={role} onClose={() => setEditing(null)} />}
 
@@ -505,10 +520,15 @@ interface ViewProps {
   todayKey: string;
   sessionsByDate: Record<string, SessionInstance[]>;
   goalsByDate: Record<string, Goal[]>;
+  injuries: Followup[];
   pending: string | null;
   onPlace: (sessionId: string, date: string | null) => void;
   onOpen: (sessionId: string) => void;
   onOpenGoal: (goals: Goal[]) => void;
+}
+
+function injuriesForDate(key: string, injuries: Followup[]): Followup[] {
+  return injuries.filter((f) => f.date <= key && (!f.dateEnd || f.dateEnd >= key));
 }
 
 function dayDrop(key: string, pending: string | null, onPlace: ViewProps["onPlace"]) {
@@ -552,7 +572,7 @@ function SessionPill({ s, onOpen, big, todayKey }: { s: SessionInstance; onOpen:
   );
 }
 
-function MonthView({ cursor, todayKey, sessionsByDate, goalsByDate, pending, onPlace, onOpen, onOpenGoal }: ViewProps) {
+function MonthView({ cursor, todayKey, sessionsByDate, goalsByDate, injuries, pending, onPlace, onOpen, onOpenGoal }: ViewProps) {
   const first = new Date(cursor.getFullYear(), cursor.getMonth(), 1);
   const startOffset = (first.getDay() + 6) % 7;
   const daysInMonth = new Date(cursor.getFullYear(), cursor.getMonth() + 1, 0).getDate();
@@ -567,18 +587,27 @@ function MonthView({ cursor, todayKey, sessionsByDate, goalsByDate, pending, onP
     const key = ymd(date);
     const sessions = sessionsByDate[key] ?? [];
     const goals = goalsByDate[key] ?? [];
+    const dayInjuries = injuriesForDate(key, injuries);
     const isGoal = goals.length > 0;
+    const isInjury = dayInjuries.length > 0;
     cells.push(
       <div
         key={key}
         {...dayDrop(key, pending, onPlace)}
         className={`flex min-h-[78px] flex-col gap-1 rounded-lg border p-1 ${
-          isGoal ? "border-ok bg-ok/10 ring-1 ring-ok/50" : `bg-surface ${key === todayKey ? "border-accent" : "border-line"}`
+          isGoal
+            ? "border-ok bg-ok/10 ring-1 ring-ok/50"
+            : isInjury
+            ? "border-danger/40 bg-danger/5"
+            : `bg-surface ${key === todayKey ? "border-accent" : "border-line"}`
         } ${pending ? "cursor-pointer" : ""}`}
       >
         <span className="flex items-center justify-between text-[11px] text-dim">
           {day}
-          {isGoal && <span title={goals.map((g) => g.competition).join(", ")}>🎯</span>}
+          <span className="flex gap-0.5">
+            {isInjury && <span title={dayInjuries.map((f) => f.text).join(", ")}>🩹</span>}
+            {isGoal && <span title={goals.map((g) => g.competition).join(", ")}>🎯</span>}
+          </span>
         </span>
         {isGoal && (
           <button
@@ -602,11 +631,12 @@ interface SynthesisViewProps {
   todayKey: string;
   sessionsByDate: Record<string, SessionInstance[]>;
   goalsByDate: Record<string, Goal[]>;
+  injuries: Followup[];
   onOpen: (sessionId: string) => void;
   onOpenGoal: (goals: Goal[]) => void;
 }
 
-function SynthesisView({ cursor, todayKey, sessionsByDate, goalsByDate, onOpen, onOpenGoal }: SynthesisViewProps) {
+function SynthesisView({ cursor, todayKey, sessionsByDate, goalsByDate, injuries, onOpen, onOpenGoal }: SynthesisViewProps) {
   const monday = new Date(cursor);
   monday.setDate(cursor.getDate() - ((cursor.getDay() + 6) % 7));
 
@@ -618,14 +648,20 @@ function SynthesisView({ cursor, todayKey, sessionsByDate, goalsByDate, onOpen, 
         const key = ymd(date);
         const sessions = sessionsByDate[key] ?? [];
         const goals = goalsByDate[key] ?? [];
+        const dayInjuries = injuriesForDate(key, injuries);
         const isGoal = goals.length > 0;
+        const isInjury = dayInjuries.length > 0;
         const isToday = key === todayKey;
 
         return (
           <div
             key={key}
             className={`rounded-xl border p-3 ${
-              isGoal ? "border-ok bg-ok/10" : `bg-surface ${isToday ? "border-accent" : "border-line"}`
+              isGoal
+                ? "border-ok bg-ok/10"
+                : isInjury
+                ? "border-danger/40 bg-danger/5"
+                : `bg-surface ${isToday ? "border-accent" : "border-line"}`
             }`}
           >
             <h3 className="mb-2 flex justify-between text-sm font-semibold">
@@ -643,6 +679,12 @@ function SynthesisView({ cursor, todayKey, sessionsByDate, goalsByDate, onOpen, 
                 <span className="ml-auto text-[11px] opacity-80">{countdownLabel(goals[0].date)}</span>
               </button>
             )}
+
+            {dayInjuries.map((f) => (
+              <div key={f.id} className="mb-2 flex items-center gap-1.5 rounded-md bg-danger/15 px-2 py-1 text-[13px] font-semibold text-danger">
+                🩹 {f.text.split("\n")[0].slice(0, 60)}
+              </div>
+            ))}
 
             {sessions.length === 0 ? (
               <span className="text-[13px] italic text-dim">Repos / rien de prévu</span>
@@ -723,7 +765,7 @@ function SynthesisView({ cursor, todayKey, sessionsByDate, goalsByDate, onOpen, 
   );
 }
 
-function WeekView({ cursor, todayKey, sessionsByDate, goalsByDate, pending, onPlace, onOpen, onOpenGoal }: ViewProps) {
+function WeekView({ cursor, todayKey, sessionsByDate, goalsByDate, injuries, pending, onPlace, onOpen, onOpenGoal }: ViewProps) {
   const monday = new Date(cursor);
   monday.setDate(cursor.getDate() - ((cursor.getDay() + 6) % 7));
 
@@ -735,12 +777,20 @@ function WeekView({ cursor, todayKey, sessionsByDate, goalsByDate, pending, onPl
         const key = ymd(date);
         const sessions = sessionsByDate[key] ?? [];
         const goals = goalsByDate[key] ?? [];
+        const dayInjuries = injuriesForDate(key, injuries);
         const isGoal = goals.length > 0;
+        const isInjury = dayInjuries.length > 0;
         return (
           <div
             key={key}
             {...dayDrop(key, pending, onPlace)}
-            className={`rounded-xl border p-3 ${isGoal ? "border-ok bg-ok/10" : `bg-surface ${key === todayKey ? "border-accent" : "border-line"}`} ${pending ? "cursor-pointer" : ""}`}
+            className={`rounded-xl border p-3 ${
+              isGoal
+                ? "border-ok bg-ok/10"
+                : isInjury
+                ? "border-danger/40 bg-danger/5"
+                : `bg-surface ${key === todayKey ? "border-accent" : "border-line"}`
+            } ${pending ? "cursor-pointer" : ""}`}
           >
             <h3 className="mb-2 flex justify-between text-sm font-semibold">
               {DOW[i]}
@@ -756,6 +806,11 @@ function WeekView({ cursor, todayKey, sessionsByDate, goalsByDate, pending, onPl
                 <span className="ml-auto text-[11px] opacity-80">{countdownLabel(goals[0].date)}</span>
               </button>
             )}
+            {dayInjuries.map((f) => (
+              <div key={f.id} className="mb-2 flex items-center gap-1.5 rounded-md bg-danger/15 px-2 py-1 text-[13px] font-semibold text-danger">
+                🩹 {f.text.split("\n")[0].slice(0, 60)}
+              </div>
+            ))}
             <div className="flex flex-col gap-1.5">
               {sessions.length === 0 ? (
                 <span className="text-[13px] italic text-dim">Repos / rien de prévu</span>
