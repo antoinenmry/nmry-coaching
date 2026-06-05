@@ -86,6 +86,36 @@ export interface ExerciseLibrary {
   exercises: LibraryExercise[];
 }
 
+// ---- Records ----
+
+export type CapDistance = "1km" | "5km" | "10km" | "21km" | "42km";
+export type HyroxCategory = "pro" | "open";
+
+export interface StrengthRecord {
+  id: string;
+  date: string;    // "YYYY-MM-DD"
+  reps: number;
+  weight: number;  // kg
+}
+
+export interface CardioRecord {
+  id: string;
+  date: string;        // "YYYY-MM-DD"
+  timeSeconds: number;
+}
+
+export interface ExerciseRecords {
+  exId: string;
+  visible: boolean;
+  entries: StrengthRecord[]; // max 3
+}
+
+export interface RecordsData {
+  strength: ExerciseRecords[];
+  cap: Record<CapDistance, CardioRecord[]>;
+  hyrox: Record<HyroxCategory, CardioRecord[]>;
+}
+
 /** Document complet d'un client (stocké en JSON dans app_state.data). */
 export interface AppState {
   profile: UserProfileData;
@@ -93,6 +123,7 @@ export interface AppState {
   goals: Goal[];
   followups: Followup[];
   library: ExerciseLibrary;
+  records: RecordsData;
 }
 
 // Bibliothèque de départ (catégories muscu modifiables/supprimables).
@@ -139,10 +170,17 @@ const defaultLibrary = (): ExerciseLibrary => ({
   ],
 });
 
+export const emptyRecords = (): RecordsData => ({
+  strength: [],
+  cap: { "1km": [], "5km": [], "10km": [], "21km": [], "42km": [] },
+  hyrox: { pro: [], open: [] },
+});
+
 export const emptyState = (): AppState => ({
   profile: { name: "", age: "", height: "", weight: "", goalWeight: "", diet: "" },
   sessions: [],
   goals: [],
   followups: [],
   library: defaultLibrary(),
+  records: emptyRecords(),
 });
