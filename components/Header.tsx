@@ -4,7 +4,7 @@ import { usePathname, useRouter } from "next/navigation";
 import { useData } from "./DataProvider";
 
 const TITLES: Record<string, string> = {
-  "/": "NMRY",
+  "/": "NMRY-coaching",
   "/profile": "Profil",
   "/plan": "Planning",
   "/goals": "Objectifs",

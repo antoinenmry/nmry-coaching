@@ -188,16 +188,8 @@ function ExerciseCard({
         </div>
       )}
 
-      <div className="mt-3 flex flex-wrap gap-x-4 gap-y-1 text-sm text-dim">
-        <span><strong className="text-ink">{ex.sets}</strong>×<strong className="text-ink">{ex.reps}</strong> reps</span>
-        <span>RPE <strong className="text-ink">{ex.rpe}</strong></span>
-        {ex.tempo && <span>Tempo {ex.tempo}</span>}
-        {ex.rest && <span>Repos {ex.rest}</span>}
-      </div>
-
-      {ex.notes && <p className="mt-2 line-clamp-2 text-sm text-dim">{ex.notes}</p>}
       {ex.video && (
-        <a href={ex.video} target="_blank" rel="noreferrer" className="mt-2 inline-block text-sm text-accent2">
+        <a href={ex.video} target="_blank" rel="noreferrer" className="mt-3 inline-block text-sm text-accent2">
           ▶ Voir la vidéo
         </a>
       )}

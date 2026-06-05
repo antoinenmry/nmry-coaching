@@ -11,6 +11,8 @@ const DOW = ["Lun","Mar","Mer","Jeu","Ven","Sam","Dim"];
 const pad = (n: number) => String(n).padStart(2, "0");
 const ymd = (d: Date) => `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`;
 const shortName = (n: string) => n.split("(")[0].trim();
+const EMOJIS = ["😫", "😕", "😐", "🙂", "🤩"];
+const emojiOf = (n: number) => (n >= 1 && n <= 5 ? EMOJIS[n - 1] + " " : "");
 
 export default function PlanPage() {
   const { state, update, loading } = useData();
@@ -214,7 +216,7 @@ function MonthView({ cursor, todayKey, planning, goalsByDate, pendingTpl, onPlac
             className="truncate rounded-md px-1.5 py-1 text-left text-[11px] font-semibold text-[#06121f]"
             style={{ background: s.color }}
           >
-            {shortName(s.name)}
+            {emojiOf(s.emoji)}{shortName(s.name)}
           </button>
         ))}
       </div>,
@@ -271,7 +273,7 @@ function WeekView({ cursor, todayKey, planning, goalsByDate, pendingTpl, onPlace
                     className="rounded-md px-2 py-1.5 text-left text-[13px] font-semibold text-[#06121f]"
                     style={{ background: s.color }}
                   >
-                    {s.name}
+                    {emojiOf(s.emoji)}{s.name}
                   </button>
                 ))
               )}

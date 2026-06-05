@@ -10,12 +10,6 @@ const blank = (): LibraryExercise => ({
   id: uid(),
   name: "",
   tags: {},
-  sets: 3,
-  reps: 10,
-  rpe: 8,
-  tempo: "",
-  rest: "90s",
-  notes: "",
   video: "",
 });
 
@@ -90,33 +84,16 @@ export default function ExerciseModal({
           </div>
         ))}
 
-        {/* Paramètres par défaut */}
-        <div className="mt-2 grid grid-cols-2 gap-3">
-          <Label text="Séries"><input type="number" min={0} value={draft.sets} onChange={(e) => set("sets", +e.target.value || 0)} /></Label>
-          <Label text="Répétitions"><input type="number" min={0} value={draft.reps} onChange={(e) => set("reps", +e.target.value || 0)} /></Label>
-        </div>
-
-        <div className="mt-1">
-          <div className="mb-1 flex items-center gap-2">
-            <span className="text-xs uppercase tracking-wide text-dim">RPE par défaut</span>
-            <span className="rounded-lg bg-accent px-2.5 py-1 text-sm font-bold text-[#1a1500]">{draft.rpe}/10</span>
-          </div>
-          <input type="range" min={1} max={10} step={1} value={draft.rpe} onChange={(e) => set("rpe", +e.target.value)} />
-        </div>
-
-        <div className="mt-3 grid grid-cols-2 gap-3">
-          <Label text="Tempo (excentrique-pause-concentrique)"><input value={draft.tempo} onChange={(e) => set("tempo", e.target.value)} placeholder="Ex : 3-0-1" /></Label>
-          <Label text="Temps de repos"><input value={draft.rest} onChange={(e) => set("rest", e.target.value)} placeholder="Ex : 90s" /></Label>
-        </div>
-
-        <Label text="Notes / consignes">
-          <textarea value={draft.notes} onChange={(e) => set("notes", e.target.value)} placeholder="Conseils technique, alternatives, objectifs…" />
-        </Label>
-        <Label text="Lien vidéo">
+        <Label text="Lien vidéo (démonstration)">
           <input value={draft.video} onChange={(e) => set("video", e.target.value)} placeholder="https://…" />
         </Label>
 
-        <button onClick={save} className="mt-4 w-full rounded-xl bg-accent py-3 font-semibold text-[#1a1500]">
+        <p className="mb-4 text-xs text-dim">
+          Les séries, répétitions, RPE et commentaires se règlent dans le plan, au moment d&apos;ajouter
+          l&apos;exercice à une séance.
+        </p>
+
+        <button onClick={save} className="mt-1 w-full rounded-xl bg-accent py-3 font-semibold text-[#1a1500]">
           {exercise ? "Enregistrer" : "Créer l'exercice"}
         </button>
       </div>

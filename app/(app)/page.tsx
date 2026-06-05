@@ -13,15 +13,16 @@ const CARDS = [
 ];
 
 export default function Dashboard() {
-  const { me, clients, activeUserId, switchClient, signOut, loading } = useData();
+  const { me, state, clients, activeUserId, switchClient, signOut, loading } = useData();
   const isCoach = me?.role === "coach";
+  const displayName = state.profile.name || me?.name || me?.email || "Moi";
 
   return (
     <div>
       {/* Barre utilisateur */}
       <div className="mb-3 flex items-center justify-between gap-3 rounded-xl border border-line bg-surface px-4 py-2.5">
         <div className="flex items-center gap-2 text-sm">
-          <strong>{me?.name || me?.email}</strong>
+          <strong>{displayName}</strong>
           <span
             className={`rounded-full px-2 py-0.5 text-[11px] font-bold ${
               isCoach ? "bg-accent/20 text-accent" : "bg-accent2/20 text-[#90caf9]"

@@ -7,15 +7,17 @@ export interface Profile {
   role: Role;
 }
 
-/** Un exercice dans une séance posée (valeurs éditables). */
+/** Un exercice dans une séance posée (la prescription, éditable). */
 export interface ExerciseInstance {
   uid: string;
-  exId: string;
+  exId: string; // référence l'exercice de la bibliothèque (ou d'un modèle)
+  name: string; // nom figé à l'ajout (robuste si la biblio change)
   sets: number;
   reps: number;
   weight: number;
-  rpe: number;
-  validated: boolean;
+  rpeCoach: number; // RPE prescrit par le coach (1-10)
+  rpeClient: number; // RPE ressenti par le client (0 = non renseigné)
+  clientComment: string; // retour libre du client
 }
 
 /** Une séance posée sur un jour du planning. */
@@ -24,6 +26,7 @@ export interface SessionInstance {
   tplId: string;
   name: string;
   color: string;
+  emoji: number; // ressenti global de la séance (0 = non noté, 1-5)
   exercises: ExerciseInstance[];
 }
 
@@ -66,17 +69,11 @@ export interface FilterCategory {
   options: FilterOption[];
 }
 
-/** Un exercice de la bibliothèque (fiche complète). */
+/** Un exercice de la bibliothèque : son identité (la prescription vit dans le plan). */
 export interface LibraryExercise {
   id: string;
   name: string;
   tags: Record<string, string>; // categoryId -> optionId
-  sets: number;
-  reps: number;
-  rpe: number;
-  tempo: string; // ex. "3-0-1"
-  rest: string; // ex. "90s"
-  notes: string;
   video: string; // URL
 }
 
@@ -132,24 +129,9 @@ const defaultLibrary = (): ExerciseLibrary => ({
     },
   ],
   exercises: [
-    {
-      id: "ex-bench",
-      name: "Développé couché",
-      tags: { zone: "haut", muscle: "pecs", equip: "barre" },
-      sets: 4, reps: 8, rpe: 8, tempo: "3-0-1", rest: "120s", notes: "", video: "",
-    },
-    {
-      id: "ex-squat",
-      name: "Squat",
-      tags: { zone: "bas", muscle: "jambes", equip: "barre" },
-      sets: 5, reps: 5, rpe: 8, tempo: "3-0-1", rest: "180s", notes: "", video: "",
-    },
-    {
-      id: "ex-pullup",
-      name: "Tractions",
-      tags: { zone: "haut", muscle: "dos", equip: "pdc" },
-      sets: 4, reps: 8, rpe: 8, tempo: "2-0-1", rest: "120s", notes: "", video: "",
-    },
+    { id: "ex-bench", name: "Développé couché", tags: { zone: "haut", muscle: "pecs", equip: "barre" }, video: "" },
+    { id: "ex-squat", name: "Squat", tags: { zone: "bas", muscle: "jambes", equip: "barre" }, video: "" },
+    { id: "ex-pullup", name: "Tractions", tags: { zone: "haut", muscle: "dos", equip: "pdc" }, video: "" },
   ],
 });
 

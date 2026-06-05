@@ -119,15 +119,18 @@ export function instanceFromTemplate(tplId: string): SessionInstance {
     tplId: t.id,
     name: t.name,
     color: t.color,
+    emoji: 0,
     exercises: t.exercises.map(
       (ex): ExerciseInstance => ({
         uid: uid(),
         exId: ex.exId,
+        name: EXERCISE_BY_ID[ex.exId]?.name ?? ex.exId,
         sets: ex.sets,
         reps: ex.reps,
         weight: ex.weight,
-        rpe: ex.rpe,
-        validated: false,
+        rpeCoach: ex.rpe,
+        rpeClient: 0,
+        clientComment: "",
       }),
     ),
   };
