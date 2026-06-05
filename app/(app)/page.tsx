@@ -85,9 +85,11 @@ export default function Dashboard() {
                   {countdownLabel(nextGoal.date)}
                 </span>
               )}
+          </div>
+            {/* On ferme la div correctement et on ajoute le label */}
+            <div className="mt-2 font-semibold">
+              {c.label}
             </div>
-            <div>
-    
           </Link>
         ))}
       </div>
