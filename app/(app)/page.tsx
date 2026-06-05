@@ -78,14 +78,16 @@ export default function Dashboard() {
               className="absolute -right-7 -top-7 h-[90px] w-[90px] rounded-full opacity-15"
               style={{ background: c.color }}
             />
-            <div className="flex items-start justify-between">
-              <span className="text-3xl">{c.icon}</span>
-              {c.href === "/goals" && nextGoal && (
-                <span className="rounded-full bg-ok/20 px-2 py-0.5 text-[11px] font-bold text-ok">
-                  {countdownLabel(nextGoal.date)}
-                </span>
-              )}
-          </div>
+           <div className="flex items-start justify-between">
+                  <span className="text-3xl">{c.icon}</span>
+  
+  {/* Le badge "J-X" centré et gros au milieu de la case */}
+  {c.href === "/goals" && nextGoal && (
+    <div className="absolute inset-0 flex items-center justify-center text-3xl font-black text-ok">
+      {countdownLabel(nextGoal.date)}
+    </div>
+  )}
+</div>
             {/* On ferme la div correctement et on ajoute le label */}
           <div className="mt-2 font-semibold text-lg">
   {c.label}
