@@ -118,6 +118,24 @@ export default function SessionEditor({
           />
         </label>
 
+        {/* Commentaire coach (séance globale) */}
+        {isCoach ? (
+          <label className="mt-3 block">
+            <span className="mb-1 block text-[13px] text-dim">Commentaire coach (séance)</span>
+            <textarea
+              value={session.coachComment ?? ""}
+              onChange={(e) => patchSession({ coachComment: e.target.value })}
+              placeholder="Consignes générales, objectifs, contexte de la séance…"
+              className="min-h-[60px]"
+            />
+          </label>
+        ) : (session.coachComment ?? "") ? (
+          <div className="mt-3 rounded-xl border border-line bg-surface2 p-3">
+            <span className="mb-1 block text-[13px] text-dim">Note du coach</span>
+            <p className="text-sm">{session.coachComment}</p>
+          </div>
+        ) : null}
+
         {/* Ressenti séance (client) */}
         <div className="mt-3 rounded-xl border border-line bg-surface2 p-3">
           <span className="mb-2 block text-[13px] text-dim">Ressenti de la séance (client)</span>
@@ -232,13 +250,27 @@ function ExerciseBlock({
             </span>
             <input type="range" min={0} max={10} step={1} value={ex.rpeCoach} onChange={(e) => onPatch({ rpeCoach: +e.target.value })} className="flex-1" />
           </div>
+          <label className="mt-2.5 block">
+            <span className="mb-1 block text-[13px] text-dim">Commentaire coach</span>
+            <textarea
+              value={ex.coachComment ?? ""}
+              onChange={(e) => onPatch({ coachComment: e.target.value })}
+              placeholder="Consigne technique, points de vigilance…"
+              className="min-h-[56px]"
+            />
+          </label>
         </>
       ) : (
-        <div className="flex flex-wrap gap-x-4 gap-y-1 text-sm">
-          <span><strong>{ex.sets}</strong> × <strong>{ex.reps}</strong> reps</span>
-          {ex.weight > 0 && <span className="text-dim">{ex.weight} kg</span>}
-          {ex.rpeCoach > 0 && <span className="text-dim">RPE coach {ex.rpeCoach}/10</span>}
-        </div>
+        <>
+          <div className="flex flex-wrap gap-x-4 gap-y-1 text-sm">
+            <span><strong>{ex.sets}</strong> × <strong>{ex.reps}</strong> reps</span>
+            {ex.weight > 0 && <span className="text-dim">{ex.weight} kg</span>}
+            {ex.rpeCoach > 0 && <span className="text-dim">RPE coach {ex.rpeCoach}/10</span>}
+          </div>
+          {(ex.coachComment ?? "") && (
+            <p className="mt-1.5 rounded-lg bg-surface p-2 text-[13px]"><span className="text-dim">Coach : </span>{ex.coachComment}</p>
+          )}
+        </>
       )}
 
       {/* RPE client — éditable client / lecture seule coach */}

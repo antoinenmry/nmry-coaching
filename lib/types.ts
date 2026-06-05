@@ -17,6 +17,7 @@ export interface ExerciseInstance {
   weight: number;
   rpeCoach: number; // RPE prescrit par le coach (1-10)
   rpeClient: number; // RPE ressenti par le client (0 = non renseigné)
+  coachComment: string; // consigne/note du coach pour cet exercice
   clientComment: string; // retour libre du client
 }
 
@@ -27,6 +28,7 @@ export interface SessionInstance {
   name: string;
   color: string;
   emoji: number; // ressenti global de la séance (0 = non noté, 1-5)
+  coachComment: string; // commentaire global du coach pour la séance
   date: string | null; // "YYYY-MM-DD" si placée, null si dans la banque
   exercises: ExerciseInstance[];
 }

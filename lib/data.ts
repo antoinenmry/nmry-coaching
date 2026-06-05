@@ -120,6 +120,7 @@ export function instanceFromTemplate(tplId: string): SessionInstance {
     name: t.name,
     color: t.color,
     emoji: 0,
+    coachComment: "",
     date: null,
     exercises: t.exercises.map(
       (ex): ExerciseInstance => ({
@@ -131,6 +132,7 @@ export function instanceFromTemplate(tplId: string): SessionInstance {
         weight: ex.weight,
         rpeCoach: ex.rpe,
         rpeClient: 0,
+        coachComment: "",
         clientComment: "",
       }),
     ),
@@ -142,7 +144,7 @@ export const SESSION_COLORS = ["#ef5350", "#42a5f5", "#66bb6a", "#ab47bc", "#ffb
 
 /** Crée une séance vide (dans la banque « À placer » par défaut). */
 export function newSession(name: string, color: string): SessionInstance {
-  return { id: uid(), tplId: "", name, color, emoji: 0, date: null, exercises: [] };
+  return { id: uid(), tplId: "", name, color, emoji: 0, coachComment: "", date: null, exercises: [] };
 }
 
 /** Transforme un exercice de la bibliothèque en instance prescriptible (valeurs par défaut). */
@@ -156,6 +158,7 @@ export function exerciseInstanceFromLibrary(ex: { id: string; name: string }): E
     weight: 0,
     rpeCoach: 0,
     rpeClient: 0,
+    coachComment: "",
     clientComment: "",
   };
 }
