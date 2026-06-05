@@ -13,6 +13,7 @@ const TITLES: Record<string, string> = {
   "/followup": "Suivi",
   "/library": "Bibliothèque",
   "/settings": "Réglages",
+  "/overview": "Vue d'ensemble",
 };
 
 export default function Header() {

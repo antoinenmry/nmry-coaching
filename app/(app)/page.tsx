@@ -14,7 +14,8 @@ const CARDS = [
 ];
 
 export default function Dashboard() {
-  const { me, state, loading } = useData();
+  const { me, state, loading, role } = useData();
+  const isCoach = role === "coach";
   const displayName = state.profile.name || me?.name || me?.email || "Moi";
   const cardColors = state.preferences?.cardColors ?? {};
   const cardColorMode = state.preferences?.cardColorMode ?? "arc";
@@ -26,6 +27,22 @@ export default function Dashboard() {
 
   return (
     <div>
+      {/* Carte Vue d'ensemble (coach uniquement) */}
+      {isCoach && (
+        <Link
+          href="/overview"
+          className="relative mb-3.5 flex items-center gap-3 overflow-hidden rounded-2xl border border-line bg-surface p-4 transition active:scale-95"
+        >
+          <span className="absolute inset-0 opacity-10" style={{ background: "#a855f7" }} />
+          <span className="text-3xl">👁️</span>
+          <div>
+            <p className="font-semibold">Vue d&apos;ensemble</p>
+            <p className="text-[12px] text-dim">Blessures & objectifs de tous les clients</p>
+          </div>
+          <span className="ml-auto text-dim">›</span>
+        </Link>
+      )}
+
       {/* Grille de cartes */}
       <div className="grid grid-cols-2 gap-3.5">
         {CARDS.map((c) => (
