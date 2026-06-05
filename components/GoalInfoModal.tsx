@@ -22,6 +22,9 @@ export default function GoalInfoModal({ goals, onClose }: { goals: Goal[]; onClo
             const future = n !== null && n >= 0;
             return (
               <div key={g.id} className="rounded-xl border border-line bg-surface2 p-3">
+                {g.clientName && (
+                  <p className="mb-1.5 text-[12px] font-semibold text-accent">{g.clientName}</p>
+                )}
                 <div className="flex items-center justify-between gap-2">
                   <strong className="text-base">{g.competition}</strong>
                   <span className={`rounded-full px-2.5 py-1 text-[13px] font-bold ${future ? "bg-ok/20 text-ok" : "bg-surface text-dim"}`}>

@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { useData } from "@/components/DataProvider";
 import SessionEditor from "@/components/SessionEditor";
 import ExerciseMultiSelect from "@/components/ExerciseMultiSelect";
@@ -9,7 +9,9 @@ import GoalInfoModal from "@/components/GoalInfoModal";
 import { AUTH_ENABLED } from "@/lib/config";
 import { SESSION_COLORS, newSession, exerciseInstanceFromLibrary } from "@/lib/data";
 import { countdownLabel } from "@/lib/dates";
-import type { Followup, Goal, SessionInstance } from "@/lib/types";
+import type { AppState, Followup, Goal, SessionInstance } from "@/lib/types";
+import { emptyState } from "@/lib/types";
+import { createClient } from "@/lib/supabase/client";
 
 const MONTHS = ["Janvier","Février","Mars","Avril","Mai","Juin","Juillet","Août","Septembre","Octobre","Novembre","Décembre"];
 const DOW = ["Lun","Mar","Mer","Jeu","Ven","Sam","Dim"];
@@ -20,7 +22,7 @@ const EMOJIS = ["😫", "😕", "😐", "🙂", "🤩"];
 const emojiOf = (n: number) => (n >= 1 && n <= 5 ? EMOJIS[n - 1] + " " : "");
 
 export default function PlanPage() {
-  const { state, update, role, setRole, loading } = useData();
+  const { state, update, role, setRole, loading, clients, activeUserId } = useData();
   const isCoach = role === "coach";
 
   const [mode, setMode] = useState<"month" | "week" | "synthesis">("month");
@@ -30,8 +32,31 @@ export default function PlanPage() {
   const [composing, setComposing] = useState(false);
   const [duplicating, setDuplicating] = useState(false);
   const [viewingGoals, setViewingGoals] = useState<Goal[] | null>(null);
+  // Objectifs des autres sportifs (coach uniquement)
+  const [otherGoals, setOtherGoals] = useState<Goal[]>([]);
 
   const todayKey = ymd(new Date());
+
+  // Charger les objectifs de tous les sportifs (coach) — exclu le sportif actif déjà dans state.goals
+  useEffect(() => {
+    if (!isCoach || loading) return;
+    const supabase = createClient();
+    const otherClients = clients.filter((c) => c.role === "client" && c.id !== activeUserId);
+    if (otherClients.length === 0) { setOtherGoals([]); return; }
+    (async () => {
+      const { data: rows } = await supabase
+        .from("app_state")
+        .select("user_id,data")
+        .in("user_id", otherClients.map((c) => c.id));
+      const goals: Goal[] = (rows ?? []).flatMap((row) => {
+        const profile = otherClients.find((c) => c.id === row.user_id);
+        const name = profile?.name || profile?.email || "Sportif";
+        const s: AppState = { ...emptyState(), ...(row.data ?? {}) };
+        return (s.goals ?? []).map((g) => ({ ...g, clientName: name }));
+      });
+      setOtherGoals(goals);
+    })();
+  }, [isCoach, loading, clients, activeUserId]);
 
   const bank = useMemo(() => state.sessions.filter((s) => !s.date), [state.sessions]);
   const sessionsByDate = useMemo(() => {
@@ -44,11 +69,16 @@ export default function PlanPage() {
 
   const goalsByDate = useMemo(() => {
     const m: Record<string, Goal[]> = {};
+    // Objectifs du sportif actif
     state.goals.forEach((g) => {
       if (g.date) (m[g.date] ??= []).push(g);
     });
+    // Objectifs des autres sportifs (coach uniquement)
+    otherGoals.forEach((g) => {
+      if (g.date) (m[g.date] ??= []).push(g);
+    });
     return m;
-  }, [state.goals]);
+  }, [state.goals, otherGoals]);
 
   const injuries = useMemo(
     () => state.followups.filter((f) => f.type === "injury"),
@@ -616,15 +646,16 @@ function MonthView({ cursor, todayKey, sessionsByDate, goalsByDate, injuries, pe
             {isGoal && <span title={goals.map((g) => g.competition).join(", ")}>🎯</span>}
           </span>
         </span>
-        {isGoal && (
+        {goals.map((g) => (
           <button
-            onClick={(e) => { e.stopPropagation(); onOpenGoal(goals); }}
+            key={g.id}
+            onClick={(e) => { e.stopPropagation(); onOpenGoal([g]); }}
             className="truncate rounded-md bg-ok/25 px-1.5 py-0.5 text-left text-[10px] font-semibold text-ok"
-            title={goals.map((g) => g.competition).join(", ")}
+            title={g.clientName ? `${g.clientName} · ${g.competition}` : g.competition}
           >
-            {goals[0].competition}
+            {g.clientName ? `${g.clientName.split(" ")[0]} · ${g.competition}` : g.competition}
           </button>
-        )}
+        ))}
         {sessions.map((s) => <SessionPill key={s.id} s={s} onOpen={onOpen} todayKey={todayKey} />)}
       </div>,
     );
@@ -676,16 +707,19 @@ function SynthesisView({ cursor, todayKey, sessionsByDate, goalsByDate, injuries
               <span className="font-normal text-dim">{date.getDate()} {MONTHS[date.getMonth()].slice(0, 3)}</span>
             </h3>
 
-            {goals.length > 0 && (
+            {goals.map((g) => (
               <button
-                onClick={() => onOpenGoal(goals)}
-                className="mb-2 flex w-full items-center gap-1.5 rounded-md bg-ok/20 px-2 py-1 text-left text-[13px] font-semibold text-ok"
+                key={g.id}
+                onClick={() => onOpenGoal([g])}
+                className="mb-1.5 flex w-full items-center gap-1.5 rounded-md bg-ok/20 px-2 py-1 text-left text-[13px] font-semibold text-ok"
               >
-                🎯 {goals[0].competition}
-                {goals[0].place && <span className="font-normal opacity-80">· {goals[0].place}</span>}
-                <span className="ml-auto text-[11px] opacity-80">{countdownLabel(goals[0].date)}</span>
+                🎯
+                {g.clientName && <span className="font-bold text-accent">{g.clientName.split(" ")[0]}</span>}
+                <span className={g.clientName ? "font-normal" : ""}>{g.competition}</span>
+                {g.place && <span className="font-normal opacity-80">· {g.place}</span>}
+                <span className="ml-auto text-[11px] opacity-80">{countdownLabel(g.date)}</span>
               </button>
-            )}
+            ))}
 
             {dayInjuries.map((f) => (
               <div key={f.id} className="mb-2 flex items-center gap-1.5 rounded-md bg-danger/15 px-2 py-1 text-[13px] font-semibold text-danger">
@@ -803,18 +837,21 @@ function WeekView({ cursor, todayKey, sessionsByDate, goalsByDate, injuries, pen
               {DOW[i]}
               <span className="font-normal text-dim">{date.getDate()} {MONTHS[date.getMonth()].slice(0, 3)}</span>
             </h3>
-            {goals.length > 0 && (
+            {goals.map((g) => (
               <button
-                onClick={(e) => { e.stopPropagation(); onOpenGoal(goals); }}
-                className="mb-2 flex w-full items-center gap-1.5 rounded-md bg-ok/20 px-2 py-1 text-left text-[13px] font-semibold text-ok"
+                key={g.id}
+                onClick={(e) => { e.stopPropagation(); onOpenGoal([g]); }}
+                className="mb-1.5 flex w-full items-center gap-1.5 rounded-md bg-ok/20 px-2 py-1 text-left text-[13px] font-semibold text-ok"
               >
-                🎯 {goals[0].competition}
-                {goals[0].place && <span className="font-normal opacity-80">· {goals[0].place}</span>}
-                <span className="ml-auto text-[11px] opacity-80">{countdownLabel(goals[0].date)}</span>
+                🎯
+                {g.clientName && <span className="font-bold text-accent">{g.clientName.split(" ")[0]}</span>}
+                <span className={g.clientName ? "font-normal" : ""}>{g.competition}</span>
+                {g.place && <span className="font-normal opacity-80">· {g.place}</span>}
+                <span className="ml-auto text-[11px] opacity-80">{countdownLabel(g.date)}</span>
               </button>
-            )}
+            ))}
             {dayInjuries.map((f) => (
-              <div key={f.id} className="mb-2 flex items-center gap-1.5 rounded-md bg-danger/15 px-2 py-1 text-[13px] font-semibold text-danger">
+              <div key={f.id} className="mb-1.5 flex items-center gap-1.5 rounded-md bg-danger/15 px-2 py-1 text-[13px] font-semibold text-danger">
                 🩹 {f.text.split("\n")[0].slice(0, 60)}
               </div>
             ))}

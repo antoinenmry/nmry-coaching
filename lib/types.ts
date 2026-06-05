@@ -51,6 +51,7 @@ export interface Goal {
   date: string;
   place: string;
   expected: string;
+  clientName?: string; // enrichi côté coach pour la vue planning multi-sportifs
 }
 
 export interface Followup {
