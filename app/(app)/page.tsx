@@ -87,11 +87,7 @@ export default function Dashboard() {
               )}
             </div>
             <div>
-              <div className="text-base font-bold leading-tight">{c.label}</div>
-              <div className="text-xs text-dim">
-                {c.href === "/goals" && nextGoal ? `Prochain : ${nextGoal.competition}` : c.sub}
-              </div>
-            </div>
+    
           </Link>
         ))}
       </div>
