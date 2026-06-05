@@ -170,6 +170,28 @@ En mode local/invité, la bibliothèque reste dans `state.library` (localStorage
 - Vercel : team `antoinenmry-s-projects`. `git push origin main` → deploy auto.
 - Commits : message en français, signés `Co-Authored-By: Claude Sonnet 4.6 <noreply@anthropic.com>`.
 
+## Gestion des sportifs (Vue coach — Réglages)
+
+### Schéma étendu
+| Table | Colonne | Rôle |
+|---|---|---|
+| `profiles` | `status` (`active`/`inactive`) | Statut du sportif, modifiable par le coach |
+| `app_state` | `updated_by_coach_at` | Timestamp dernière sauvegarde par le coach |
+| `app_state` | `updated_by_client_at` | Timestamp dernière sauvegarde par le sportif |
+| `auth.users` | `last_sign_in_at` | Dernière connexion — lu via service role (API route) |
+
+### API routes (service role)
+- `GET /api/coach/athletes` → retourne `[{ id, last_sign_in_at, updated_by_coach_at, updated_by_client_at, status }]`
+- `DELETE /api/coach/athletes/[id]` → supprime le compte auth + profil (cascade)
+- `PATCH /api/coach/athletes/[id]` → met à jour `status` (`active`/`inactive`)
+
+### Variables d'environnement requises
+- `SUPABASE_SERVICE_ROLE_KEY` (Vercel + `.env.local`) — clé secrète Supabase, jamais exposée au client
+
+### UI — Settings
+- Dropdown coach : "Affichage standard" / "Vue Gestion des Profils"
+- Vue Gestion : grille de cartes par sportif avec toutes les métadonnées + bouton Supprimer (modale de confirmation)
+
 ## Roadmap / prochaines étapes connues
 - [ ] Configurer SMTP Resend pour lever la limite 2 emails/h (voir section Auth ci-dessus)
 - [ ] Tests Supabase bout en bout (schema.sql + RLS + multi-client)

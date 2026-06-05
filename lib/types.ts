@@ -1,10 +1,12 @@
 export type Role = "coach" | "client";
+export type AthleteStatus = "active" | "inactive";
 
 export interface Profile {
   id: string;
   email: string;
   name: string;
   role: Role;
+  status?: AthleteStatus; // "active" par défaut (champ optionnel pour rétrocompat)
 }
 
 /** Un exercice dans une séance posée (la prescription, éditable). */

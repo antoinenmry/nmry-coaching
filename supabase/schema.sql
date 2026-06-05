@@ -10,17 +10,26 @@ create table if not exists public.profiles (
   email      text,
   name       text default '',
   role       text not null default 'client' check (role in ('client','coach')),
+  status     text not null default 'active'  check (status in ('active','inactive')),
   created_at timestamptz default now()
 );
+-- Migration : ajouter status si la table existe déjà
+alter table public.profiles add column if not exists
+  status text not null default 'active' check (status in ('active','inactive'));
 
 -- 2) ÉTAT APPLICATIF : le "document" complet de chaque client (profil, planning,
 --    objectifs, suivi) stocké en JSON. Simple à faire évoluer ; on pourra
 --    normaliser en tables dédiées plus tard (suivi de records, stats...).
 create table if not exists public.app_state (
-  user_id    uuid primary key references auth.users on delete cascade,
-  data       jsonb not null default '{}'::jsonb,
-  updated_at timestamptz default now()
+  user_id              uuid primary key references auth.users on delete cascade,
+  data                 jsonb not null default '{}'::jsonb,
+  updated_at           timestamptz default now(),
+  updated_by_coach_at  timestamptz,   -- dernière sauvegarde effectuée par le coach
+  updated_by_client_at timestamptz    -- dernière sauvegarde effectuée par le sportif
 );
+-- Migrations : ajouter les colonnes si la table existe déjà
+alter table public.app_state add column if not exists updated_by_coach_at  timestamptz;
+alter table public.app_state add column if not exists updated_by_client_at timestamptz;
 
 alter table public.profiles  enable row level security;
 alter table public.app_state enable row level security;

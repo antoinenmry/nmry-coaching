@@ -132,7 +132,7 @@ export function DataProvider({ children }: { children: React.ReactNode }) {
       setMode("auth");
       const { data: profile } = await supabase
         .from("profiles")
-        .select("id,email,name,role")
+        .select("id,email,name,role,status")
         .eq("id", user.id)
         .maybeSingle();
       const myProfile: Profile =
@@ -151,7 +151,7 @@ export function DataProvider({ children }: { children: React.ReactNode }) {
       if (myProfile.role === "coach") {
         const { data: all } = await supabase
           .from("profiles")
-          .select("id,email,name,role")
+          .select("id,email,name,role,status")
           .order("created_at");
         const list = (all ?? []) as Profile[];
         setClients(list);
@@ -182,10 +182,15 @@ export function DataProvider({ children }: { children: React.ReactNode }) {
     }
 
     setSaving(true);
+    const now = new Date().toISOString();
+    const isCoachSaving = meRef.current?.role === "coach";
     const { error } = await supabase.from("app_state").upsert({
       user_id: userId,
       data: stateRef.current,
-      updated_at: new Date().toISOString(),
+      updated_at: now,
+      ...(isCoachSaving
+        ? { updated_by_coach_at: now }
+        : { updated_by_client_at: now }),
     });
     if (error) console.error("Sauvegarde échouée", error);
     setSaving(false);
