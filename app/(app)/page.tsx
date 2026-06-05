@@ -7,7 +7,7 @@ import { daysUntil, countdownLabel } from "@/lib/dates";
 
 const CARDS = [
   { href: "/profile", icon: "👤", label: "Mon Profil" },
-  { href: "/plan", icon: "🗓️", label: "Ma Programmation", color: "var(--color-accent2)" },
+  { href: "/plan", icon: "🗓️", label: "Programmation", color: "var(--color-accent2)" },
   { href: "/goals", icon: "🎯", label: "Mes Objectifs", color: "var(--color-ok)" },
   { href: "/records", icon: "🏆", label: "Mes Records", color: "var(--color-accent)" },
   { href: "/followup", icon: "📝", label: "Mon Suivi", color: "var(--color-danger)" },
