@@ -4,8 +4,9 @@ import { useMemo, useState } from "react";
 import { useData } from "@/components/DataProvider";
 import SessionEditor from "@/components/SessionEditor";
 import ExerciseMultiSelect from "@/components/ExerciseMultiSelect";
+import { AUTH_ENABLED } from "@/lib/config";
 import { SESSION_COLORS, newSession, exerciseInstanceFromLibrary } from "@/lib/data";
-import type { Goal } from "@/lib/types";
+import type { Goal, SessionInstance } from "@/lib/types";
 
 const MONTHS = ["Janvier","Février","Mars","Avril","Mai","Juin","Juillet","Août","Septembre","Octobre","Novembre","Décembre"];
 const DOW = ["Lun","Mar","Mer","Jeu","Ven","Sam","Dim"];
@@ -16,15 +17,26 @@ const EMOJIS = ["😫", "😕", "😐", "🙂", "🤩"];
 const emojiOf = (n: number) => (n >= 1 && n <= 5 ? EMOJIS[n - 1] + " " : "");
 
 export default function PlanPage() {
-  const { state, loading } = useData();
+  const { state, update, role, setRole, loading } = useData();
+  const isCoach = role === "coach";
+
   const [mode, setMode] = useState<"month" | "week">("month");
   const [cursor, setCursor] = useState(() => new Date());
-  const [composing, setComposing] = useState<string | null>(null); // dateKey
-  const [editing, setEditing] = useState<{ dateKey: string; sessionId: string } | null>(null);
+  const [pending, setPending] = useState<string | null>(null); // séance à placer (tap-to-place)
+  const [editing, setEditing] = useState<string | null>(null); // sessionId
+  const [composing, setComposing] = useState(false);
 
   const todayKey = ymd(new Date());
 
-  // Objectifs (compétitions) indexés par date, pour les mettre en surbrillance.
+  const bank = useMemo(() => state.sessions.filter((s) => !s.date), [state.sessions]);
+  const sessionsByDate = useMemo(() => {
+    const m: Record<string, SessionInstance[]> = {};
+    state.sessions.forEach((s) => {
+      if (s.date) (m[s.date] ??= []).push(s);
+    });
+    return m;
+  }, [state.sessions]);
+
   const goalsByDate = useMemo(() => {
     const m: Record<string, Goal[]> = {};
     state.goals.forEach((g) => {
@@ -40,23 +52,55 @@ export default function PlanPage() {
     setCursor(d);
   }
 
-  const editingSession =
-    editing && state.planning[editing.dateKey]?.find((s) => s.id === editing.sessionId);
+  function place(sessionId: string, date: string | null) {
+    update((d) => {
+      const s = d.sessions.find((x) => x.id === sessionId);
+      if (s) s.date = date;
+    });
+    setPending(null);
+  }
+
+  function deleteBankSession(sessionId: string) {
+    update((d) => {
+      d.sessions = d.sessions.filter((x) => x.id !== sessionId);
+    });
+  }
 
   if (loading) return <p className="py-10 text-center text-dim">Chargement…</p>;
 
   return (
     <div>
+      {/* Bascule de rôle (mode local) */}
+      {!AUTH_ENABLED && (
+        <div className="mb-3 flex items-center gap-2 rounded-xl border border-line bg-surface px-3 py-2">
+          <span className="text-[13px] text-dim">Vue :</span>
+          <div className="flex rounded-lg bg-surface2 p-1">
+            {(["coach", "client"] as const).map((r) => (
+              <button
+                key={r}
+                onClick={() => setRole(r)}
+                className={`rounded-md px-3 py-1.5 text-[13px] font-semibold capitalize ${
+                  role === r ? "bg-accent text-[#1a1500]" : "text-dim"
+                }`}
+              >
+                {r}
+              </button>
+            ))}
+          </div>
+          <span className="ml-auto text-[11px] text-dim">
+            {isCoach ? "Crée et édite les séances" : "Place les séances et donne ton ressenti"}
+          </span>
+        </div>
+      )}
+
       {/* Barre d'outils */}
-      <div className="mb-3.5 flex flex-wrap items-center gap-2">
+      <div className="mb-3 flex flex-wrap items-center gap-2">
         <div className="flex rounded-lg bg-surface2 p-1">
           {(["month", "week"] as const).map((m) => (
             <button
               key={m}
               onClick={() => setMode(m)}
-              className={`rounded-md px-3.5 py-2 text-sm font-semibold ${
-                mode === m ? "bg-accent text-[#1a1500]" : "text-dim"
-              }`}
+              className={`rounded-md px-3.5 py-2 text-sm font-semibold ${mode === m ? "bg-accent text-[#1a1500]" : "text-dim"}`}
             >
               {m === "month" ? "Mois" : "Semaine"}
             </button>
@@ -69,8 +113,59 @@ export default function PlanPage() {
         </div>
       </div>
 
+      {/* Zone "À placer" */}
+      <div
+        className="mb-3.5 rounded-xl border border-line bg-surface p-3"
+        onDragOver={(e) => e.preventDefault()}
+        onDrop={(e) => {
+          e.preventDefault();
+          const id = e.dataTransfer.getData("text/session");
+          if (id) place(id, null);
+        }}
+      >
+        <div className="mb-2 flex items-center justify-between">
+          <span className="text-sm font-bold">À placer ({bank.length})</span>
+          {isCoach && (
+            <button onClick={() => setComposing(true)} className="rounded-lg bg-ok px-3 py-1.5 text-[13px] font-semibold text-[#06210a]">
+              + Créer une séance
+            </button>
+          )}
+        </div>
+        {bank.length === 0 ? (
+          <p className="py-2 text-[13px] text-dim">
+            {isCoach ? "Crée des séances ; elles apparaîtront ici à placer sur les jours." : "Aucune séance à placer pour l'instant."}
+          </p>
+        ) : (
+          <div className="flex gap-2.5 overflow-x-auto pb-1">
+            {bank.map((s) => (
+              <div
+                key={s.id}
+                draggable
+                onDragStart={(e) => e.dataTransfer.setData("text/session", s.id)}
+                onClick={() => setPending(pending === s.id ? null : s.id)}
+                className={`flex-none cursor-grab select-none rounded-xl border bg-surface2 px-3 py-2.5 ${
+                  pending === s.id ? "border-accent" : "border-line"
+                }`}
+                style={{ borderLeft: `5px solid ${s.color}` }}
+              >
+                <div className="flex items-center gap-2">
+                  <span className="text-sm font-semibold">{s.name}</span>
+                  {isCoach && (
+                    <>
+                      <button onClick={(e) => { e.stopPropagation(); setEditing(s.id); }} className="rounded bg-surface px-1.5 text-[12px]">✏️</button>
+                      <button onClick={(e) => { e.stopPropagation(); deleteBankSession(s.id); }} className="rounded bg-surface px-1.5 text-[12px]">🗑️</button>
+                    </>
+                  )}
+                </div>
+                <span className="text-[11px] text-dim">{s.exercises.length} exercice{s.exercises.length > 1 ? "s" : ""}</span>
+              </div>
+            ))}
+          </div>
+        )}
+      </div>
+
       <p className="mb-2.5 text-xs text-dim">
-        Touche un jour pour créer une séance en piochant dans ta bibliothèque.
+        {pending ? "Touche un jour pour y placer la séance sélectionnée." : "Glisse une séance sur un jour (ou touche-la puis touche le jour)."}
       </p>
 
       {/* Calendrier */}
@@ -78,45 +173,38 @@ export default function PlanPage() {
         <MonthView
           cursor={cursor}
           todayKey={todayKey}
-          planning={state.planning}
+          sessionsByDate={sessionsByDate}
           goalsByDate={goalsByDate}
-          onCompose={setComposing}
-          onOpen={(dateKey, sessionId) => setEditing({ dateKey, sessionId })}
+          pending={pending}
+          onPlace={place}
+          onOpen={setEditing}
         />
       ) : (
         <WeekView
           cursor={cursor}
           todayKey={todayKey}
-          planning={state.planning}
+          sessionsByDate={sessionsByDate}
           goalsByDate={goalsByDate}
-          onCompose={setComposing}
-          onOpen={(dateKey, sessionId) => setEditing({ dateKey, sessionId })}
+          pending={pending}
+          onPlace={place}
+          onOpen={setEditing}
         />
       )}
 
-      {/* Légende */}
       {state.goals.some((g) => g.date) && (
         <p className="mt-3 flex items-center gap-1.5 text-xs text-dim">
           <span className="inline-block h-3 w-3 rounded border border-ok bg-ok/20" /> 🎯 Jour de compétition (objectif déclaré)
         </p>
       )}
 
-      {editing && editingSession && (
-        <SessionEditor
-          dateKey={editing.dateKey}
-          session={editingSession}
-          onClose={() => setEditing(null)}
-        />
-      )}
+      {editing && <SessionEditor sessionId={editing} role={role} onClose={() => setEditing(null)} />}
 
       {composing && (
         <ComposeModal
-          dateKey={composing}
-          onClose={() => setComposing(null)}
-          onCreated={(sessionId) => {
-            const dateKey = composing;
-            setComposing(null);
-            setEditing({ dateKey, sessionId });
+          onClose={() => setComposing(false)}
+          onCreated={(id) => {
+            setComposing(false);
+            setEditing(id);
           }}
         />
       )}
@@ -124,23 +212,14 @@ export default function PlanPage() {
   );
 }
 
-// Modale de composition : nom + couleur + sélection multiple d'exercices.
-function ComposeModal({
-  dateKey,
-  onClose,
-  onCreated,
-}: {
-  dateKey: string;
-  onClose: () => void;
-  onCreated: (sessionId: string) => void;
-}) {
+// Modale de création d'une séance (coach) : nom + couleur + exercices → dans la banque.
+function ComposeModal({ onClose, onCreated }: { onClose: () => void; onCreated: (id: string) => void }) {
   const { update } = useData();
   const [name, setName] = useState("Séance");
   const [color, setColor] = useState(SESSION_COLORS[0]);
   const [picked, setPicked] = useState<string[]>([]);
 
-  const toggle = (id: string) =>
-    setPicked((p) => (p.includes(id) ? p.filter((x) => x !== id) : [...p, id]));
+  const toggle = (id: string) => setPicked((p) => (p.includes(id) ? p.filter((x) => x !== id) : [...p, id]));
 
   function create() {
     let newId = "";
@@ -151,19 +230,16 @@ function ComposeModal({
         const libEx = d.library.exercises.find((e) => e.id === id);
         s.exercises.push(exerciseInstanceFromLibrary({ id, name: libEx?.name ?? "Exercice" }));
       });
-      (d.planning[dateKey] ??= []).push(s);
+      d.sessions.push(s);
     });
     onCreated(newId);
   }
 
   return (
-    <div
-      className="fixed inset-0 z-50 flex items-end justify-center bg-black/60 sm:items-center"
-      onClick={(e) => e.target === e.currentTarget && onClose()}
-    >
+    <div className="fixed inset-0 z-50 flex items-end justify-center bg-black/60 sm:items-center" onClick={(e) => e.target === e.currentTarget && onClose()}>
       <div className="flex max-h-[92vh] w-full max-w-xl flex-col overflow-y-auto rounded-t-3xl border-t border-line bg-surface p-5 sm:rounded-3xl sm:border">
         <div className="mb-3 flex items-center justify-between">
-          <h2 className="text-lg font-bold">Nouvelle séance · {frenchDate(dateKey)}</h2>
+          <h2 className="text-lg font-bold">Nouvelle séance</h2>
           <button onClick={onClose} className="grid h-9 w-9 place-items-center rounded-lg bg-surface2">✕</button>
         </div>
 
@@ -176,13 +252,7 @@ function ComposeModal({
           <span className="mb-1.5 block text-[13px] text-dim">Couleur</span>
           <div className="flex gap-2">
             {SESSION_COLORS.map((c) => (
-              <button
-                key={c}
-                onClick={() => setColor(c)}
-                className={`h-8 w-8 rounded-full border-2 ${color === c ? "border-ink" : "border-transparent"}`}
-                style={{ background: c }}
-                aria-label={`Couleur ${c}`}
-              />
+              <button key={c} onClick={() => setColor(c)} className={`h-8 w-8 rounded-full border-2 ${color === c ? "border-ink" : "border-transparent"}`} style={{ background: c }} aria-label={`Couleur ${c}`} />
             ))}
           </div>
         </div>
@@ -190,21 +260,10 @@ function ComposeModal({
         <span className="mb-1.5 block text-[13px] text-dim">Exercices ({picked.length} sélectionné{picked.length > 1 ? "s" : ""})</span>
         <ExerciseMultiSelect picked={picked} onToggle={toggle} />
 
-        <button
-          onClick={create}
-          className="mt-4 w-full rounded-xl bg-accent py-3 font-semibold text-[#1a1500]"
-        >
-          Créer la séance
-        </button>
+        <button onClick={create} className="mt-4 w-full rounded-xl bg-accent py-3 font-semibold text-[#1a1500]">Créer la séance</button>
       </div>
     </div>
   );
-}
-
-function frenchDate(key: string) {
-  const months = ["janvier","février","mars","avril","mai","juin","juillet","août","septembre","octobre","novembre","décembre"];
-  const [y, m, d] = key.split("-").map(Number);
-  return `${d} ${months[m - 1]} ${y}`;
 }
 
 function periodLabel(mode: "month" | "week", cursor: Date) {
@@ -219,13 +278,42 @@ function periodLabel(mode: "month" | "week", cursor: Date) {
 interface ViewProps {
   cursor: Date;
   todayKey: string;
-  planning: ReturnType<typeof useData>["state"]["planning"];
+  sessionsByDate: Record<string, SessionInstance[]>;
   goalsByDate: Record<string, Goal[]>;
-  onCompose: (dateKey: string) => void;
-  onOpen: (dateKey: string, sessionId: string) => void;
+  pending: string | null;
+  onPlace: (sessionId: string, date: string | null) => void;
+  onOpen: (sessionId: string) => void;
 }
 
-function MonthView({ cursor, todayKey, planning, goalsByDate, onCompose, onOpen }: ViewProps) {
+function dayDrop(key: string, pending: string | null, onPlace: ViewProps["onPlace"]) {
+  return {
+    onDragOver: (e: React.DragEvent) => e.preventDefault(),
+    onDrop: (e: React.DragEvent) => {
+      e.preventDefault();
+      const id = e.dataTransfer.getData("text/session");
+      if (id) onPlace(id, key);
+    },
+    onClick: () => {
+      if (pending) onPlace(pending, key);
+    },
+  };
+}
+
+function SessionPill({ s, onOpen, big }: { s: SessionInstance; onOpen: (id: string) => void; big?: boolean }) {
+  return (
+    <button
+      draggable
+      onDragStart={(e) => { e.stopPropagation(); e.dataTransfer.setData("text/session", s.id); }}
+      onClick={(e) => { e.stopPropagation(); onOpen(s.id); }}
+      className={`truncate rounded-md px-1.5 text-left font-semibold text-[#06121f] ${big ? "py-1.5 text-[13px]" : "py-1 text-[11px]"}`}
+      style={{ background: s.color }}
+    >
+      {emojiOf(s.emoji)}{big ? s.name : shortName(s.name)}
+    </button>
+  );
+}
+
+function MonthView({ cursor, todayKey, sessionsByDate, goalsByDate, pending, onPlace, onOpen }: ViewProps) {
   const first = new Date(cursor.getFullYear(), cursor.getMonth(), 1);
   const startOffset = (first.getDay() + 6) % 7;
   const daysInMonth = new Date(cursor.getFullYear(), cursor.getMonth() + 1, 0).getDate();
@@ -238,41 +326,27 @@ function MonthView({ cursor, todayKey, planning, goalsByDate, onCompose, onOpen 
   for (let day = 1; day <= daysInMonth; day++) {
     const date = new Date(cursor.getFullYear(), cursor.getMonth(), day);
     const key = ymd(date);
-    const sessions = planning[key] ?? [];
+    const sessions = sessionsByDate[key] ?? [];
     const goals = goalsByDate[key] ?? [];
     const isGoal = goals.length > 0;
     cells.push(
       <div
         key={key}
-        onClick={() => onCompose(key)}
-        className={`flex min-h-[78px] cursor-pointer flex-col gap-1 rounded-lg border p-1 ${
-          isGoal
-            ? "border-ok bg-ok/10 ring-1 ring-ok/50"
-            : `bg-surface ${key === todayKey ? "border-accent" : "border-line"}`
-        }`}
+        {...dayDrop(key, pending, onPlace)}
+        className={`flex min-h-[78px] flex-col gap-1 rounded-lg border p-1 ${
+          isGoal ? "border-ok bg-ok/10 ring-1 ring-ok/50" : `bg-surface ${key === todayKey ? "border-accent" : "border-line"}`
+        } ${pending ? "cursor-pointer" : ""}`}
       >
         <span className="flex items-center justify-between text-[11px] text-dim">
           {day}
           {isGoal && <span title={goals.map((g) => g.competition).join(", ")}>🎯</span>}
         </span>
         {isGoal && (
-          <span
-            className="truncate rounded-md bg-ok/25 px-1.5 py-0.5 text-[10px] font-semibold text-ok"
-            title={goals.map((g) => g.competition).join(", ")}
-          >
+          <span className="truncate rounded-md bg-ok/25 px-1.5 py-0.5 text-[10px] font-semibold text-ok" title={goals.map((g) => g.competition).join(", ")}>
             {goals[0].competition}
           </span>
         )}
-        {sessions.map((s) => (
-          <button
-            key={s.id}
-            onClick={(e) => { e.stopPropagation(); onOpen(key, s.id); }}
-            className="truncate rounded-md px-1.5 py-1 text-left text-[11px] font-semibold text-[#06121f]"
-            style={{ background: s.color }}
-          >
-            {emojiOf(s.emoji)}{shortName(s.name)}
-          </button>
-        ))}
+        {sessions.map((s) => <SessionPill key={s.id} s={s} onOpen={onOpen} />)}
       </div>,
     );
   }
@@ -280,7 +354,7 @@ function MonthView({ cursor, todayKey, planning, goalsByDate, onCompose, onOpen 
   return <div className="grid grid-cols-7 gap-1.5">{cells}</div>;
 }
 
-function WeekView({ cursor, todayKey, planning, goalsByDate, onCompose, onOpen }: ViewProps) {
+function WeekView({ cursor, todayKey, sessionsByDate, goalsByDate, pending, onPlace, onOpen }: ViewProps) {
   const monday = new Date(cursor);
   monday.setDate(cursor.getDate() - ((cursor.getDay() + 6) % 7));
 
@@ -290,46 +364,29 @@ function WeekView({ cursor, todayKey, planning, goalsByDate, onCompose, onOpen }
         const date = new Date(monday);
         date.setDate(monday.getDate() + i);
         const key = ymd(date);
-        const sessions = planning[key] ?? [];
+        const sessions = sessionsByDate[key] ?? [];
         const goals = goalsByDate[key] ?? [];
         const isGoal = goals.length > 0;
         return (
           <div
             key={key}
-            onClick={() => onCompose(key)}
-            className={`cursor-pointer rounded-xl border p-3 ${
-              isGoal ? "border-ok bg-ok/10" : `bg-surface ${key === todayKey ? "border-accent" : "border-line"}`
-            }`}
+            {...dayDrop(key, pending, onPlace)}
+            className={`rounded-xl border p-3 ${isGoal ? "border-ok bg-ok/10" : `bg-surface ${key === todayKey ? "border-accent" : "border-line"}`} ${pending ? "cursor-pointer" : ""}`}
           >
             <h3 className="mb-2 flex justify-between text-sm font-semibold">
               {DOW[i]}
-              <span className="font-normal text-dim">
-                {date.getDate()} {MONTHS[date.getMonth()].slice(0, 3)}
-              </span>
+              <span className="font-normal text-dim">{date.getDate()} {MONTHS[date.getMonth()].slice(0, 3)}</span>
             </h3>
             {goals.map((g) => (
-              <div
-                key={g.id}
-                className="mb-2 flex items-center gap-1.5 rounded-md bg-ok/20 px-2 py-1 text-[13px] font-semibold text-ok"
-              >
-                🎯 {g.competition}
-                {g.place && <span className="font-normal opacity-80">· {g.place}</span>}
+              <div key={g.id} className="mb-2 flex items-center gap-1.5 rounded-md bg-ok/20 px-2 py-1 text-[13px] font-semibold text-ok">
+                🎯 {g.competition}{g.place && <span className="font-normal opacity-80">· {g.place}</span>}
               </div>
             ))}
             <div className="flex flex-col gap-1.5">
               {sessions.length === 0 ? (
                 <span className="text-[13px] italic text-dim">Repos / rien de prévu</span>
               ) : (
-                sessions.map((s) => (
-                  <button
-                    key={s.id}
-                    onClick={(e) => { e.stopPropagation(); onOpen(key, s.id); }}
-                    className="rounded-md px-2 py-1.5 text-left text-[13px] font-semibold text-[#06121f]"
-                    style={{ background: s.color }}
-                  >
-                    {emojiOf(s.emoji)}{s.name}
-                  </button>
-                ))
+                sessions.map((s) => <SessionPill key={s.id} s={s} onOpen={onOpen} big />)
               )}
             </div>
           </div>

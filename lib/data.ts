@@ -120,6 +120,7 @@ export function instanceFromTemplate(tplId: string): SessionInstance {
     name: t.name,
     color: t.color,
     emoji: 0,
+    date: null,
     exercises: t.exercises.map(
       (ex): ExerciseInstance => ({
         uid: uid(),
@@ -139,9 +140,9 @@ export function instanceFromTemplate(tplId: string): SessionInstance {
 // Palette de couleurs pour les séances composées librement.
 export const SESSION_COLORS = ["#ef5350", "#42a5f5", "#66bb6a", "#ab47bc", "#ffb300", "#26c6da"];
 
-/** Crée une séance vide (composition libre depuis la bibliothèque). */
+/** Crée une séance vide (dans la banque « À placer » par défaut). */
 export function newSession(name: string, color: string): SessionInstance {
-  return { id: uid(), tplId: "", name, color, emoji: 0, exercises: [] };
+  return { id: uid(), tplId: "", name, color, emoji: 0, date: null, exercises: [] };
 }
 
 /** Transforme un exercice de la bibliothèque en instance prescriptible (valeurs par défaut). */

@@ -20,13 +20,14 @@ export interface ExerciseInstance {
   clientComment: string; // retour libre du client
 }
 
-/** Une séance posée sur un jour du planning. */
+/** Une séance. `date` = null tant qu'elle est dans la banque « À placer ». */
 export interface SessionInstance {
   id: string;
   tplId: string;
   name: string;
   color: string;
   emoji: number; // ressenti global de la séance (0 = non noté, 1-5)
+  date: string | null; // "YYYY-MM-DD" si placée, null si dans la banque
   exercises: ExerciseInstance[];
 }
 
@@ -85,7 +86,7 @@ export interface ExerciseLibrary {
 /** Document complet d'un client (stocké en JSON dans app_state.data). */
 export interface AppState {
   profile: UserProfileData;
-  planning: Record<string, SessionInstance[]>;
+  sessions: SessionInstance[]; // toutes les séances (date = null si dans la banque)
   goals: Goal[];
   followups: Followup[];
   library: ExerciseLibrary;
@@ -137,7 +138,7 @@ const defaultLibrary = (): ExerciseLibrary => ({
 
 export const emptyState = (): AppState => ({
   profile: { name: "", age: "", height: "", weight: "", goalWeight: "", diet: "" },
-  planning: {},
+  sessions: [],
   goals: [],
   followups: [],
   library: defaultLibrary(),

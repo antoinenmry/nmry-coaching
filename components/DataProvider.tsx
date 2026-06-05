@@ -11,10 +11,11 @@ import {
 import { useRouter } from "next/navigation";
 import { createClient } from "@/lib/supabase/client";
 import { AUTH_ENABLED } from "@/lib/config";
-import { emptyState, type AppState, type Profile } from "@/lib/types";
+import { emptyState, type AppState, type Profile, type Role } from "@/lib/types";
 
 // --- Mode local (sans connexion) : persistance dans le navigateur ---
 const LOCAL_KEY = "nmry-local-state";
+const LOCAL_ROLE_KEY = "nmry-local-role";
 const LOCAL_PROFILE: Profile = { id: "local", email: "", name: "Moi", role: "client" };
 function loadLocal(): AppState {
   if (typeof window === "undefined") return emptyState();
@@ -36,6 +37,8 @@ interface DataContextValue {
   clients: Profile[]; // non vide seulement pour le coach
   switchClient: (userId: string) => Promise<void>;
   signOut: () => Promise<void>;
+  role: Role; // rôle effectif (compte si connecté, sinon bascule locale)
+  setRole: (r: Role) => void; // n'a d'effet qu'en mode local
 }
 
 const DataContext = createContext<DataContextValue | null>(null);
@@ -56,6 +59,12 @@ export function DataProvider({ children }: { children: React.ReactNode }) {
   const [state, setState] = useState<AppState>(emptyState());
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
+  const [role, setRoleState] = useState<Role>("coach");
+
+  const setRole = useCallback((r: Role) => {
+    setRoleState(r);
+    if (!AUTH_ENABLED && typeof window !== "undefined") localStorage.setItem(LOCAL_ROLE_KEY, r);
+  }, []);
 
   const saveTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const stateRef = useRef(state);
@@ -83,6 +92,8 @@ export function DataProvider({ children }: { children: React.ReactNode }) {
       setMe(LOCAL_PROFILE);
       setActiveUserId(LOCAL_PROFILE.id);
       setState(loadLocal());
+      const savedRole = (typeof window !== "undefined" && localStorage.getItem(LOCAL_ROLE_KEY)) as Role | null;
+      setRoleState(savedRole === "client" || savedRole === "coach" ? savedRole : "coach");
       setLoading(false);
       return;
     }
@@ -103,6 +114,7 @@ export function DataProvider({ children }: { children: React.ReactNode }) {
       const myProfile: Profile =
         profile ?? { id: user.id, email: user.email ?? "", name: "", role: "client" };
       setMe(myProfile);
+      setRoleState(myProfile.role);
 
       if (myProfile.role === "coach") {
         const { data: all } = await supabase
@@ -171,7 +183,7 @@ export function DataProvider({ children }: { children: React.ReactNode }) {
 
   return (
     <DataContext.Provider
-      value={{ me, state, update, loading, saving, activeUserId, clients, switchClient, signOut }}
+      value={{ me, state, update, loading, saving, activeUserId, clients, switchClient, signOut, role, setRole }}
     >
       {children}
     </DataContext.Provider>
