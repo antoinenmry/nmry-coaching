@@ -6,8 +6,8 @@ import { AUTH_ENABLED } from "@/lib/config";
 import { daysUntil, countdownLabel } from "@/lib/dates";
 
 const CARDS = [
-  { href: "/profile", icon: "👤", label: "Profil & Diète", sub: "Infos perso, objectif poids, plan alimentaire", color: "var(--color-accent)" },
-  { href: "/plan", icon: "🗓️", label: "Plan d'entraînement", sub: "Vue mois / semaine, glisser-déposer", color: "var(--color-accent2)" },
+  { href: "/profile", icon: "👤", label: "Profil", sub: "Infos perso, objectif poids, plan alimentaire", color: "var(--color-accent)" },
+  { href: "/plan", icon: "🗓️", label: "Programmation", sub: "Vue mois / semaine, glisser-déposer", color: "var(--color-accent2)" },
   { href: "/goals", icon: "🎯", label: "Objectifs", sub: "Compétitions & performances visées", color: "var(--color-ok)" },
   { href: "/followup", icon: "📝", label: "Suivi perso", sub: "Commentaires, blessures, ressenti", color: "var(--color-danger)" },
   { href: "/library", icon: "📚", label: "Bibliothèque", sub: "Exercices & filtres personnalisables", color: "var(--color-accent)" },
