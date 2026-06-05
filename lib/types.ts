@@ -45,13 +45,21 @@ export interface UserProfileData {
   diet: string;
 }
 
+export interface GoalEvent {
+  id: string;
+  name: string;     // nom de l'épreuve (ex : Squat, 100m nage libre…)
+  planned: string;  // objectif prévu
+  achieved: string; // réalisation effective
+}
+
 export interface Goal {
   id: string;
   competition: string;
   date: string;
   place: string;
-  expected: string;
-  clientName?: string; // enrichi côté coach pour la vue planning multi-sportifs
+  expected: string;       // commentaires libres (renommé côté UI)
+  events?: GoalEvent[];   // épreuves structurées prévu / réalisé
+  clientName?: string;    // enrichi côté coach pour la vue planning multi-sportifs
 }
 
 export interface Followup {

@@ -2,6 +2,7 @@
 
 import { countdownLabel, daysUntil, frenchDate } from "@/lib/dates";
 import type { Goal } from "@/lib/types";
+import { EventsDisplay } from "@/app/(app)/goals/page";
 
 /** Fiche objectif en lecture seule (utilisée depuis le planning). */
 export default function GoalInfoModal({ goals, onClose }: { goals: Goal[]; onClose: () => void }) {
@@ -35,11 +36,9 @@ export default function GoalInfoModal({ goals, onClose }: { goals: Goal[]; onClo
                   {frenchDate(g.date)}
                   {g.place && ` · ${g.place}`}
                 </div>
+                <EventsDisplay events={g.events ?? []} />
                 {g.expected && (
-                  <p className="mt-2 whitespace-pre-wrap text-sm">
-                    <span className="text-dim">Perfs visées : </span>
-                    {g.expected}
-                  </p>
+                  <p className="mt-2 whitespace-pre-wrap text-sm text-dim">{g.expected}</p>
                 )}
               </div>
             );
