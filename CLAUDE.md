@@ -26,6 +26,10 @@ npx tsc --noEmit # type-check seul (sûr, ne touche pas au cache)
 - **Outil de preview** : la navigation programmatique (`location.href`) est instable et revient sur `/`.
   Préférer **cliquer les liens** (`a[href=...]`). Après clic, laisser ~4-8 s (compile + hydratation)
   avant d'inspecter. Vérifs synchrones après `click()` = faux négatifs.
+- **Tests sans `.env.local`** : pour simuler Vercel sans variables, faire `mv .env.local .env.local.bak`,
+  supprimer `.next`, rebuilder, et **se souvenir de le restaurer** (`mv .env.local.bak .env.local`).
+  `npm run dev` et `next start` rechargent `.env.local` automatiquement, mais le comportement Edge
+  (middleware) ne se reproduit qu'avec un vrai build prod sans le fichier.
 
 ## Authentification & modes d'accès
 `lib/config.ts` → `AUTH_ENABLED = true` (activé).
@@ -40,27 +44,52 @@ npx tsc --noEmit # type-check seul (sûr, ne touche pas au cache)
 - Le mode **invité** est marqué par un cookie `nmry-guest=1` (`lib/guest.ts`).
   Le middleware et le layout (`app/(app)/layout.tsx`) vérifient ce cookie pour autoriser l'accès
   sans session Supabase. Déconnexion invité = supprimer le cookie + retour `/login`.
+- En mode **invité**, le toggle Coach ⇄ Client est disponible (sur l'accueil et dans le planning).
+  Le rôle est persisté dans `localStorage` (`nmry-local-role`).
 - Pour basculer en **mode local forcé** (dev sans Supabase) : `AUTH_ENABLED = false` dans
   `lib/config.ts`. Le DataProvider ne touche plus du tout à Supabase.
+
+### Auth flow complet (AUTH_ENABLED = true)
+1. **Inscription** : nom + email + mdp → `supabase.auth.signUp` avec `emailRedirectTo: /auth/callback`
+   → écran "Confirme ton email 📬" (pas de connexion immédiate si confirmation active)
+2. **Confirmation email** : clic sur le lien → `/auth/callback?code=…` → échange PKCE → session →
+   redirect `/`. Variante OTP : `/auth/confirm?token_hash=…&type=signup`.
+3. **Connexion** : email + mdp → `signInWithPassword` → `/`
+4. **Mot de passe oublié** : email → `resetPasswordForEmail` avec `redirectTo: /auth/callback?next=/auth/reset-password`
+   → `/auth/reset-password` → `updateUser({ password })` → `/`
+5. **Déconnexion** : `supabase.auth.signOut()` → `/login`
+
+### ⚠️ Configuration Vercel/Supabase nécessaire pour que l'auth fonctionne
+- **Vercel → Settings → Environment Variables** : `NEXT_PUBLIC_SUPABASE_URL` + `NEXT_PUBLIC_SUPABASE_ANON_KEY`
+  (valeurs dans `.env.local` local, jamais commité). Sans elles → app accessible en mode dégradé
+  (login + invité) mais **aucune session Supabase possible**.
+- **Supabase → Auth → URL Configuration** :
+  - Site URL : `https://nmry-coaching.vercel.app`
+  - Redirect URLs : `https://nmry-coaching.vercel.app/auth/callback` + `http://localhost:3000/auth/callback`
+- Après un changement d'env vars Vercel : **redéployer manuellement** (Deployments → Redeploy).
+
+### ⚠️ Piège middleware — `MIDDLEWARE_INVOCATION_FAILED`
+`lib/supabase/client.ts` a des placeholders de repli → ne plante jamais sans variables.
+`lib/supabase/middleware.ts` construisait `createServerClient(undefined, undefined)` → **lève une
+exception à la construction** → 500 sur toutes les routes. Corrigé : le middleware vérifie la
+présence des variables avant de créer le client ; sinon, dégrade proprement en mode déconnecté.
+Les routes `/auth/*` sont **exclues de la protection** (la session n'existe pas encore lors du
+callback email — y appliquer la garde cassait la confirmation).
 
 ### État Supabase
 - Projet ref : `zhvfqcxdifribggyzxgk`
 - URL : `https://zhvfqcxdifribggyzxgk.supabase.co`
 - Schéma : `supabase/schema.sql` (tables `profiles` + `app_state`, RLS, trigger inscription)
-- Pour devenir coach : `update public.profiles set role='coach' where email='TON_EMAIL';`
+- Pour devenir coach : `update public.profiles set role = 'coach' where email = 'TON_EMAIL_ICI';`
 - **SQL Editor** : exécuter `supabase/schema.sql` si les tables n'existent pas encore.
-- Désactiver « Confirm email » dans Supabase Auth pour tester sans validation mail.
 
 ## Rôles coach / client
-Exposés par `useData()` : `role` (string `"coach"|"client"`) et `setRole` (mode local/invité).
+Exposés par `useData()` : `role`, `setRole`, `isGuest`.
 
-- **Coach** : crée et édite les séances (prescription : séries/reps/poids/RPE coach), gère la
-  bibliothèque d'exercices. Sur le plan : bouton « + Nouvelle séance » dans la zone « À placer ».
-- **Client** : glisse-dépose les séances depuis la banque sur les jours, renseigne ressenti (emoji
-  1-5), RPE client et commentaire. **Prescription en lecture seule.**
-- En mode auth : le rôle vient de `profiles.role` dans Supabase.
-- En mode invité/local : bascule manuelle via `nmry-local-role` (localStorage), affiché comme
-  bouton **Coach ⇄ Client** dans la barre d'outils du planning.
+- **Coach** (compte Supabase avec `profiles.role = 'coach'`) : crée et édite les séances (séries/reps/poids/RPE), gère la bibliothèque. Voit un sélecteur de client sur l'accueil. Peut créer des exercices inline lors de la composition d'une séance (case "Ajouter à la bibliothèque" cochée par défaut).
+- **Client** (compte Supabase avec `profiles.role = 'client'`) : glisse-dépose les séances, renseigne ressenti (emoji 1-5), RPE client et commentaire. Prescription en lecture seule.
+- **Invité** : toggle Coach ⇄ Client visible sur l'accueil et dans le planning. Rôle persisté dans `localStorage`.
+- En mode local forcé : même toggle, rôle persisté dans `localStorage`.
 
 ## Modèle de données (`lib/types.ts` → `AppState`)
 Document unique par client (JSON local ou `app_state.data` Supabase) :
@@ -72,29 +101,33 @@ Document unique par client (JSON local ou `app_state.data` Supabase) :
   - Champs : `id`, `name`, `color`, `emoji` (0-5), `tplId`, `exercises: ExerciseInstance[]`.
   - `ExerciseInstance` : `uid`, `exId`, `name` (figé à l'ajout), `sets`, `reps`, `weight`,
     `rpeCoach`, `rpeClient` (0 = non renseigné), `clientComment`.
+  - **`weight = 0`** → pas de charge prescrite (masqué côté client). **`rpeCoach = 0`** → RPE non
+    renseigné (affiché "—" côté coach, masqué côté client). Valeurs par défaut à la création : 0/0.
 - `goals: Goal[]` : `competition`, `date`, `place`, `expected`.
 - `followups: Followup[]` : `date`, `type` (`"note"|"injury"`), `text`.
 - `library: ExerciseLibrary` :
-  - `categories: FilterCategory[]` : catégories de filtres (ex. Zone, Groupe musculaire, Équipement),
-    entièrement éditables dans l'UI.
+  - `categories: FilterCategory[]` : catégories de filtres (ex. Zone, Groupe musculaire, Équipement).
   - `exercises: LibraryExercise[]` : `id`, `name`, `tags` (map catId→optId), `video`.
   - **La prescription (séries/reps/RPE/poids) vit dans le plan, PAS dans la bibliothèque.**
 
 ## Carte des fichiers
 | Chemin | Rôle |
 |---|---|
-| `app/login/` | Connexion / inscription + bouton « Continuer en invité » |
+| `app/login/` | Connexion / inscription / "Continuer en invité" / mot de passe oublié |
+| `app/auth/callback/` | Route handler PKCE : échange `code` → session (confirmation email, reset mdp) |
+| `app/auth/confirm/` | Route handler OTP : vérifie `token_hash` (variante flow Supabase) |
+| `app/auth/reset-password/` | Page de saisie du nouveau mot de passe (après clic lien reset) |
 | `app/(app)/layout.tsx` | Zone protégée : vérifie session Supabase OU cookie invité |
-| `app/(app)/page.tsx` | Accueil : 5 cartes + badge nom/rôle + décompte prochain objectif |
-| `app/(app)/plan/` | Planning mois/sem, banque « À placer », compose séance, glisser-déposer, bascule rôle |
+| `app/(app)/page.tsx` | Accueil : cartes + badge nom/rôle (toggle coach⇄client pour invités) |
+| `app/(app)/plan/` | Planning mois/sem, banque « À placer », compose séance, glisser-déposer |
 | `app/(app)/goals/` | Objectifs (tri par date, décompte J-X, édition) |
 | `app/(app)/profile/` | Profil & diète |
 | `app/(app)/followup/` | Suivi (notes/blessures) |
 | `app/(app)/library/` | Bibliothèque d'exercices + filtres personnalisables |
-| `components/DataProvider.tsx` | Contexte : 3 modes (auth/invité/local), chargement, sauvegarde, `me`, `role` |
-| `components/SessionEditor.tsx` | Édition séance (conscient du rôle : coach=tout, client=feedback) |
+| `components/DataProvider.tsx` | Contexte : 3 modes (auth/invité/local), chargement, sauvegarde, `me`, `role`, `isGuest` |
+| `components/SessionEditor.tsx` | Édition séance (coach=tout, client=feedback) |
 | `components/ExerciseMultiSelect.tsx` | Filtres + sélection multiple d'exercices (réutilisable) |
-| `components/ExercisePicker.tsx` | Modale wrapper du multi-select |
+| `components/ExercisePicker.tsx` | Modale picker + création inline d'exercices (avec case "Ajouter à la bibliothèque") |
 | `components/GoalInfoModal.tsx` | Fiche objectif en lecture seule (depuis le plan) |
 | `components/Header.tsx` | En-tête (titre par route, bouton retour, indicateur sauvegarde) |
 | `lib/types.ts` | Tous les types TypeScript + `emptyState()` + bibliothèque par défaut |
@@ -102,9 +135,9 @@ Document unique par client (JSON local ou `app_state.data` Supabase) :
 | `lib/dates.ts` | `daysUntil`, `countdownLabel`, `frenchDate` |
 | `lib/config.ts` | `AUTH_ENABLED` |
 | `lib/guest.ts` | `GUEST_COOKIE`, `isGuestClient()`, `setGuest()` |
-| `lib/supabase/client.ts` | Client Supabase navigateur (repli si env vars absentes) |
+| `lib/supabase/client.ts` | Client Supabase navigateur (repli placeholder si env vars absentes) |
 | `lib/supabase/server.ts` | Client Supabase serveur |
-| `lib/supabase/middleware.ts` | Refresh session + garde routes (autorise invité via cookie) |
+| `lib/supabase/middleware.ts` | Refresh session + garde routes (dégrade proprement si vars absentes) |
 | `middleware.ts` | Entry-point Next.js pour le middleware Supabase |
 | `supabase/schema.sql` | Schéma + RLS + trigger d'inscription automatique |
 
@@ -121,13 +154,11 @@ Document unique par client (JSON local ou `app_state.data` Supabase) :
 
 ## Infra
 - GitHub : `github.com/antoinenmry/nmry-coaching` — SSH (`~/.ssh/github_tridash`), remote
-  `git@github.com:antoinenmry/nmry-coaching.git`. Pas de token, pas de `gh`.
+  `git@github.com:antoinenmry/nmry-coaching.git`. Pas de token, pas de `gh`. Pas de CLI Vercel.
 - Vercel : team `antoinenmry-s-projects`. `git push origin main` → deploy auto.
-  Env vars à configurer sur Vercel : `NEXT_PUBLIC_SUPABASE_URL` + `NEXT_PUBLIC_SUPABASE_ANON_KEY`.
+  Env vars à configurer manuellement dans le dashboard Vercel.
 - Commits : message en français, signés `Co-Authored-By: Claude Sonnet 4.6 <noreply@anthropic.com>`.
 
 ## Roadmap / prochaines étapes connues
-- [ ] Finir l'intégration DataProvider mode invité (3 modes : auth/invité/local)
-- [ ] Rôles complets dans le plan : banque « À placer » (coach), glisser-déposer (client)
 - [ ] Tests Supabase bout en bout (schema.sql + RLS + multi-client)
 - [ ] Migration : `library` et `sessions` en tables Supabase dédiées (scope coach) plutôt que blob
