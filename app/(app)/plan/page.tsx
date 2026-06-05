@@ -23,7 +23,7 @@ export default function PlanPage() {
   const { state, update, role, setRole, loading } = useData();
   const isCoach = role === "coach";
 
-  const [mode, setMode] = useState<"month" | "week">("month");
+  const [mode, setMode] = useState<"month" | "week" | "synthesis">("month");
   const [cursor, setCursor] = useState(() => new Date());
   const [pending, setPending] = useState<string | null>(null); // séance à placer (tap-to-place)
   const [editing, setEditing] = useState<string | null>(null); // sessionId
@@ -101,13 +101,13 @@ export default function PlanPage() {
       {/* Barre d'outils */}
       <div className="mb-3 flex flex-wrap items-center gap-2">
         <div className="flex rounded-lg bg-surface2 p-1">
-          {(["month", "week"] as const).map((m) => (
+          {(["month", "week", "synthesis"] as const).map((m) => (
             <button
               key={m}
               onClick={() => setMode(m)}
               className={`rounded-md px-3.5 py-2 text-sm font-semibold ${mode === m ? "bg-accent text-[#1a1500]" : "text-dim"}`}
             >
-              {m === "month" ? "Mois" : "Semaine"}
+              {m === "month" ? "Mois" : m === "week" ? "Semaine" : "Synthèse"}
             </button>
           ))}
         </div>
@@ -190,7 +190,7 @@ export default function PlanPage() {
           onOpen={setEditing}
           onOpenGoal={setViewingGoals}
         />
-      ) : (
+      ) : mode === "week" ? (
         <WeekView
           cursor={cursor}
           todayKey={todayKey}
@@ -198,6 +198,15 @@ export default function PlanPage() {
           goalsByDate={goalsByDate}
           pending={pending}
           onPlace={place}
+          onOpen={setEditing}
+          onOpenGoal={setViewingGoals}
+        />
+      ) : (
+        <SynthesisView
+          cursor={cursor}
+          todayKey={todayKey}
+          sessionsByDate={sessionsByDate}
+          goalsByDate={goalsByDate}
           onOpen={setEditing}
           onOpenGoal={setViewingGoals}
         />
@@ -482,7 +491,7 @@ function DuplicateWeekModal({
   );
 }
 
-function periodLabel(mode: "month" | "week", cursor: Date) {
+function periodLabel(mode: "month" | "week" | "synthesis", cursor: Date) {
   if (mode === "month") return `${MONTHS[cursor.getMonth()]} ${cursor.getFullYear()}`;
   const monday = new Date(cursor);
   monday.setDate(cursor.getDate() - ((cursor.getDay() + 6) % 7));
@@ -586,6 +595,132 @@ function MonthView({ cursor, todayKey, sessionsByDate, goalsByDate, pending, onP
   }
 
   return <div className="grid grid-cols-7 gap-1.5">{cells}</div>;
+}
+
+interface SynthesisViewProps {
+  cursor: Date;
+  todayKey: string;
+  sessionsByDate: Record<string, SessionInstance[]>;
+  goalsByDate: Record<string, Goal[]>;
+  onOpen: (sessionId: string) => void;
+  onOpenGoal: (goals: Goal[]) => void;
+}
+
+function SynthesisView({ cursor, todayKey, sessionsByDate, goalsByDate, onOpen, onOpenGoal }: SynthesisViewProps) {
+  const monday = new Date(cursor);
+  monday.setDate(cursor.getDate() - ((cursor.getDay() + 6) % 7));
+
+  return (
+    <div className="space-y-3">
+      {Array.from({ length: 7 }).map((_, i) => {
+        const date = new Date(monday);
+        date.setDate(monday.getDate() + i);
+        const key = ymd(date);
+        const sessions = sessionsByDate[key] ?? [];
+        const goals = goalsByDate[key] ?? [];
+        const isGoal = goals.length > 0;
+        const isToday = key === todayKey;
+
+        return (
+          <div
+            key={key}
+            className={`rounded-xl border p-3 ${
+              isGoal ? "border-ok bg-ok/10" : `bg-surface ${isToday ? "border-accent" : "border-line"}`
+            }`}
+          >
+            <h3 className="mb-2 flex justify-between text-sm font-semibold">
+              {DOW[i]}
+              <span className="font-normal text-dim">{date.getDate()} {MONTHS[date.getMonth()].slice(0, 3)}</span>
+            </h3>
+
+            {goals.length > 0 && (
+              <button
+                onClick={() => onOpenGoal(goals)}
+                className="mb-2 flex w-full items-center gap-1.5 rounded-md bg-ok/20 px-2 py-1 text-left text-[13px] font-semibold text-ok"
+              >
+                🎯 {goals[0].competition}
+                {goals[0].place && <span className="font-normal opacity-80">· {goals[0].place}</span>}
+                <span className="ml-auto text-[11px] opacity-80">{countdownLabel(goals[0].date)}</span>
+              </button>
+            )}
+
+            {sessions.length === 0 ? (
+              <span className="text-[13px] italic text-dim">Repos / rien de prévu</span>
+            ) : (
+              <div className="flex flex-col gap-3">
+                {sessions.map((s) => {
+                  const isPast = !!s.date && s.date < todayKey;
+                  const rpes = s.exercises.map((e) => e.rpeClient).filter((r) => r > 0);
+                  const avgRpe = rpes.length > 0 ? Math.round(rpes.reduce((a, b) => a + b, 0) / rpes.length) : 0;
+
+                  return (
+                    <div key={s.id} className="rounded-xl border border-line bg-surface2 overflow-hidden">
+                      {/* En-tête séance */}
+                      <button
+                        onClick={() => onOpen(s.id)}
+                        className="w-full px-3 py-2.5 text-left"
+                        style={{ borderLeft: `5px solid ${s.color}` }}
+                      >
+                        <div className="flex items-center justify-between gap-2">
+                          <span className="font-semibold text-sm">{emojiOf(s.emoji)}{s.name}</span>
+                          <span className="flex items-center gap-1.5 text-[12px] shrink-0">
+                            {s.done ? (
+                              <span className="text-ok font-semibold">✅{avgRpe > 0 ? ` RPE ${avgRpe}` : ""}</span>
+                            ) : isPast ? (
+                              <span className="text-danger">❌</span>
+                            ) : null}
+                            <span className="text-dim text-[11px] underline underline-offset-2">éditer</span>
+                          </span>
+                        </div>
+                        {s.coachComment && (
+                          <p className="mt-1 text-[12px] text-dim leading-snug">{s.coachComment}</p>
+                        )}
+                      </button>
+
+                      {/* Exercices */}
+                      {s.exercises.length > 0 && (
+                        <div className="border-t border-line divide-y divide-line">
+                          {s.exercises.map((ex) => {
+                            const prescription = [
+                              ex.sets ? `${ex.sets} × ${ex.reps || "?"}` : null,
+                              ex.weight ? `${ex.weight} kg` : null,
+                              ex.rpeCoach ? `RPE coach ${ex.rpeCoach}` : null,
+                            ].filter(Boolean).join(" · ");
+
+                            return (
+                              <div key={ex.uid} className="px-3 py-2">
+                                <div className="flex items-start justify-between gap-2">
+                                  <span className="text-[13px] font-medium">{ex.name}</span>
+                                  {ex.rpeClient > 0 && (
+                                    <span className="shrink-0 text-[11px] font-semibold text-accent">
+                                      RPE client {ex.rpeClient}
+                                    </span>
+                                  )}
+                                </div>
+                                {prescription && (
+                                  <p className="mt-0.5 text-[12px] text-dim">{prescription}</p>
+                                )}
+                                {ex.coachComment && (
+                                  <p className="mt-1 text-[11px] text-dim italic">🗒 {ex.coachComment}</p>
+                                )}
+                                {ex.clientComment && (
+                                  <p className="mt-1 text-[11px] text-accent2 italic">💬 {ex.clientComment}</p>
+                                )}
+                              </div>
+                            );
+                          })}
+                        </div>
+                      )}
+                    </div>
+                  );
+                })}
+              </div>
+            )}
+          </div>
+        );
+      })}
+    </div>
+  );
 }
 
 function WeekView({ cursor, todayKey, sessionsByDate, goalsByDate, pending, onPlace, onOpen, onOpenGoal }: ViewProps) {
