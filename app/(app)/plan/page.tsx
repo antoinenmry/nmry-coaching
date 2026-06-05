@@ -4,8 +4,10 @@ import { useMemo, useState } from "react";
 import { useData } from "@/components/DataProvider";
 import SessionEditor from "@/components/SessionEditor";
 import ExerciseMultiSelect from "@/components/ExerciseMultiSelect";
+import GoalInfoModal from "@/components/GoalInfoModal";
 import { AUTH_ENABLED } from "@/lib/config";
 import { SESSION_COLORS, newSession, exerciseInstanceFromLibrary } from "@/lib/data";
+import { countdownLabel } from "@/lib/dates";
 import type { Goal, SessionInstance } from "@/lib/types";
 
 const MONTHS = ["Janvier","Février","Mars","Avril","Mai","Juin","Juillet","Août","Septembre","Octobre","Novembre","Décembre"];
@@ -25,6 +27,7 @@ export default function PlanPage() {
   const [pending, setPending] = useState<string | null>(null); // séance à placer (tap-to-place)
   const [editing, setEditing] = useState<string | null>(null); // sessionId
   const [composing, setComposing] = useState(false);
+  const [viewingGoals, setViewingGoals] = useState<Goal[] | null>(null);
 
   const todayKey = ymd(new Date());
 
@@ -178,6 +181,7 @@ export default function PlanPage() {
           pending={pending}
           onPlace={place}
           onOpen={setEditing}
+          onOpenGoal={setViewingGoals}
         />
       ) : (
         <WeekView
@@ -188,6 +192,7 @@ export default function PlanPage() {
           pending={pending}
           onPlace={place}
           onOpen={setEditing}
+          onOpenGoal={setViewingGoals}
         />
       )}
 
@@ -198,6 +203,8 @@ export default function PlanPage() {
       )}
 
       {editing && <SessionEditor sessionId={editing} role={role} onClose={() => setEditing(null)} />}
+
+      {viewingGoals && <GoalInfoModal goals={viewingGoals} onClose={() => setViewingGoals(null)} />}
 
       {composing && (
         <ComposeModal
@@ -283,6 +290,7 @@ interface ViewProps {
   pending: string | null;
   onPlace: (sessionId: string, date: string | null) => void;
   onOpen: (sessionId: string) => void;
+  onOpenGoal: (goals: Goal[]) => void;
 }
 
 function dayDrop(key: string, pending: string | null, onPlace: ViewProps["onPlace"]) {
@@ -313,7 +321,7 @@ function SessionPill({ s, onOpen, big }: { s: SessionInstance; onOpen: (id: stri
   );
 }
 
-function MonthView({ cursor, todayKey, sessionsByDate, goalsByDate, pending, onPlace, onOpen }: ViewProps) {
+function MonthView({ cursor, todayKey, sessionsByDate, goalsByDate, pending, onPlace, onOpen, onOpenGoal }: ViewProps) {
   const first = new Date(cursor.getFullYear(), cursor.getMonth(), 1);
   const startOffset = (first.getDay() + 6) % 7;
   const daysInMonth = new Date(cursor.getFullYear(), cursor.getMonth() + 1, 0).getDate();
@@ -342,9 +350,13 @@ function MonthView({ cursor, todayKey, sessionsByDate, goalsByDate, pending, onP
           {isGoal && <span title={goals.map((g) => g.competition).join(", ")}>🎯</span>}
         </span>
         {isGoal && (
-          <span className="truncate rounded-md bg-ok/25 px-1.5 py-0.5 text-[10px] font-semibold text-ok" title={goals.map((g) => g.competition).join(", ")}>
+          <button
+            onClick={(e) => { e.stopPropagation(); onOpenGoal(goals); }}
+            className="truncate rounded-md bg-ok/25 px-1.5 py-0.5 text-left text-[10px] font-semibold text-ok"
+            title={goals.map((g) => g.competition).join(", ")}
+          >
             {goals[0].competition}
-          </span>
+          </button>
         )}
         {sessions.map((s) => <SessionPill key={s.id} s={s} onOpen={onOpen} />)}
       </div>,
@@ -354,7 +366,7 @@ function MonthView({ cursor, todayKey, sessionsByDate, goalsByDate, pending, onP
   return <div className="grid grid-cols-7 gap-1.5">{cells}</div>;
 }
 
-function WeekView({ cursor, todayKey, sessionsByDate, goalsByDate, pending, onPlace, onOpen }: ViewProps) {
+function WeekView({ cursor, todayKey, sessionsByDate, goalsByDate, pending, onPlace, onOpen, onOpenGoal }: ViewProps) {
   const monday = new Date(cursor);
   monday.setDate(cursor.getDate() - ((cursor.getDay() + 6) % 7));
 
@@ -377,11 +389,16 @@ function WeekView({ cursor, todayKey, sessionsByDate, goalsByDate, pending, onPl
               {DOW[i]}
               <span className="font-normal text-dim">{date.getDate()} {MONTHS[date.getMonth()].slice(0, 3)}</span>
             </h3>
-            {goals.map((g) => (
-              <div key={g.id} className="mb-2 flex items-center gap-1.5 rounded-md bg-ok/20 px-2 py-1 text-[13px] font-semibold text-ok">
-                🎯 {g.competition}{g.place && <span className="font-normal opacity-80">· {g.place}</span>}
-              </div>
-            ))}
+            {goals.length > 0 && (
+              <button
+                onClick={(e) => { e.stopPropagation(); onOpenGoal(goals); }}
+                className="mb-2 flex w-full items-center gap-1.5 rounded-md bg-ok/20 px-2 py-1 text-left text-[13px] font-semibold text-ok"
+              >
+                🎯 {goals[0].competition}
+                {goals[0].place && <span className="font-normal opacity-80">· {goals[0].place}</span>}
+                <span className="ml-auto text-[11px] opacity-80">{countdownLabel(goals[0].date)}</span>
+              </button>
+            )}
             <div className="flex flex-col gap-1.5">
               {sessions.length === 0 ? (
                 <span className="text-[13px] italic text-dim">Repos / rien de prévu</span>

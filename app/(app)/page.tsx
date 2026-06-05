@@ -3,6 +3,7 @@
 import Link from "next/link";
 import { useData } from "@/components/DataProvider";
 import { AUTH_ENABLED } from "@/lib/config";
+import { daysUntil, countdownLabel } from "@/lib/dates";
 
 const CARDS = [
   { href: "/profile", icon: "👤", label: "Profil & Diète", sub: "Infos perso, objectif poids, plan alimentaire", color: "var(--color-accent)" },
@@ -16,6 +17,11 @@ export default function Dashboard() {
   const { me, state, clients, activeUserId, switchClient, signOut, loading } = useData();
   const isCoach = me?.role === "coach";
   const displayName = state.profile.name || me?.name || me?.email || "Moi";
+
+  // Prochain objectif à venir (le plus proche dans le futur).
+  const nextGoal = state.goals
+    .filter((g) => g.date && (daysUntil(g.date) ?? -1) >= 0)
+    .sort((a, b) => (daysUntil(a.date)! - daysUntil(b.date)!))[0];
 
   return (
     <div>
@@ -72,10 +78,19 @@ export default function Dashboard() {
               className="absolute -right-7 -top-7 h-[90px] w-[90px] rounded-full opacity-15"
               style={{ background: c.color }}
             />
-            <div className="text-3xl">{c.icon}</div>
+            <div className="flex items-start justify-between">
+              <span className="text-3xl">{c.icon}</span>
+              {c.href === "/goals" && nextGoal && (
+                <span className="rounded-full bg-ok/20 px-2 py-0.5 text-[11px] font-bold text-ok">
+                  {countdownLabel(nextGoal.date)}
+                </span>
+              )}
+            </div>
             <div>
               <div className="text-base font-bold leading-tight">{c.label}</div>
-              <div className="text-xs text-dim">{c.sub}</div>
+              <div className="text-xs text-dim">
+                {c.href === "/goals" && nextGoal ? `Prochain : ${nextGoal.competition}` : c.sub}
+              </div>
             </div>
           </Link>
         ))}
