@@ -227,15 +227,17 @@ function ExerciseBlock({
           </div>
           <div className="mt-2.5 flex items-center gap-2">
             <span className="w-24 shrink-0 text-[13px] text-dim">RPE coach</span>
-            <span className="rounded-lg bg-accent px-2.5 py-1 text-sm font-bold text-[#1a1500]">{ex.rpeCoach}/10</span>
-            <input type="range" min={1} max={10} step={1} value={ex.rpeCoach} onChange={(e) => onPatch({ rpeCoach: +e.target.value })} className="flex-1" />
+            <span className={`rounded-lg px-2.5 py-1 text-sm font-bold ${ex.rpeCoach ? "bg-accent text-[#1a1500]" : "bg-surface text-dim"}`}>
+              {ex.rpeCoach ? `${ex.rpeCoach}/10` : "—"}
+            </span>
+            <input type="range" min={0} max={10} step={1} value={ex.rpeCoach} onChange={(e) => onPatch({ rpeCoach: +e.target.value })} className="flex-1" />
           </div>
         </>
       ) : (
         <div className="flex flex-wrap gap-x-4 gap-y-1 text-sm">
           <span><strong>{ex.sets}</strong> × <strong>{ex.reps}</strong> reps</span>
-          <span className="text-dim">{ex.weight} kg</span>
-          <span className="text-dim">RPE coach {ex.rpeCoach}/10</span>
+          {ex.weight > 0 && <span className="text-dim">{ex.weight} kg</span>}
+          {ex.rpeCoach > 0 && <span className="text-dim">RPE coach {ex.rpeCoach}/10</span>}
         </div>
       )}
 

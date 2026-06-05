@@ -153,8 +153,8 @@ export function exerciseInstanceFromLibrary(ex: { id: string; name: string }): E
     name: ex.name,
     sets: 3,
     reps: 10,
-    weight: 20,
-    rpeCoach: 8,
+    weight: 0,
+    rpeCoach: 0,
     rpeClient: 0,
     clientComment: "",
   };
