@@ -37,7 +37,7 @@ export default function Dashboard() {
           <span className="text-3xl">👁️</span>
           <div>
             <p className="font-semibold">Vue d&apos;ensemble</p>
-            <p className="text-[12px] text-dim">Blessures & objectifs de tous les clients</p>
+            <p className="text-[12px] text-dim">Blessures & objectifs de tous les sportifs</p>
           </div>
           <span className="ml-auto text-dim">›</span>
         </Link>

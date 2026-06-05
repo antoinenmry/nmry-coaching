@@ -138,7 +138,7 @@ export default function SessionEditor({
 
         {/* Ressenti séance (client) */}
         <div className="mt-3 rounded-xl border border-line bg-surface2 p-3">
-          <span className="mb-2 block text-[13px] text-dim">Ressenti de la séance (client)</span>
+          <span className="mb-2 block text-[13px] text-dim">Ressenti de la séance (sportif)</span>
           <div className="flex gap-2">
             {EMOJIS.map((emo, i) => {
               const value = i + 1;
@@ -294,7 +294,7 @@ function ExerciseBlock({
 
       {/* RPE client — éditable client / lecture seule coach */}
       <div className="mt-2.5 flex items-center gap-2">
-        <span className="w-24 shrink-0 text-[13px] text-dim">RPE client</span>
+        <span className="w-24 shrink-0 text-[13px] text-dim">RPE sportif</span>
         <span className={`rounded-lg px-2.5 py-1 text-sm font-bold ${ex.rpeClient ? "bg-accent2 text-[#06121f]" : "bg-surface text-dim"}`}>
           {ex.rpeClient ? `${ex.rpeClient}/10` : "—"}
         </span>
@@ -306,11 +306,11 @@ function ExerciseBlock({
       {/* Commentaire client */}
       {isCoach ? (
         ex.clientComment ? (
-          <p className="mt-2 rounded-lg bg-surface p-2 text-[13px]"><span className="text-dim">Client : </span>{ex.clientComment}</p>
+          <p className="mt-2 rounded-lg bg-surface p-2 text-[13px]"><span className="text-dim">Sportif : </span>{ex.clientComment}</p>
         ) : null
       ) : (
         <label className="mt-2.5 block">
-          <span className="mb-1 block text-[13px] text-dim">Commentaire client</span>
+          <span className="mb-1 block text-[13px] text-dim">Commentaire sportif</span>
           <textarea
             value={ex.clientComment}
             onChange={(e) => onPatch({ clientComment: e.target.value })}

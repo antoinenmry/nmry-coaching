@@ -143,7 +143,7 @@ export default function ProfilePage() {
         <h2 className="mb-4 text-xl font-bold">Diète à suivre</h2>
         <label className="block">
           <span className="mb-1.5 block text-[13px] text-dim">
-            Plan alimentaire (modifiable coach ou client)
+            Plan alimentaire (modifiable coach ou sportif)
           </span>
           <textarea
             value={p.diet}

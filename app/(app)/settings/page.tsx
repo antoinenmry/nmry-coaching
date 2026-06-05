@@ -43,7 +43,7 @@ export default function SettingsPage() {
           <span className={`shrink-0 rounded-full px-2.5 py-1 text-sm font-bold ${
             role === "coach" ? "bg-accent/20 text-accent" : "bg-accent2/20 text-accent2"
           }`}>
-            {role === "coach" ? "Coach" : "Client"}
+            {role === "coach" ? "Coach" : "Sportif"}
           </span>
         </div>
         <button

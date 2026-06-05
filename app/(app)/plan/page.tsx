@@ -84,11 +84,11 @@ export default function PlanPage() {
               <button
                 key={r}
                 onClick={() => setRole(r)}
-                className={`rounded-md px-3 py-1.5 text-[13px] font-semibold capitalize ${
+                className={`rounded-md px-3 py-1.5 text-[13px] font-semibold ${
                   role === r ? "bg-accent text-[#1a1500]" : "text-dim"
                 }`}
               >
-                {r}
+                {r === "coach" ? "Coach" : "Sportif"}
               </button>
             ))}
           </div>

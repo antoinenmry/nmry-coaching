@@ -92,7 +92,7 @@ export default function OverviewPage() {
 
   return (
     <div>
-      <p className="mb-4 text-sm text-dim">{data.length} client{data.length > 1 ? "s" : ""}</p>
+      <p className="mb-4 text-sm text-dim">{data.length} sportif{data.length > 1 ? "s" : ""}</p>
 
       {/* Onglets */}
       <div className="mb-4 flex rounded-lg bg-surface2 p-1">

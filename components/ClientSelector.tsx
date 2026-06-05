@@ -30,7 +30,7 @@ export default function ClientSelector() {
         disabled={loading}
         className="flex items-center gap-1.5 rounded-xl border border-line bg-surface px-3 py-1.5 text-sm font-medium disabled:opacity-50"
       >
-        <span className="text-xs text-dim">Client :</span>
+        <span className="text-xs text-dim">Sportif :</span>
         <span className="max-w-[140px] truncate text-accent">{activeLabel}</span>
         <span className="text-xs text-dim">{open ? "▲" : "▼"}</span>
       </button>
@@ -38,7 +38,7 @@ export default function ClientSelector() {
       {open && (
         <div className="absolute top-full z-50 mt-1 min-w-[200px] rounded-2xl border border-line bg-surface shadow-xl">
           {coachableClients.length === 0 && (
-            <p className="px-4 py-3 text-sm text-dim">Aucun client enregistré</p>
+            <p className="px-4 py-3 text-sm text-dim">Aucun sportif enregistré</p>
           )}
           {coachableClients.map((c, i) => (
             <button
