@@ -3,7 +3,8 @@
 import { useMemo, useState } from "react";
 import { useData } from "@/components/DataProvider";
 import SessionEditor from "@/components/SessionEditor";
-import { SESSION_TEMPLATES, instanceFromTemplate } from "@/lib/data";
+import ExerciseMultiSelect from "@/components/ExerciseMultiSelect";
+import { SESSION_COLORS, newSession, exerciseInstanceFromLibrary } from "@/lib/data";
 import type { Goal } from "@/lib/types";
 
 const MONTHS = ["Janvier","Février","Mars","Avril","Mai","Juin","Juillet","Août","Septembre","Octobre","Novembre","Décembre"];
@@ -15,10 +16,10 @@ const EMOJIS = ["😫", "😕", "😐", "🙂", "🤩"];
 const emojiOf = (n: number) => (n >= 1 && n <= 5 ? EMOJIS[n - 1] + " " : "");
 
 export default function PlanPage() {
-  const { state, update, loading } = useData();
+  const { state, loading } = useData();
   const [mode, setMode] = useState<"month" | "week">("month");
   const [cursor, setCursor] = useState(() => new Date());
-  const [pendingTpl, setPendingTpl] = useState<string | null>(null);
+  const [composing, setComposing] = useState<string | null>(null); // dateKey
   const [editing, setEditing] = useState<{ dateKey: string; sessionId: string } | null>(null);
 
   const todayKey = ymd(new Date());
@@ -37,14 +38,6 @@ export default function PlanPage() {
     if (mode === "month") d.setMonth(d.getMonth() + dir);
     else d.setDate(d.getDate() + dir * 7);
     setCursor(d);
-  }
-
-  function place(dateKey: string, tplId: string | null) {
-    if (!tplId) return;
-    update((draft) => {
-      (draft.planning[dateKey] ??= []).push(instanceFromTemplate(tplId));
-    });
-    setPendingTpl(null);
   }
 
   const editingSession =
@@ -77,26 +70,8 @@ export default function PlanPage() {
       </div>
 
       <p className="mb-2.5 text-xs text-dim">
-        Glisse une séance sur un jour. Sur mobile : appuie sur une séance puis sur le jour cible.
+        Touche un jour pour créer une séance en piochant dans ta bibliothèque.
       </p>
-
-      {/* Bibliothèque */}
-      <div className="mb-3.5 flex gap-2.5 overflow-x-auto pb-2">
-        {SESSION_TEMPLATES.map((t) => (
-          <button
-            key={t.id}
-            draggable
-            onDragStart={(e) => e.dataTransfer.setData("text/tpl", t.id)}
-            onClick={() => setPendingTpl(pendingTpl === t.id ? null : t.id)}
-            className={`flex-none cursor-grab select-none rounded-xl border bg-surface2 px-3.5 py-2.5 text-sm font-semibold ${
-              pendingTpl === t.id ? "border-accent" : "border-line"
-            }`}
-            style={{ borderLeft: `5px solid ${t.color}` }}
-          >
-            {t.name}
-          </button>
-        ))}
-      </div>
 
       {/* Calendrier */}
       {mode === "month" ? (
@@ -105,8 +80,7 @@ export default function PlanPage() {
           todayKey={todayKey}
           planning={state.planning}
           goalsByDate={goalsByDate}
-          pendingTpl={pendingTpl}
-          onPlace={place}
+          onCompose={setComposing}
           onOpen={(dateKey, sessionId) => setEditing({ dateKey, sessionId })}
         />
       ) : (
@@ -115,8 +89,7 @@ export default function PlanPage() {
           todayKey={todayKey}
           planning={state.planning}
           goalsByDate={goalsByDate}
-          pendingTpl={pendingTpl}
-          onPlace={place}
+          onCompose={setComposing}
           onOpen={(dateKey, sessionId) => setEditing({ dateKey, sessionId })}
         />
       )}
@@ -135,8 +108,103 @@ export default function PlanPage() {
           onClose={() => setEditing(null)}
         />
       )}
+
+      {composing && (
+        <ComposeModal
+          dateKey={composing}
+          onClose={() => setComposing(null)}
+          onCreated={(sessionId) => {
+            const dateKey = composing;
+            setComposing(null);
+            setEditing({ dateKey, sessionId });
+          }}
+        />
+      )}
     </div>
   );
+}
+
+// Modale de composition : nom + couleur + sélection multiple d'exercices.
+function ComposeModal({
+  dateKey,
+  onClose,
+  onCreated,
+}: {
+  dateKey: string;
+  onClose: () => void;
+  onCreated: (sessionId: string) => void;
+}) {
+  const { update } = useData();
+  const [name, setName] = useState("Séance");
+  const [color, setColor] = useState(SESSION_COLORS[0]);
+  const [picked, setPicked] = useState<string[]>([]);
+
+  const toggle = (id: string) =>
+    setPicked((p) => (p.includes(id) ? p.filter((x) => x !== id) : [...p, id]));
+
+  function create() {
+    let newId = "";
+    update((d) => {
+      const s = newSession(name.trim() || "Séance", color);
+      newId = s.id;
+      picked.forEach((id) => {
+        const libEx = d.library.exercises.find((e) => e.id === id);
+        s.exercises.push(exerciseInstanceFromLibrary({ id, name: libEx?.name ?? "Exercice" }));
+      });
+      (d.planning[dateKey] ??= []).push(s);
+    });
+    onCreated(newId);
+  }
+
+  return (
+    <div
+      className="fixed inset-0 z-50 flex items-end justify-center bg-black/60 sm:items-center"
+      onClick={(e) => e.target === e.currentTarget && onClose()}
+    >
+      <div className="flex max-h-[92vh] w-full max-w-xl flex-col overflow-y-auto rounded-t-3xl border-t border-line bg-surface p-5 sm:rounded-3xl sm:border">
+        <div className="mb-3 flex items-center justify-between">
+          <h2 className="text-lg font-bold">Nouvelle séance · {frenchDate(dateKey)}</h2>
+          <button onClick={onClose} className="grid h-9 w-9 place-items-center rounded-lg bg-surface2">✕</button>
+        </div>
+
+        <label className="mb-3 block">
+          <span className="mb-1 block text-[13px] text-dim">Nom de la séance</span>
+          <input value={name} onChange={(e) => setName(e.target.value)} placeholder="Ex : Haut du corps A" />
+        </label>
+
+        <div className="mb-3">
+          <span className="mb-1.5 block text-[13px] text-dim">Couleur</span>
+          <div className="flex gap-2">
+            {SESSION_COLORS.map((c) => (
+              <button
+                key={c}
+                onClick={() => setColor(c)}
+                className={`h-8 w-8 rounded-full border-2 ${color === c ? "border-ink" : "border-transparent"}`}
+                style={{ background: c }}
+                aria-label={`Couleur ${c}`}
+              />
+            ))}
+          </div>
+        </div>
+
+        <span className="mb-1.5 block text-[13px] text-dim">Exercices ({picked.length} sélectionné{picked.length > 1 ? "s" : ""})</span>
+        <ExerciseMultiSelect picked={picked} onToggle={toggle} />
+
+        <button
+          onClick={create}
+          className="mt-4 w-full rounded-xl bg-accent py-3 font-semibold text-[#1a1500]"
+        >
+          Créer la séance
+        </button>
+      </div>
+    </div>
+  );
+}
+
+function frenchDate(key: string) {
+  const months = ["janvier","février","mars","avril","mai","juin","juillet","août","septembre","octobre","novembre","décembre"];
+  const [y, m, d] = key.split("-").map(Number);
+  return `${d} ${months[m - 1]} ${y}`;
 }
 
 function periodLabel(mode: "month" | "week", cursor: Date) {
@@ -153,25 +221,11 @@ interface ViewProps {
   todayKey: string;
   planning: ReturnType<typeof useData>["state"]["planning"];
   goalsByDate: Record<string, Goal[]>;
-  pendingTpl: string | null;
-  onPlace: (dateKey: string, tplId: string | null) => void;
+  onCompose: (dateKey: string) => void;
   onOpen: (dateKey: string, sessionId: string) => void;
 }
 
-function dayHandlers(dateKey: string, pendingTpl: string | null, onPlace: ViewProps["onPlace"]) {
-  return {
-    onDragOver: (e: React.DragEvent) => e.preventDefault(),
-    onDrop: (e: React.DragEvent) => {
-      e.preventDefault();
-      onPlace(dateKey, e.dataTransfer.getData("text/tpl"));
-    },
-    onClick: () => {
-      if (pendingTpl) onPlace(dateKey, pendingTpl);
-    },
-  };
-}
-
-function MonthView({ cursor, todayKey, planning, goalsByDate, pendingTpl, onPlace, onOpen }: ViewProps) {
+function MonthView({ cursor, todayKey, planning, goalsByDate, onCompose, onOpen }: ViewProps) {
   const first = new Date(cursor.getFullYear(), cursor.getMonth(), 1);
   const startOffset = (first.getDay() + 6) % 7;
   const daysInMonth = new Date(cursor.getFullYear(), cursor.getMonth() + 1, 0).getDate();
@@ -190,8 +244,8 @@ function MonthView({ cursor, todayKey, planning, goalsByDate, pendingTpl, onPlac
     cells.push(
       <div
         key={key}
-        {...dayHandlers(key, pendingTpl, onPlace)}
-        className={`flex min-h-[78px] flex-col gap-1 rounded-lg border p-1 ${
+        onClick={() => onCompose(key)}
+        className={`flex min-h-[78px] cursor-pointer flex-col gap-1 rounded-lg border p-1 ${
           isGoal
             ? "border-ok bg-ok/10 ring-1 ring-ok/50"
             : `bg-surface ${key === todayKey ? "border-accent" : "border-line"}`
@@ -226,7 +280,7 @@ function MonthView({ cursor, todayKey, planning, goalsByDate, pendingTpl, onPlac
   return <div className="grid grid-cols-7 gap-1.5">{cells}</div>;
 }
 
-function WeekView({ cursor, todayKey, planning, goalsByDate, pendingTpl, onPlace, onOpen }: ViewProps) {
+function WeekView({ cursor, todayKey, planning, goalsByDate, onCompose, onOpen }: ViewProps) {
   const monday = new Date(cursor);
   monday.setDate(cursor.getDate() - ((cursor.getDay() + 6) % 7));
 
@@ -242,8 +296,8 @@ function WeekView({ cursor, todayKey, planning, goalsByDate, pendingTpl, onPlace
         return (
           <div
             key={key}
-            {...dayHandlers(key, pendingTpl, onPlace)}
-            className={`rounded-xl border p-3 ${
+            onClick={() => onCompose(key)}
+            className={`cursor-pointer rounded-xl border p-3 ${
               isGoal ? "border-ok bg-ok/10" : `bg-surface ${key === todayKey ? "border-accent" : "border-line"}`
             }`}
           >

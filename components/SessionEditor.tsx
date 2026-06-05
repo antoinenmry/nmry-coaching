@@ -1,9 +1,10 @@
 "use client";
 
+import { useState } from "react";
 import { useData } from "./DataProvider";
+import ExercisePicker from "./ExercisePicker";
+import { exerciseInstanceFromLibrary } from "@/lib/data";
 import type { ExerciseInstance, SessionInstance } from "@/lib/types";
-
-const uid = () => Math.random().toString(36).slice(2, 9);
 
 const EMOJIS = ["😫", "😕", "😐", "🙂", "🤩"]; // ressenti 1 → 5
 
@@ -25,6 +26,7 @@ export default function SessionEditor({
   const { update, state } = useData();
   const library = state.library.exercises;
   const videoById = Object.fromEntries(library.map((e) => [e.id, e.video]));
+  const [picking, setPicking] = useState(false);
 
   const patchSession = (patch: Partial<SessionInstance>) =>
     update((d) => {
@@ -39,20 +41,13 @@ export default function SessionEditor({
       if (ex) Object.assign(ex, patch);
     });
 
-  const addExercise = (exId: string) =>
+  const addExercises = (ids: string[]) =>
     update((d) => {
-      const libEx = d.library.exercises.find((e) => e.id === exId);
       const s = d.planning[dateKey]?.find((x) => x.id === session.id);
-      s?.exercises.push({
-        uid: uid(),
-        exId,
-        name: libEx?.name ?? "Exercice",
-        sets: 3,
-        reps: 10,
-        weight: 20,
-        rpeCoach: 8,
-        rpeClient: 0,
-        clientComment: "",
+      if (!s) return;
+      ids.forEach((id) => {
+        const libEx = d.library.exercises.find((e) => e.id === id);
+        s.exercises.push(exerciseInstanceFromLibrary({ id, name: libEx?.name ?? "Exercice" }));
       });
     });
 
@@ -85,10 +80,15 @@ export default function SessionEditor({
         >
           ✕
         </button>
-        <h2 className="border-l-4 pl-2.5 text-lg font-bold" style={{ borderColor: session.color }}>
-          {session.name}
-        </h2>
-        <p className="mt-1 text-[13px] text-dim">{frenchDate(dateKey)}</p>
+        <div className="border-l-4 pl-2.5" style={{ borderColor: session.color }}>
+          <input
+            value={session.name}
+            onChange={(e) => patchSession({ name: e.target.value })}
+            className="!border-0 !bg-transparent !p-0 text-lg font-bold"
+            aria-label="Nom de la séance"
+          />
+          <p className="text-[13px] text-dim">{frenchDate(dateKey)}</p>
+        </div>
 
         {/* Ressenti global de la séance (client) */}
         <div className="mt-3 rounded-xl border border-line bg-surface2 p-3">
@@ -125,7 +125,14 @@ export default function SessionEditor({
           ))}
         </div>
 
-        <AddExercise library={library} onAdd={addExercise} />
+        <button
+          onClick={() => setPicking(true)}
+          className="mt-3 w-full rounded-xl border border-dashed border-line py-3 font-semibold text-dim"
+        >
+          + Ajouter des exercices
+        </button>
+
+        {picking && <ExercisePicker onConfirm={addExercises} onClose={() => setPicking(false)} />}
 
         <button
           onClick={deleteSession}
@@ -209,42 +216,6 @@ function ExerciseBlock({
           className="min-h-[60px]"
         />
       </label>
-    </div>
-  );
-}
-
-function AddExercise({
-  library,
-  onAdd,
-}: {
-  library: { id: string; name: string }[];
-  onAdd: (exId: string) => void;
-}) {
-  if (library.length === 0) {
-    return (
-      <p className="mt-3 rounded-lg border border-dashed border-line p-3 text-center text-[13px] text-dim">
-        Aucun exercice dans la bibliothèque. Crée-en d&apos;abord dans l&apos;onglet Bibliothèque.
-      </p>
-    );
-  }
-  return (
-    <div className="mt-2.5 flex gap-2">
-      <select id="add-ex" className="flex-1" defaultValue={library[0].id}>
-        {library.map((e) => (
-          <option key={e.id} value={e.id}>
-            {e.name}
-          </option>
-        ))}
-      </select>
-      <button
-        onClick={() => {
-          const sel = document.getElementById("add-ex") as HTMLSelectElement;
-          onAdd(sel.value);
-        }}
-        className="rounded-lg bg-surface2 px-3 text-[13px] font-semibold"
-      >
-        + Exercice
-      </button>
     </div>
   );
 }

@@ -135,3 +135,26 @@ export function instanceFromTemplate(tplId: string): SessionInstance {
     ),
   };
 }
+
+// Palette de couleurs pour les séances composées librement.
+export const SESSION_COLORS = ["#ef5350", "#42a5f5", "#66bb6a", "#ab47bc", "#ffb300", "#26c6da"];
+
+/** Crée une séance vide (composition libre depuis la bibliothèque). */
+export function newSession(name: string, color: string): SessionInstance {
+  return { id: uid(), tplId: "", name, color, emoji: 0, exercises: [] };
+}
+
+/** Transforme un exercice de la bibliothèque en instance prescriptible (valeurs par défaut). */
+export function exerciseInstanceFromLibrary(ex: { id: string; name: string }): ExerciseInstance {
+  return {
+    uid: uid(),
+    exId: ex.id,
+    name: ex.name,
+    sets: 3,
+    reps: 10,
+    weight: 20,
+    rpeCoach: 8,
+    rpeClient: 0,
+    clientComment: "",
+  };
+}
