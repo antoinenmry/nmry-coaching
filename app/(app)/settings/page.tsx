@@ -377,6 +377,61 @@ function AdminManager() {
   );
 }
 
+// ─── Composer Broadcast ──────────────────────────────────────────────────────
+function BroadcastComposer() {
+  const [msg, setMsg] = useState("");
+  const [sending, setSending] = useState(false);
+  const [sent, setSent] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  async function send() {
+    if (!msg.trim()) return;
+    setSending(true); setError(null); setSent(false);
+    try {
+      const res = await fetch("/api/broadcasts", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ message: msg.trim(), expiresInHours: 24 }),
+      });
+      if (!res.ok) {
+        const body = await res.json().catch(() => ({}));
+        throw new Error(body.error ?? "Erreur inconnue");
+      }
+      setMsg("");
+      setSent(true);
+      setTimeout(() => setSent(false), 3000);
+    } catch (e) {
+      setError((e as Error).message);
+    } finally {
+      setSending(false);
+    }
+  }
+
+  return (
+    <section className="rounded-2xl border border-line bg-surface p-4">
+      <h2 className="mb-1 font-bold">📢 Broadcast</h2>
+      <p className="mb-3 text-[12px] text-dim">
+        Envoie un message pop-up à tous tes sportifs en temps réel. Visible 24 h.
+      </p>
+      <textarea
+        value={msg}
+        onChange={(e) => setMsg(e.target.value)}
+        placeholder="Rappel séance, fermeture, annonce…"
+        rows={3}
+        className="w-full resize-none rounded-xl border border-line bg-surface2 p-3 text-sm outline-none focus:border-accent"
+      />
+      {error && <p className="mt-1 text-xs text-danger">{error}</p>}
+      <button
+        onClick={send}
+        disabled={sending || !msg.trim()}
+        className="mt-2 w-full rounded-xl bg-accent py-2.5 font-semibold text-[#1a1500] transition disabled:opacity-40"
+      >
+        {sending ? "Envoi…" : sent ? "✅ Envoyé !" : "Envoyer à tous les sportifs"}
+      </button>
+    </section>
+  );
+}
+
 // ─── Page principale ──────────────────────────────────────────────────────────
 export default function SettingsPage() {
   const { me, role, signOut, state, update } = useData();
@@ -550,9 +605,12 @@ export default function SettingsPage() {
 
       {/* Onglet Sportifs */}
       {tab === "sportifs" && isElevated && (
-        <section className="rounded-2xl border border-line bg-surface p-4">
-          <AthletesManager />
-        </section>
+        <>
+          <BroadcastComposer />
+          <section className="rounded-2xl border border-line bg-surface p-4">
+            <AthletesManager />
+          </section>
+        </>
       )}
 
       {/* Onglet Admin */}

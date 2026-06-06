@@ -1,0 +1,80 @@
+import { NextRequest, NextResponse } from "next/server";
+import { createClient } from "@/lib/supabase/server";
+import { createAdminClient } from "@/lib/supabase/admin";
+
+/**
+ * POST /api/broadcasts
+ * Coach/admin crée un message broadcast visible en pop-up par tous ses sportifs.
+ * Body: { message: string, expiresInHours?: number }
+ *
+ * GET /api/broadcasts
+ * Récupère les broadcasts actifs pour l'utilisateur connecté (client).
+ * Filtrés par coach_id lié au client.
+ */
+
+export async function POST(req: NextRequest) {
+  const supabase = await createClient();
+  const { data: { user } } = await supabase.auth.getUser();
+  if (!user) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+
+  // Vérifier que l'utilisateur est coach ou admin
+  const admin = createAdminClient();
+  const { data: profile } = await admin
+    .from("profiles")
+    .select("role")
+    .eq("id", user.id)
+    .maybeSingle();
+
+  if (!profile || (profile.role !== "coach" && profile.role !== "admin")) {
+    return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+  }
+
+  const { message, expiresInHours = 24 } = await req.json();
+  if (!message?.trim()) {
+    return NextResponse.json({ error: "Message requis" }, { status: 400 });
+  }
+
+  const expires_at = new Date(Date.now() + expiresInHours * 3_600_000).toISOString();
+
+  const { data, error } = await admin
+    .from("broadcasts")
+    .insert({ coach_id: user.id, message: message.trim(), expires_at })
+    .select()
+    .single();
+
+  if (error) {
+    console.error("[broadcasts] insert error:", error);
+    return NextResponse.json({ error: error.message }, { status: 500 });
+  }
+
+  return NextResponse.json(data);
+}
+
+export async function GET() {
+  const supabase = await createClient();
+  const { data: { user } } = await supabase.auth.getUser();
+  if (!user) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+
+  const admin = createAdminClient();
+
+  // Trouver le coach du client
+  const { data: assignment } = await admin
+    .from("coach_client")
+    .select("coach_id")
+    .eq("client_id", user.id)
+    .maybeSingle();
+
+  if (!assignment?.coach_id) {
+    return NextResponse.json([]);
+  }
+
+  // Récupérer les broadcasts actifs (non expirés)
+  const { data: broadcasts } = await admin
+    .from("broadcasts")
+    .select("id, message, created_at, expires_at")
+    .eq("coach_id", assignment.coach_id)
+    .gt("expires_at", new Date().toISOString())
+    .order("created_at", { ascending: false });
+
+  return NextResponse.json(broadcasts ?? []);
+}

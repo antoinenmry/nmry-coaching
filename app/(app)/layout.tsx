@@ -2,6 +2,7 @@ import { redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
 import { DataProvider } from "@/components/DataProvider";
 import Header from "@/components/Header";
+import BroadcastPopup from "@/components/BroadcastPopup";
 import { AUTH_ENABLED } from "@/lib/config";
 
 export default async function AppLayout({ children }: { children: React.ReactNode }) {
@@ -15,6 +16,7 @@ export default async function AppLayout({ children }: { children: React.ReactNod
     <DataProvider>
       <Header />
       <main className="mx-auto max-w-3xl p-4">{children}</main>
+      <BroadcastPopup />
     </DataProvider>
   );
 }
