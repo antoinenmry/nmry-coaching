@@ -90,13 +90,14 @@ export default function NotifPrefsPanel() {
   if (swState === "unsupported") return null;
 
   // Lignes de préférences selon le rôle
-  const prefRows: { key: keyof NotifPrefs; label: string; desc: string; forCoach?: boolean; forClient?: boolean }[] = [
-    { key: "newMessage",      label: "Nouveau message",        desc: "Message reçu dans le chat",                      forCoach: true, forClient: true },
-    { key: "urgentMessage",   label: "Message urgent",         desc: "Un sportif envoie un message urgent",             forCoach: true },
-    { key: "newPlan",         label: "Nouveau programme",      desc: "Le coach publie un nouveau programme",            forClient: true },
-    { key: "sessionReminder", label: "Rappel séance",          desc: "Séance programmée aujourd'hui (7h du matin)",     forClient: true },
-    { key: "goalReminder",    label: "Rappel objectif",        desc: "J-7 et J-1 avant une compétition",                forClient: true },
-  ].filter((r) => isCoach ? r.forCoach : r.forClient);
+  type PrefRow = { key: keyof NotifPrefs; label: string; desc: string; forCoach?: boolean; forClient?: boolean };
+  const prefRows: PrefRow[] = ([
+    { key: "newMessage"      as keyof NotifPrefs, label: "Nouveau message",   desc: "Message reçu dans le chat",                  forCoach: true, forClient: true },
+    { key: "urgentMessage"   as keyof NotifPrefs, label: "Message urgent",    desc: "Un sportif envoie un message urgent",         forCoach: true },
+    { key: "newPlan"         as keyof NotifPrefs, label: "Nouveau programme", desc: "Le coach publie un nouveau programme",        forClient: true },
+    { key: "sessionReminder" as keyof NotifPrefs, label: "Rappel séance",     desc: "Séance programmée aujourd'hui (7h du matin)", forClient: true },
+    { key: "goalReminder"    as keyof NotifPrefs, label: "Rappel objectif",   desc: "J-7 et J-1 avant une compétition",            forClient: true },
+  ] as PrefRow[]).filter((r) => isCoach ? r.forCoach : r.forClient);
 
   return (
     <div className="space-y-3">
