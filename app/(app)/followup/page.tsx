@@ -269,7 +269,7 @@ function MessagesTab() {
         fetch("/api/messages/notify", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ recipientId: "coach", senderName: me.name || me.email, messageText: msgText, clientId: me.id }),
+          body: JSON.stringify({ clientId: me.id, senderName: me.name || me.email, messageText: msgText }),
         }).catch(() => {});
       }
     }
