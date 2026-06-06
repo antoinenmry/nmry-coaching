@@ -63,6 +63,16 @@ export default function SessionEditor({
       if (s) s.exercises = s.exercises.filter((e) => e.uid !== exUid);
     });
 
+  const moveExercise = (exUid: string, dir: -1 | 1) =>
+    update((d) => {
+      const s = d.sessions.find((x) => x.id === sessionId);
+      if (!s) return;
+      const idx = s.exercises.findIndex((e) => e.uid === exUid);
+      const target = idx + dir;
+      if (target < 0 || target >= s.exercises.length) return;
+      [s.exercises[idx], s.exercises[target]] = [s.exercises[target], s.exercises[idx]];
+    });
+
   const deleteSession = () => {
     update((d) => {
       d.sessions = d.sessions.filter((x) => x.id !== sessionId);
@@ -177,14 +187,17 @@ export default function SessionEditor({
         )}
 
         <div className="mt-3 space-y-2.5">
-          {session.exercises.map((ex) => (
+          {session.exercises.map((ex, idx) => (
             <ExerciseBlock
               key={ex.uid}
               ex={ex}
+              index={idx}
+              total={session.exercises.length}
               video={videoById[ex.exId]}
               isCoach={isCoach}
               onPatch={(patch) => patchEx(ex.uid, patch)}
               onRemove={() => removeExercise(ex.uid)}
+              onMove={(dir) => moveExercise(ex.uid, dir)}
             />
           ))}
           {session.exercises.length === 0 && (
@@ -222,28 +235,53 @@ export default function SessionEditor({
 
 function ExerciseBlock({
   ex,
+  index,
+  total,
   video,
   isCoach,
   onPatch,
   onRemove,
+  onMove,
 }: {
   ex: ExerciseInstance;
+  index: number;
+  total: number;
   video?: string;
   isCoach: boolean;
   onPatch: (patch: Partial<ExerciseInstance>) => void;
   onRemove: () => void;
+  onMove: (dir: -1 | 1) => void;
 }) {
   return (
     <div className="rounded-xl border border-line bg-surface2 p-3">
       <div className="mb-2.5 flex items-center justify-between gap-2">
-        <div className="min-w-0">
+        <div className="min-w-0 flex-1">
           <span className="font-bold">{ex.name}</span>
           {video && (
             <a href={video} target="_blank" rel="noreferrer" className="ml-2 text-[13px] text-accent2">▶ vidéo</a>
           )}
         </div>
         {isCoach && (
-          <button onClick={onRemove} className="shrink-0 rounded-lg bg-surface px-2.5 py-1 text-[13px]">✕</button>
+          <div className="flex shrink-0 items-center gap-0.5">
+            <button
+              type="button"
+              onClick={() => onMove(-1)}
+              disabled={index === 0}
+              className="grid h-7 w-7 place-items-center rounded text-dim disabled:opacity-20 hover:text-ink"
+              aria-label="Monter"
+            >▲</button>
+            <button
+              type="button"
+              onClick={() => onMove(1)}
+              disabled={index === total - 1}
+              className="grid h-7 w-7 place-items-center rounded text-dim disabled:opacity-20 hover:text-ink"
+              aria-label="Descendre"
+            >▼</button>
+            <button
+              onClick={onRemove}
+              className="ml-0.5 rounded-lg bg-surface px-2.5 py-1 text-[13px] text-dim hover:text-danger"
+            >✕</button>
+          </div>
         )}
       </div>
 

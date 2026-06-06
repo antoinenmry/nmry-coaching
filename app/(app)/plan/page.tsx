@@ -365,18 +365,17 @@ function ComposeModal({ onClose, onCreated }: { onClose: () => void; onCreated: 
       });
     }
 
-    // 2. Créer la séance dans l'app_state dans l'ordre voulu
-    let newId = "";
-    update((d) => {
-      const s = newSession(name.trim() || "Séance", color);
-      newId = s.id;
-      exercises.forEach(({ id, name: exName }) => {
-        const libEx = library.exercises.find((e) => e.id === id);
-        s.exercises.push(exerciseInstanceFromLibrary({ id, name: libEx?.name ?? exName }));
-      });
-      d.sessions.push(s);
+    // 2. Construire la séance AVANT update() pour que l'ID soit garanti synchrone
+    const s = newSession(name.trim() || "Séance", color);
+    exercises.forEach(({ id, name: exName }) => {
+      // La bibliothèque peut déjà inclure l'exercice custom (ajouté ci-dessus)
+      // Utiliser le nom inline en fallback si l'exercice n'est pas encore dans library
+      const libEx = library.exercises.find((e) => e.id === id);
+      s.exercises.push(exerciseInstanceFromLibrary({ id, name: libEx?.name ?? exName }));
     });
-    onCreated(newId);
+
+    update((d) => { d.sessions.push(s); });
+    onCreated(s.id);
   }
 
   const pickedIds = exercises.filter((e) => !e.isInline).map((e) => e.id);
