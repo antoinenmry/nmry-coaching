@@ -60,6 +60,7 @@ interface DataContextValue {
   setRole: (r: Role) => void;
   previewAsClient: boolean;
   setPreviewAsClient: (v: boolean) => void;
+  hasCoach: boolean; // false = client sans coach affecté (accès bloqué)
 }
 
 const DataContext = createContext<DataContextValue | null>(null);
@@ -85,6 +86,7 @@ export function DataProvider({ children }: { children: React.ReactNode }) {
   const [saving, setSaving] = useState(false);
   const [role, setRoleState] = useState<Role>("client");
   const [previewAsClient, setPreviewAsClient] = useState(false);
+  const [hasCoach, setHasCoach] = useState(true); // optimiste par défaut
 
   const setRole = useCallback((r: Role) => {
     setRoleState(r);
@@ -203,6 +205,13 @@ export function DataProvider({ children }: { children: React.ReactNode }) {
         const savedClient = savedId ? list.find((c) => c.id === savedId) : null;
         await loadStateFor(savedClient ? savedClient.id : user.id);
       } else {
+        // Client : vérifier qu'il a un coach affecté
+        const { data: coachLink } = await supabase
+          .from("coach_client")
+          .select("coach_id")
+          .eq("client_id", user.id)
+          .maybeSingle();
+        setHasCoach(!!coachLink?.coach_id);
         await loadStateFor(user.id);
       }
       setLoading(false);
@@ -334,6 +343,7 @@ export function DataProvider({ children }: { children: React.ReactNode }) {
         activeUserId, clients, switchClient, signOut,
         role: previewAsClient ? "client" : role,
         setRole, previewAsClient, setPreviewAsClient,
+        hasCoach,
       }}
     >
       {children}

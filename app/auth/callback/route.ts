@@ -35,8 +35,21 @@ export async function GET(request: NextRequest) {
       },
     );
 
-    const { error } = await supabase.auth.exchangeCodeForSession(code);
-    if (!error) return response;
+    const { data: sessionData, error } = await supabase.auth.exchangeCodeForSession(code);
+    if (!error) {
+      // Si c'est une confirmation d'inscription (next = "/"), notifier les coaches/admins
+      if (next === "/" && sessionData?.user) {
+        const u = sessionData.user;
+        const displayName = u.user_metadata?.name || u.email || "Nouvel utilisateur";
+        // Fire-and-forget — on ne bloque pas la redirection
+        fetch(new URL("/api/auth/on-signup", request.url).toString(), {
+          method: "POST",
+          headers: { "Content-Type": "application/json", "Cookie": request.headers.get("cookie") ?? "" },
+          body: JSON.stringify({ userName: displayName, userEmail: u.email }),
+        }).catch(() => {});
+      }
+      return response;
+    }
   }
 
   return NextResponse.redirect(

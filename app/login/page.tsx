@@ -55,11 +55,17 @@ function LoginForm() {
         return;
       }
       if (data.session) {
+        // Notifier les coaches/admins (fire-and-forget)
+        fetch("/api/auth/on-signup", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ userName: name.trim(), userEmail: email }),
+        }).catch(() => {});
         router.replace("/");
         router.refresh();
         return;
       }
-      // Confirmation email envoyée
+      // Confirmation email envoyée (pas encore de session — la notif sera envoyée au callback)
       go("pending");
       setBusy(false);
     } else {
