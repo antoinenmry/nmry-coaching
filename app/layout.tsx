@@ -26,7 +26,7 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
       <head>
         {/* Applique le thème avant hydratation pour éviter le flash */}
         <script dangerouslySetInnerHTML={{ __html: `try{var t=localStorage.getItem('nmry-theme');if(t)document.documentElement.setAttribute('data-theme',t);}catch(e){}` }} />
-        <link rel="apple-touch-icon" href="/logo-light.png" />
+        <link rel="apple-touch-icon" href="/icon-512.png" />
       </head>
       <body className="min-h-screen bg-bg text-ink antialiased">
         <ThemeProvider>{children}</ThemeProvider>
