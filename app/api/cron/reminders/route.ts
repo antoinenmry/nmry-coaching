@@ -14,8 +14,13 @@ import type { AppState, SessionInstance, Goal } from "@/lib/types";
  * Sécurisé par le header Authorization: Bearer <CRON_SECRET>
  */
 export async function GET(req: NextRequest) {
+  const secret = process.env.CRON_SECRET;
+  if (!secret) {
+    // Variable non configurée — refuser systématiquement pour éviter une fausse ouverture
+    return NextResponse.json({ error: "CRON_SECRET not configured" }, { status: 503 });
+  }
   const auth = req.headers.get("authorization");
-  if (auth !== `Bearer ${process.env.CRON_SECRET}`) {
+  if (auth !== `Bearer ${secret}`) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
 

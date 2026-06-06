@@ -25,6 +25,18 @@ export async function POST(req: NextRequest) {
   if (!clientId) return NextResponse.json({ error: "clientId required" }, { status: 400 });
 
   const adminClient = createAdminClient();
+
+  // Vérifier que ce client n'est pas déjà affecté à un autre coach
+  const { data: existing } = await adminClient
+    .from("coach_client")
+    .select("coach_id")
+    .eq("client_id", clientId)
+    .maybeSingle();
+
+  if (existing && existing.coach_id !== user.id) {
+    return NextResponse.json({ error: "Ce sportif est déjà affecté à un autre coach" }, { status: 409 });
+  }
+
   const { error } = await adminClient
     .from("coach_client")
     .upsert({ coach_id: user.id, client_id: clientId });

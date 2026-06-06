@@ -70,6 +70,18 @@ export async function PATCH(
   if (status !== "active" && status !== "inactive") {
     return NextResponse.json({ error: "Paramètre manquant ou invalide" }, { status: 400 });
   }
+
+  // Un coach ne peut modifier que les clients qui lui sont affectés
+  if (caller.role === "coach") {
+    const { data: link } = await admin
+      .from("coach_client")
+      .select("id")
+      .eq("coach_id", caller.user.id)
+      .eq("client_id", id)
+      .maybeSingle();
+    if (!link) return NextResponse.json({ error: "Ce sportif ne vous est pas affecté" }, { status: 403 });
+  }
+
   const { error } = await admin.from("profiles").update({ status }).eq("id", id);
   if (error) return NextResponse.json({ error: error.message }, { status: 500 });
   return NextResponse.json({ success: true });

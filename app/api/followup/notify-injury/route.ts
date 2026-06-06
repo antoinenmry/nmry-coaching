@@ -17,6 +17,11 @@ export async function POST(req: NextRequest) {
   const { clientId, clientName, injuryText } = await req.json();
   if (!clientId) return NextResponse.json({ error: "Missing clientId" }, { status: 400 });
 
+  // Vérifier que clientId correspond bien à l'utilisateur connecté (anti-usurpation)
+  if (clientId !== user.id) {
+    return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+  }
+
   const admin = createAdminClient();
 
   const { data: assignment } = await admin
