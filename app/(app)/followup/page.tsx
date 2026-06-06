@@ -3,7 +3,7 @@
 import { useState, useRef, useEffect, useCallback } from "react";
 import { useData } from "@/components/DataProvider";
 import { createClient } from "@/lib/supabase/client";
-import { emptyState, type AppState, type ChatMessage, type Followup } from "@/lib/types";
+import { emptyState, type AppState, type BlockNote, type ChatMessage, type Followup } from "@/lib/types";
 
 // ─── Utils ────────────────────────────────────────────────────────────────────
 const uid = () => Math.random().toString(36).slice(2, 9);
@@ -301,6 +301,38 @@ function MessagesTab() {
     if (timerRef.current) clearInterval(timerRef.current);
   }
 
+  // ── Edit / Delete ──────────────────────────────────────────────────────────
+  const [editingMsgId, setEditingMsgId] = useState<string | null>(null);
+  const [editText, setEditText] = useState("");
+
+  async function applyMessages(next: ChatMessage[]) {
+    if (isElevated) {
+      if (!chatClientId || !chatState) return;
+      const updated = { ...chatState, messages: next };
+      const supabase = createClient();
+      await supabase.from("app_state").upsert({
+        user_id: chatClientId, data: updated,
+        updated_at: new Date().toISOString(), updated_by_coach_at: new Date().toISOString(),
+      });
+      setChatState(updated);
+    } else {
+      update(d => { d.messages = next; });
+    }
+  }
+
+  async function deleteMsg(id: string) {
+    await applyMessages(messages.filter(m => m.id !== id));
+  }
+
+  async function saveEdit(id: string) {
+    const trimmed = editText.trim();
+    if (!trimmed) return;
+    await applyMessages(messages.map(m =>
+      m.id === id ? { ...m, text: trimmed, editedAt: new Date().toISOString() } : m
+    ));
+    setEditingMsgId(null);
+  }
+
   // État d'attente coach sans client sélectionné
   if (isElevated && clientList.length === 0) return (
     <p className="rounded-xl bg-surface2 px-4 py-3 text-sm text-dim">Aucun sportif affecté.</p>
@@ -330,7 +362,6 @@ function MessagesTab() {
         </div>
       )}
 
-      {/* Loader pendant le chargement du chat client */}
       {isElevated && chatLoading && (
         <p className="py-4 text-center text-sm text-dim">Chargement…</p>
       )}
@@ -342,11 +373,12 @@ function MessagesTab() {
         )}
         {messages.map(msg => {
           const isMe = msg.senderId === me?.id;
+          const isEditing = editingMsgId === msg.id;
           return (
-            <div key={msg.id} className={`flex ${isMe ? "justify-end" : "justify-start"}`}>
+            <div key={msg.id} className={`flex flex-col ${isMe ? "items-end" : "items-start"}`}>
               <div className={`max-w-[78%] rounded-2xl px-3.5 py-2.5 ${
                 msg.isUrgent
-                  ? "border border-danger/40 bg-danger/10"
+                  ? "border border-danger/60 bg-danger/25"
                   : isMe
                   ? "bg-accent"
                   : "border border-line bg-surface2"
@@ -357,16 +389,48 @@ function MessagesTab() {
                 {msg.isUrgent && (
                   <p className="mb-1 text-[11px] font-bold text-danger">🚨 URGENCE</p>
                 )}
-                {msg.isVoice ? (
+                {/* Mode édition inline */}
+                {isEditing && !msg.isVoice ? (
+                  <div className="space-y-1.5">
+                    <textarea
+                      value={editText}
+                      onChange={e => setEditText(e.target.value)}
+                      autoFocus
+                      rows={3}
+                      className="w-full resize-none rounded-lg border border-line bg-surface px-2.5 py-1.5 text-sm text-ink outline-none focus:border-accent"
+                    />
+                    <div className="flex gap-2">
+                      <button onClick={() => saveEdit(msg.id)} className="rounded-lg bg-ok px-3 py-1 text-[12px] font-semibold text-[#06210a]">Enregistrer</button>
+                      <button onClick={() => setEditingMsgId(null)} className="rounded-lg bg-surface2 px-3 py-1 text-[12px] text-dim">Annuler</button>
+                    </div>
+                  </div>
+                ) : msg.isVoice ? (
                   <VoicePlayer audioUrl={msg.audioUrl} isMe={isMe} />
                 ) : (
-                  <p className={`whitespace-pre-wrap text-sm ${isMe ? "text-[#1a1500]" : ""}`}>{msg.text}</p>
+                  <p className={`whitespace-pre-wrap text-sm ${isMe ? "text-[#1a1500]" : "text-ink"}`}>{msg.text}</p>
                 )}
                 <p className={`mt-1 text-right text-[10px] ${isMe ? "text-[#1a1500]/50" : "text-dim"}`}>
                   {fmtHour(msg.createdAt)}
+                  {msg.editedAt && <span className="ml-1 italic">modifié</span>}
                   {isMe && <span className="ml-1">{msg.isRead ? "✓✓" : "✓"}</span>}
                 </p>
               </div>
+
+              {/* Actions sur ses propres messages */}
+              {isMe && !isEditing && (
+                <div className="mt-0.5 flex gap-2 px-1">
+                  {!msg.isVoice && (
+                    <button
+                      onClick={() => { setEditingMsgId(msg.id); setEditText(msg.text); }}
+                      className="text-[11px] text-dim hover:text-ink"
+                    >✏️ Modifier</button>
+                  )}
+                  <button
+                    onClick={() => deleteMsg(msg.id)}
+                    className="text-[11px] text-dim hover:text-danger"
+                  >🗑️ Supprimer</button>
+                </div>
+              )}
             </div>
           );
         })}
@@ -394,25 +458,13 @@ function MessagesTab() {
               className="flex-1 resize-none rounded-xl border border-line bg-surface2 px-3 py-2 text-sm outline-none focus:border-accent"
             />
             <div className="flex shrink-0 flex-col gap-1.5">
-              <button
-                onClick={startRecording}
-                title="Message vocal"
-                className="grid h-10 w-10 place-items-center rounded-xl border border-line bg-surface2"
-              >
-                🎤
-              </button>
-              <button
-                onClick={send}
-                disabled={!text.trim()}
-                className="grid h-10 w-10 place-items-center rounded-xl bg-accent text-[#1a1500] text-lg font-bold disabled:opacity-40"
-              >
-                ↑
-              </button>
+              <button onClick={startRecording} title="Message vocal"
+                className="grid h-10 w-10 place-items-center rounded-xl border border-line bg-surface2">🎤</button>
+              <button onClick={send} disabled={!text.trim()}
+                className="grid h-10 w-10 place-items-center rounded-xl bg-accent text-[#1a1500] text-lg font-bold disabled:opacity-40">↑</button>
             </div>
           </div>
         )}
-
-        {/* Toggle Urgence */}
         <button
           onClick={() => setIsUrgent(u => !u)}
           className={`flex w-full items-center gap-2 rounded-xl px-3 py-2 text-sm font-semibold transition ${
@@ -642,30 +694,165 @@ function EditInjuryModal({ followup, onClose }: { followup: Followup; onClose: (
   );
 }
 
-// ─── Tab Diète ─────────────────────────────────────────────────────────────────
-function DieteTab() {
-  const { state, update } = useData();
+// ─── Tab Bloc-notes ────────────────────────────────────────────────────────────
+function BlocNotesTab() {
+  const { state, update, me, role } = useData();
+  const isCoach = role === "coach" || role === "admin";
+  const notes: BlockNote[] = state.notes ?? [];
+
+  const [text, setText] = useState("");
+  const [editingId, setEditingId] = useState<string | null>(null);
+  const [editText, setEditText] = useState("");
+
+  function addNote() {
+    if (!text.trim() || !me) return;
+    const note: BlockNote = {
+      id: uid(),
+      text: text.trim(),
+      createdAt: new Date().toISOString(),
+      authorId: me.id,
+      authorName: me.name || me.email || "Moi",
+      authorRole: role,
+    };
+    update(d => { d.notes = [note, ...(d.notes ?? [])]; });
+    setText("");
+  }
+
+  function saveEdit() {
+    if (!editText.trim() || !editingId) return;
+    update(d => {
+      const n = (d.notes ?? []).find(x => x.id === editingId);
+      if (n) { n.text = editText.trim(); n.updatedAt = new Date().toISOString(); }
+    });
+    setEditingId(null);
+  }
+
+  function deleteNote(id: string) {
+    update(d => { d.notes = (d.notes ?? []).filter(x => x.id !== id); });
+  }
+
+  function fmtDate(iso: string) {
+    return new Date(iso).toLocaleDateString("fr-FR", {
+      day: "numeric", month: "long", year: "numeric",
+      hour: "2-digit", minute: "2-digit",
+    });
+  }
+
+  const roleLabel: Record<string, string> = {
+    coach: "Coach", admin: "Coach", client: "Sportif",
+  };
+
   return (
     <div className="space-y-4">
+      {/* Plan alimentaire du coach (conservé) */}
       <section className="rounded-2xl border border-line bg-surface p-4">
         <h2 className="mb-1 font-bold">🥗 Plan alimentaire</h2>
-        <p className="mb-3 text-[12px] text-dim">Rédigé par le coach · modifiable</p>
+        <p className="mb-3 text-[12px] text-dim">Rédigé par le coach</p>
         <textarea
           value={state.profile.diet}
           onChange={e => update(d => { d.profile.diet = e.target.value; })}
           placeholder="Petit-déj, déjeuner, collation, dîner, macros…"
-          className="min-h-[130px]"
+          className="min-h-[100px]"
+          readOnly={!isCoach}
         />
       </section>
+
+      {/* Bloc-notes partagé */}
       <section className="rounded-2xl border border-line bg-surface p-4">
-        <h2 className="mb-1 font-bold">💬 Ton commentaire</h2>
-        <p className="mb-3 text-[12px] text-dim">Difficultés, ressenti, questions…</p>
-        <textarea
-          value={state.profile.dietComment ?? ""}
-          onChange={e => update(d => { d.profile.dietComment = e.target.value; })}
-          placeholder="Ex : J&apos;ai du mal avec les quantités le soir…"
-          className="min-h-[100px]"
-        />
+        <h2 className="mb-1 font-bold">📓 Bloc-notes</h2>
+        <p className="mb-3 text-[12px] text-dim">
+          Visible par le coach et le sportif · chacun peut ajouter
+        </p>
+
+        {/* Saisie */}
+        <div className="mb-4 space-y-2">
+          <textarea
+            value={text}
+            onChange={e => setText(e.target.value)}
+            placeholder="Ajoute une note, observation, question…"
+            className="min-h-[80px]"
+          />
+          <button
+            onClick={addNote}
+            disabled={!text.trim()}
+            className="w-full rounded-xl bg-accent py-2.5 font-semibold text-[#1a1500] disabled:opacity-40"
+          >
+            + Ajouter la note
+          </button>
+        </div>
+
+        {/* Archive */}
+        {notes.length === 0 ? (
+          <p className="py-6 text-center text-sm text-dim">Aucune note pour l&apos;instant.</p>
+        ) : (
+          <div className="space-y-3">
+            {notes.map(n => {
+              const isOwn = n.authorId === me?.id;
+              const isEditingThis = editingId === n.id;
+              return (
+                <div key={n.id} className="rounded-xl border border-line bg-surface2 p-3.5">
+                  {/* En-tête note */}
+                  <div className="mb-2 flex items-center justify-between gap-2">
+                    <div className="flex items-center gap-2">
+                      <span className={`rounded-full px-2 py-0.5 text-[11px] font-bold ${
+                        n.authorRole === "client"
+                          ? "bg-accent2/20 text-accent2"
+                          : "bg-accent/20 text-accent"
+                      }`}>
+                        {roleLabel[n.authorRole] ?? n.authorRole} · {n.authorName}
+                      </span>
+                    </div>
+                    {/* Actions — auteur seulement */}
+                    {isOwn && !isEditingThis && (
+                      <div className="flex gap-1">
+                        <button
+                          onClick={() => { setEditingId(n.id); setEditText(n.text); }}
+                          className="grid h-7 w-7 place-items-center rounded-lg bg-surface text-dim hover:text-ink"
+                          title="Modifier"
+                        >✏️</button>
+                        <button
+                          onClick={() => deleteNote(n.id)}
+                          className="grid h-7 w-7 place-items-center rounded-lg bg-surface text-dim hover:text-danger"
+                          title="Supprimer"
+                        >🗑️</button>
+                      </div>
+                    )}
+                  </div>
+
+                  {/* Contenu */}
+                  {isEditingThis ? (
+                    <div className="space-y-2">
+                      <textarea
+                        value={editText}
+                        onChange={e => setEditText(e.target.value)}
+                        autoFocus
+                        className="min-h-[70px]"
+                      />
+                      <div className="flex gap-2">
+                        <button onClick={saveEdit}
+                          className="rounded-lg bg-ok px-3 py-1.5 text-[13px] font-semibold text-[#06210a]">
+                          Enregistrer
+                        </button>
+                        <button onClick={() => setEditingId(null)}
+                          className="rounded-lg bg-surface px-3 py-1.5 text-[13px] text-dim">
+                          Annuler
+                        </button>
+                      </div>
+                    </div>
+                  ) : (
+                    <p className="whitespace-pre-wrap text-sm">{n.text}</p>
+                  )}
+
+                  {/* Horodatage */}
+                  <p className="mt-2 text-[11px] text-dim">
+                    {fmtDate(n.createdAt)}
+                    {n.updatedAt && <span className="ml-1 italic">· modifié</span>}
+                  </p>
+                </div>
+              );
+            })}
+          </div>
+        )}
       </section>
     </div>
   );
@@ -674,7 +861,7 @@ function DieteTab() {
 // ─── Page principale ──────────────────────────────────────────────────────────
 export default function FollowupPage() {
   const { state, me, loading } = useData();
-  const [tab, setTab] = useState<"messages" | "sante" | "diete">("messages");
+  const [tab, setTab] = useState<"messages" | "sante" | "notes">("messages");
 
   if (loading) return <p className="py-10 text-center text-dim">Chargement…</p>;
 
@@ -687,12 +874,12 @@ export default function FollowupPage() {
         {([
           { id: "messages", label: "💬 Messages" },
           { id: "sante",    label: "🩹 Santé" },
-          { id: "diete",    label: "🍏 Diète" },
+          { id: "notes",    label: "📓 Bloc-notes" },
         ] as const).map(t => (
           <button
             key={t.id}
             onClick={() => setTab(t.id)}
-            className={`relative flex-1 rounded-xl py-2.5 text-sm font-semibold transition ${
+            className={`relative flex-1 rounded-xl py-2.5 text-[13px] font-semibold transition ${
               tab === t.id ? "bg-accent text-[#1a1500] shadow-sm" : "text-dim"
             }`}
           >
@@ -708,7 +895,7 @@ export default function FollowupPage() {
 
       {tab === "messages" && <MessagesTab />}
       {tab === "sante"    && <SanteTab />}
-      {tab === "diete"    && <DieteTab />}
+      {tab === "notes"    && <BlocNotesTab />}
     </div>
   );
 }

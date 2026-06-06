@@ -110,9 +110,21 @@ export interface ChatMessage {
   isVoice: boolean;
   audioUrl?: string;    // base64 data URL audio/webm
   createdAt: string;    // ISO timestamp
+  editedAt?: string;    // ISO timestamp si modifié après envoi
   senderId: string;     // user id de l'expéditeur
   senderName?: string;  // dénormalisé pour affichage
   isRead: boolean;
+}
+
+/** Une note du bloc-notes partagé sportif ↔ coach (stocké dans app_state du sportif). */
+export interface BlockNote {
+  id: string;
+  text: string;
+  createdAt: string;   // ISO timestamp
+  updatedAt?: string;  // ISO timestamp si modifié
+  authorId: string;
+  authorName: string;
+  authorRole: Role;
 }
 
 // ---- Bibliothèque d'exercices (filtres personnalisables) ----
@@ -236,6 +248,7 @@ export interface AppState {
   goals: Goal[];
   followups: Followup[];
   messages: ChatMessage[];     // chat coach ↔ sportif (stocké côté sportif)
+  notes: BlockNote[];          // bloc-notes partagé sportif ↔ coach
   library: ExerciseLibrary;
   records: RecordsData;
   preferences: UserPreferences;
@@ -297,6 +310,7 @@ export const emptyState = (): AppState => ({
   goals: [],
   followups: [],
   messages: [],
+  notes: [],
   library: defaultLibrary(),
   records: emptyRecords(),
   preferences: { cardColors: {}, cardColorMode: "arc" },
