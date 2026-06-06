@@ -205,13 +205,18 @@ export function DataProvider({ children }: { children: React.ReactNode }) {
         const savedClient = savedId ? list.find((c) => c.id === savedId) : null;
         await loadStateFor(savedClient ? savedClient.id : user.id);
       } else {
-        // Client : vérifier qu'il a un coach affecté
-        const { data: coachLink } = await supabase
-          .from("coach_client")
-          .select("coach_id")
-          .eq("client_id", user.id)
-          .maybeSingle();
-        setHasCoach(!!coachLink?.coach_id);
+        // Client : vérifier qu'il a un coach affecté via l'API (bypass RLS coach_client)
+        // En cas d'erreur réseau on laisse passer (fail-open) pour ne pas bloquer les clients existants
+        try {
+          const res = await fetch("/api/me/has-coach");
+          if (res.ok) {
+            const { hasCoach } = await res.json();
+            setHasCoach(hasCoach);
+          }
+          // Si res not ok : hasCoach reste true par défaut (fail-open)
+        } catch {
+          // Erreur réseau : hasCoach reste true (fail-open)
+        }
         await loadStateFor(user.id);
       }
       setLoading(false);
