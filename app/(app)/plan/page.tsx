@@ -287,42 +287,62 @@ export default function PlanPage() {
 
 // Modale de création d'une séance (coach) : nom + couleur + exercices → dans la banque.
 function ComposeModal({ onClose, onCreated }: { onClose: () => void; onCreated: (id: string) => void }) {
-  const { update } = useData();
+  const { update, updateLibrary, library } = useData();
+  const { categories } = library;
+
   const [name, setName] = useState("Séance");
   const [color, setColor] = useState(SESSION_COLORS[0]);
   const [picked, setPicked] = useState<string[]>([]);
-  const [newName, setNewName] = useState("");
   const [inlineExercises, setInlineExercises] = useState<InlineExercise[]>([]);
   const [saveToLib, setSaveToLib] = useState(true);
 
+  // Formulaire de création inline
+  const [newName, setNewName] = useState("");
+  const [newTags, setNewTags] = useState<Record<string, string[]>>({});
+  const [newVideo, setNewVideo] = useState("");
+  const [showTagsForm, setShowTagsForm] = useState(false);
+
   const toggle = (id: string) => setPicked((p) => (p.includes(id) ? p.filter((x) => x !== id) : [...p, id]));
+
+  const toggleTag = (catId: string, optId: string) =>
+    setNewTags((prev) => {
+      const cur = prev[catId] ?? [];
+      return { ...prev, [catId]: cur.includes(optId) ? cur.filter((x) => x !== optId) : [...cur, optId] };
+    });
 
   function addInline() {
     const trimmed = newName.trim();
     if (!trimmed) return;
-    setInlineExercises((prev) => [...prev, { id: crypto.randomUUID(), name: trimmed, tags: {}, video: "" }]);
+    setInlineExercises((prev) => [...prev, { id: crypto.randomUUID(), name: trimmed, tags: newTags, video: newVideo }]);
     setNewName("");
+    setNewTags({});
+    setNewVideo("");
+    setShowTagsForm(false);
   }
 
   function create() {
-    let newId = "";
-    update((d) => {
-      if (saveToLib) {
-        inlineExercises.forEach(({ id, name: exName }) => {
-          if (!d.library.exercises.find((e) => e.id === id)) {
-            d.library.exercises.push({ id, name: exName, tags: {}, video: "" });
+    // 1. Sauvegarder les exercices inline dans la bibliothèque partagée (via updateLibrary → API)
+    if (saveToLib && inlineExercises.length > 0) {
+      updateLibrary((lib) => {
+        inlineExercises.forEach(({ id, name: exName, tags, video }) => {
+          if (!lib.exercises.find((e) => e.id === id)) {
+            lib.exercises.push({ id, name: exName, tags, video, comment: "" });
           }
         });
-      }
+      });
+    }
+
+    // 2. Créer la séance dans l'app_state
+    let newId = "";
+    update((d) => {
       const s = newSession(name.trim() || "Séance", color);
       newId = s.id;
       picked.forEach((id) => {
-        const libEx = d.library.exercises.find((e) => e.id === id);
+        const libEx = library.exercises.find((e) => e.id === id);
         s.exercises.push(exerciseInstanceFromLibrary({ id, name: libEx?.name ?? "Exercice" }));
       });
       inlineExercises.forEach(({ id, name: exName }) => {
-        const libEx = d.library.exercises.find((e) => e.id === id);
-        s.exercises.push(exerciseInstanceFromLibrary({ id, name: libEx?.name ?? exName }));
+        s.exercises.push(exerciseInstanceFromLibrary({ id, name: exName }));
       });
       d.sessions.push(s);
     });
@@ -361,32 +381,93 @@ function ComposeModal({ onClose, onCreated }: { onClose: () => void; onCreated: 
         {/* Création d'exercices inline */}
         <div className="mt-4 rounded-xl border border-dashed border-line bg-surface2 p-3">
           <p className="mb-2 text-[13px] font-semibold text-dim">Nouvel exercice</p>
+
+          {/* Nom */}
           <div className="flex gap-2">
             <input
               value={newName}
               onChange={(e) => setNewName(e.target.value)}
-              onKeyDown={(e) => e.key === "Enter" && addInline()}
+              onKeyDown={(e) => e.key === "Enter" && newName.trim() && setShowTagsForm(true)}
               placeholder="Nom de l'exercice…"
               className="flex-1"
             />
             <button
-              onClick={addInline}
+              onClick={() => { if (newName.trim()) setShowTagsForm(true); }}
               disabled={!newName.trim()}
               className="rounded-lg bg-accent px-3 py-2 text-sm font-semibold text-[#1a1500] disabled:opacity-40"
             >
-              Ajouter
+              Détails →
             </button>
           </div>
 
+          {/* Formulaire étendu (filtres + vidéo) */}
+          {showTagsForm && newName.trim() && (
+            <div className="mt-3 space-y-2.5 border-t border-line/50 pt-3">
+              {categories.map((cat) => (
+                <div key={cat.id}>
+                  <p className="mb-1 text-[11px] uppercase tracking-wide text-dim">{cat.name}</p>
+                  <div className="flex flex-wrap gap-1.5">
+                    {cat.options.map((opt) => {
+                      const active = (newTags[cat.id] ?? []).includes(opt.id);
+                      return (
+                        <button
+                          key={opt.id}
+                          type="button"
+                          onClick={() => toggleTag(cat.id, opt.id)}
+                          className={`rounded-full border px-2.5 py-1 text-[12px] transition ${
+                            active ? "border-accent bg-accent/15 text-accent" : "border-line bg-surface text-ink"
+                          }`}
+                        >
+                          {opt.label}
+                        </button>
+                      );
+                    })}
+                    {cat.options.length === 0 && <span className="text-[12px] text-dim">—</span>}
+                  </div>
+                </div>
+              ))}
+              <div>
+                <p className="mb-1 text-[11px] uppercase tracking-wide text-dim">Lien vidéo (optionnel)</p>
+                <input
+                  value={newVideo}
+                  onChange={(e) => setNewVideo(e.target.value)}
+                  placeholder="https://…"
+                  className="text-sm"
+                />
+              </div>
+              <button
+                type="button"
+                onClick={addInline}
+                className="w-full rounded-lg bg-ok py-2 text-sm font-semibold text-[#06210a]"
+              >
+                ✓ Ajouter « {newName.trim()} »
+              </button>
+            </div>
+          )}
+
+          {/* Liste des exercices inline créés */}
           {inlineExercises.length > 0 && (
             <>
               <ul className="mt-2.5 space-y-1.5">
-                {inlineExercises.map((ex) => (
-                  <li key={ex.id} className="flex items-center justify-between rounded-lg bg-surface px-2.5 py-1.5 text-sm">
-                    <span className="font-medium">{ex.name}</span>
-                    <button onClick={() => setInlineExercises((p) => p.filter((e) => e.id !== ex.id))} className="text-dim">✕</button>
-                  </li>
-                ))}
+                {inlineExercises.map((ex) => {
+                  const labels = categories.flatMap((c) =>
+                    (ex.tags[c.id] ?? [])
+                      .map((id) => c.options.find((o) => o.id === id)?.label)
+                      .filter(Boolean) as string[]
+                  );
+                  return (
+                    <li key={ex.id} className="flex items-center justify-between rounded-lg bg-surface px-2.5 py-1.5 text-sm">
+                      <div className="min-w-0">
+                        <span className="font-medium">{ex.name}</span>
+                        {labels.length > 0 && (
+                          <span className="ml-2 text-[11px] text-dim">{labels.join(", ")}</span>
+                        )}
+                        {ex.video && <span className="ml-1 text-[11px] text-accent2">▶</span>}
+                      </div>
+                      <button onClick={() => setInlineExercises((p) => p.filter((e) => e.id !== ex.id))} className="ml-2 shrink-0 text-dim">✕</button>
+                    </li>
+                  );
+                })}
               </ul>
               <label className="mt-2.5 flex cursor-pointer items-center gap-2 text-[13px]">
                 <span
@@ -398,7 +479,7 @@ function ComposeModal({ onClose, onCreated }: { onClose: () => void; onCreated: 
                   {saveToLib ? "✓" : ""}
                 </span>
                 <input type="checkbox" className="sr-only" checked={saveToLib} onChange={(e) => setSaveToLib(e.target.checked)} />
-                Ajouter aussi à la bibliothèque
+                Ajouter aussi à la bibliothèque commune
               </label>
             </>
           )}
