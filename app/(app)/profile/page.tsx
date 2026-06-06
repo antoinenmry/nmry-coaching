@@ -82,7 +82,7 @@ export default function ProfilePage() {
         </div>
 
         {/* Date de naissance + Genre */}
-        <div className="mb-4 grid grid-cols-2 gap-3">
+        <div className="mb-4 flex flex-col gap-3">
           <label className="block">
             <span className="mb-1.5 block text-[13px] text-dim">Date de naissance</span>
             <input

@@ -6,7 +6,7 @@ import { useData } from "./DataProvider";
 import ClientSelector from "./ClientSelector";
 
 const TITLES: Record<string, string> = {
-  "/": "NMRY",
+  "/": "NMRY-coaching",
   "/profile": "Mon Profil",
   "/plan": "Programmation",
   "/goals": "Mes Objectifs",
