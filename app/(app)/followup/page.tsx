@@ -247,17 +247,31 @@ function MessagesTab() {
     });
     setText(""); setIsUrgent(false);
 
-    // Email d'alerte si message urgent (client uniquement — le coach ne se notifie pas lui-même)
-    if (isUrgent && !isElevated) {
-      fetch("/api/messages/urgent", {
+    // Notification push au destinataire
+    // Coach → notifie le client sélectionné ; Client → notifie son coach (via urgent ou notify)
+    if (isElevated && chatClientId) {
+      // Coach envoie → notifie le sportif
+      fetch("/api/messages/notify", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          clientId: me.id,
-          messageText: msgText,
-          clientName: me.name || me.email,
-        }),
-      }).catch((err) => console.warn("[NMRY] Urgent email failed:", err));
+        body: JSON.stringify({ recipientId: chatClientId, senderName: me.name || me.email, messageText: msgText }),
+      }).catch(() => {});
+    } else if (!isElevated) {
+      if (isUrgent) {
+        // Message urgent → email + push au coach
+        fetch("/api/messages/urgent", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ clientId: me.id, messageText: msgText, clientName: me.name || me.email }),
+        }).catch((err) => console.warn("[NMRY] Urgent email failed:", err));
+      } else {
+        // Message normal → push au coach
+        fetch("/api/messages/notify", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ recipientId: "coach", senderName: me.name || me.email, messageText: msgText, clientId: me.id }),
+        }).catch(() => {});
+      }
     }
   }
 

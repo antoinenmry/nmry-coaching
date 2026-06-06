@@ -3,7 +3,7 @@
 import { useCallback, useEffect, useState } from "react";
 import { useData } from "@/components/DataProvider";
 import { useTheme } from "@/components/ThemeProvider";
-import PushSubscribeButton from "@/components/PushSubscribeButton";
+import NotifPrefsPanel from "@/components/NotifPrefsPanel";
 import type { AthleteAdminData, AthleteStatus, AdminOverview, CoachWithClients, Profile } from "@/lib/types";
 
 const CARDS = [
@@ -566,7 +566,7 @@ export default function SettingsPage() {
 
           <section className="rounded-2xl border border-line bg-surface p-4">
             <h2 className="mb-3 font-bold">Notifications</h2>
-            <PushSubscribeButton />
+            <NotifPrefsPanel />
           </section>
 
           <section className="rounded-2xl border border-line bg-surface p-4">

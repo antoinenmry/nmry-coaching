@@ -23,6 +23,16 @@ const emojiOf = (n: number) => (n >= 1 && n <= 5 ? EMOJIS[n - 1] + " " : "");
 export default function PlanPage() {
   const { state, update, role, setRole, loading, clients, activeUserId, me } = useData();
   const isCoach = role === "coach" || role === "admin";
+  const [notifying, setNotifying] = useState(false);
+  const [notifSent, setNotifSent] = useState(false);
+
+  async function notifyNewPlan() {
+    setNotifying(true);
+    await fetch("/api/plan/notify", { method: "POST" }).catch(() => {});
+    setNotifying(false);
+    setNotifSent(true);
+    setTimeout(() => setNotifSent(false), 3000);
+  }
 
   const [mode, setMode] = useState<"month" | "week" | "synthesis">("month");
   const [cursor, setCursor] = useState(() => new Date());
@@ -171,6 +181,13 @@ export default function PlanPage() {
               </button>
               <button onClick={() => setDuplicating(true)} className="rounded-lg px-3 py-1.5 text-[13px] font-semibold text-white" style={{ background: "#a855f7" }}>
                 Dupliquer la semaine
+              </button>
+              <button
+                onClick={notifyNewPlan}
+                disabled={notifying}
+                className="rounded-lg bg-accent/15 px-3 py-1.5 text-[13px] font-semibold text-accent hover:bg-accent/25 disabled:opacity-50"
+              >
+                {notifying ? "…" : notifSent ? "✅ Envoyé !" : "🔔 Notifier"}
               </button>
             </div>
           )}

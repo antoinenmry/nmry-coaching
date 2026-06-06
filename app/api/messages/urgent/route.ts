@@ -3,6 +3,7 @@ import { createClient } from "@/lib/supabase/server";
 import { createAdminClient } from "@/lib/supabase/admin";
 import nodemailer from "nodemailer";
 import { sendPushToUser } from "@/lib/push";
+import { getUserNotifPrefs } from "@/lib/notifPrefs";
 
 /**
  * POST /api/messages/urgent
@@ -122,11 +123,14 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ sent: false, reason: String(err) }, { status: 500 });
   }
 
-  // Notification push au coach (fire-and-forget)
-  sendPushToUser(assignment.coach_id, {
-    title: `🚨 Message urgent — ${senderLabel}`,
-    body: messageText ? messageText.slice(0, 100) : "Message vocal urgent",
-    url: "/followup",
+  // Notification push au coach si pref activée (fire-and-forget)
+  getUserNotifPrefs(assignment.coach_id).then((prefs) => {
+    if (!prefs.urgentMessage) return;
+    return sendPushToUser(assignment.coach_id, {
+      title: `🚨 Message urgent — ${senderLabel}`,
+      body: messageText ? messageText.slice(0, 100) : "Message vocal urgent",
+      url: "/followup",
+    });
   }).catch(() => {});
 
   return NextResponse.json({ sent: true });

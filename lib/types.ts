@@ -235,10 +235,20 @@ export interface RecordsData {
   hyrox: Record<HyroxCategory, CardioRecord[]>;
 }
 
+/** Préférences de notifications push par utilisateur. */
+export interface NotifPrefs {
+  newMessage: boolean;      // nouveau message chat (coach → sportif / sportif → coach)
+  newPlan: boolean;         // nouveau programme publié par le coach (sportif uniquement)
+  urgentMessage: boolean;   // message urgent d'un sportif (coach uniquement)
+  goalReminder: boolean;    // rappel J-7 / J-1 avant objectif (sportif uniquement)
+  sessionReminder: boolean; // rappel séance du jour à 7h (sportif uniquement)
+}
+
 /** Préférences visuelles par compte (couleurs cartes accueil…). */
 export interface UserPreferences {
   cardColors: Record<string, string>; // href → couleur hex
   cardColorMode: "arc" | "full";      // arc de cercle ou fond entier
+  notifPrefs?: NotifPrefs;            // préférences notifications (undefined = tout activé par défaut)
 }
 
 /** Document complet d'un client (stocké en JSON dans app_state.data). */
