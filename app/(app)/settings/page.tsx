@@ -222,14 +222,19 @@ export default function SettingsPage() {
         <section className="rounded-2xl border border-line bg-surface p-4">
           <div className="mb-4 flex items-center justify-between gap-3">
             <h2 className="font-bold">Sportifs</h2>
-            <select
-              value={athleteView}
-              onChange={(e) => setAthleteView(e.target.value as typeof athleteView)}
-              className="rounded-xl border border-line bg-surface2 px-3 py-1.5 text-sm font-semibold"
-            >
-              <option value="standard">Affichage standard</option>
-              <option value="management">Vue Gestion des Profils</option>
-            </select>
+            <div className="flex rounded-xl bg-surface2 p-1">
+              {(["standard", "management"] as const).map((m) => (
+                <button
+                  key={m}
+                  onClick={() => setAthleteView(m)}
+                  className={`rounded-lg px-3 py-1.5 text-sm font-semibold transition ${
+                    athleteView === m ? "bg-accent text-[#1a1500]" : "text-dim"
+                  }`}
+                >
+                  {m === "standard" ? "Affichage" : "Gestion"}
+                </button>
+              ))}
+            </div>
           </div>
 
           {athleteView === "standard" ? (
