@@ -16,9 +16,14 @@ export async function POST(req: NextRequest) {
   const { data: { user } } = await supabase.auth.getUser();
   if (!user) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
 
-  // Anti-replay : le compte doit avoir été créé il y a moins de 5 minutes
-  const createdAt = new Date(user.created_at ?? 0).getTime();
-  if (Date.now() - createdAt > 5 * 60 * 1000) {
+  // Anti-replay : l'inscription ou la confirmation email doit être récente (< 5 min).
+  // - Path session immédiate (email confirm désactivé) : on vérifie created_at
+  // - Path confirmation email (normal) : on vérifie email_confirmed_at (mis à jour au clic du lien)
+  // Un utilisateur existant a ces deux timestamps anciens → rejeté.
+  const createdAt    = new Date(user.created_at         ?? 0).getTime();
+  const confirmedAt  = new Date(user.email_confirmed_at ?? 0).getTime();
+  const mostRecent   = Math.max(createdAt, confirmedAt);
+  if (Date.now() - mostRecent > 5 * 60 * 1000) {
     return NextResponse.json({ skipped: true, reason: "not_new" });
   }
 
