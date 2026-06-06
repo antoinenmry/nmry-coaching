@@ -407,9 +407,9 @@ function MessagesTab() {
                 ) : msg.isVoice ? (
                   <VoicePlayer audioUrl={msg.audioUrl} isMe={isMe} />
                 ) : (
-                  <p className={`whitespace-pre-wrap text-sm ${isMe ? "text-[#1a1500]" : "text-ink"}`}>{msg.text}</p>
+                  <p className={`whitespace-pre-wrap text-sm ${msg.isUrgent ? "text-white" : isMe ? "text-[#1a1500]" : "text-ink"}`}>{msg.text}</p>
                 )}
-                <p className={`mt-1 text-right text-[10px] ${isMe ? "text-[#1a1500]/50" : "text-dim"}`}>
+                <p className={`mt-1 text-right text-[10px] ${msg.isUrgent ? "text-white/60" : isMe ? "text-[#1a1500]/50" : "text-dim"}`}>
                   {fmtHour(msg.createdAt)}
                   {msg.editedAt && <span className="ml-1 italic">modifié</span>}
                   {isMe && <span className="ml-1">{msg.isRead ? "✓✓" : "✓"}</span>}
