@@ -1,8 +1,9 @@
 "use client";
 
-import { useState, useRef, useEffect } from "react";
+import { useState, useRef, useEffect, useCallback } from "react";
 import { useData } from "@/components/DataProvider";
-import type { ChatMessage, Followup } from "@/lib/types";
+import { createClient } from "@/lib/supabase/client";
+import { emptyState, type AppState, type ChatMessage, type Followup } from "@/lib/types";
 
 // ─── Utils ────────────────────────────────────────────────────────────────────
 const uid = () => Math.random().toString(36).slice(2, 9);
@@ -65,41 +66,48 @@ function VoicePlayer({ audioUrl, isMe }: { audioUrl?: string; isMe: boolean }) {
   );
 }
 
-// ─── Sélecteur de conversation (coach/admin) ──────────────────────────────────
-function ConversationPicker() {
-  const { clients, activeUserId, switchClient, loading } = useData();
-  const clientList = clients.filter(c => c.role === "client");
-  if (clientList.length === 0) return (
-    <p className="rounded-xl bg-surface2 px-4 py-3 text-sm text-dim">Aucun sportif affecté.</p>
-  );
-  return (
-    <div className="space-y-1.5">
-      <p className="text-[12px] font-semibold text-dim">Conversation avec :</p>
-      <div className="flex gap-2 overflow-x-auto pb-1">
-        {clientList.map(c => (
-          <button
-            key={c.id}
-            onClick={() => switchClient(c.id)}
-            disabled={loading}
-            className={`shrink-0 rounded-xl px-3.5 py-2 text-sm font-semibold transition ${
-              c.id === activeUserId
-                ? "bg-accent text-[#1a1500]"
-                : "border border-line bg-surface2 text-dim"
-            }`}
-          >
-            {c.name || c.email}
-          </button>
-        ))}
-      </div>
-    </div>
-  );
-}
-
 // ─── Tab Messages ─────────────────────────────────────────────────────────────
 function MessagesTab() {
-  const { state, update, me, role } = useData();
+  const { state, update, me, role, clients } = useData();
   const isElevated = role === "coach" || role === "admin";
-  const messages = state.messages ?? [];
+
+  // ── Mode coach : chat indépendant (ne change PAS le profil actif global) ──
+  const clientList = clients.filter(c => c.role === "client");
+  const [chatClientId, setChatClientId] = useState<string | null>(
+    clientList[0]?.id ?? null
+  );
+  const [chatState, setChatState] = useState<AppState | null>(null);
+  const [chatLoading, setChatLoading] = useState(false);
+
+  const loadChat = useCallback(async (clientId: string) => {
+    setChatLoading(true);
+    const supabase = createClient();
+    const { data: row } = await supabase
+      .from("app_state").select("data").eq("user_id", clientId).maybeSingle();
+    const cs: AppState = { ...emptyState(), ...(row?.data ?? {}) };
+    // Marquer comme lus les messages du client
+    const hasUnread = (cs.messages ?? []).some(m => !m.isRead && m.senderId !== me?.id);
+    if (hasUnread && me) {
+      const updated = { ...cs, messages: (cs.messages ?? []).map(m =>
+        (!m.isRead && m.senderId !== me.id) ? { ...m, isRead: true } : m
+      )};
+      await supabase.from("app_state").upsert({
+        user_id: clientId, data: updated,
+        updated_at: new Date().toISOString(), updated_by_coach_at: new Date().toISOString(),
+      });
+      setChatState(updated);
+    } else {
+      setChatState(cs);
+    }
+    setChatLoading(false);
+  }, [me]);
+
+  useEffect(() => {
+    if (isElevated && chatClientId) loadChat(chatClientId);
+  }, [isElevated, chatClientId, loadChat]);
+
+  // Messages affichés selon le rôle
+  const messages = isElevated ? (chatState?.messages ?? []) : (state.messages ?? []);
   const [text, setText] = useState("");
   const [isUrgent, setIsUrgent] = useState(false);
   const [recording, setRecording] = useState(false);
@@ -109,8 +117,9 @@ function MessagesTab() {
   const timerRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const bottomRef = useRef<HTMLDivElement>(null);
 
-  // Marquer les messages de l'autre comme lus à l'ouverture
+  // Client : marquer les messages de l'autre comme lus à l'ouverture
   useEffect(() => {
+    if (isElevated) return; // coach gère ses lectures dans loadChat
     const hasUnread = (state.messages ?? []).some(m => !m.isRead && m.senderId !== me?.id);
     if (!hasUnread) return;
     update(d => {
@@ -125,14 +134,28 @@ function MessagesTab() {
     bottomRef.current?.scrollIntoView({ behavior: "smooth" });
   }, [messages.length]);
 
+  async function pushMsg(msg: ChatMessage) {
+    if (isElevated) {
+      // Coach : écriture directe dans l'app_state du client sélectionné
+      if (!chatClientId || !chatState) return;
+      const updated = { ...chatState, messages: [...(chatState.messages ?? []), msg] };
+      const supabase = createClient();
+      await supabase.from("app_state").upsert({
+        user_id: chatClientId, data: updated,
+        updated_at: new Date().toISOString(), updated_by_coach_at: new Date().toISOString(),
+      });
+      setChatState(updated);
+    } else {
+      // Client : via DataProvider (sauvegarde différée)
+      update(d => { if (!d.messages) d.messages = []; d.messages.push(msg); });
+    }
+  }
+
   function send() {
     if (!text.trim() || !me) return;
-    const msg: ChatMessage = {
-      id: uid(), text: text.trim(), isUrgent, isVoice: false,
+    pushMsg({ id: uid(), text: text.trim(), isUrgent, isVoice: false,
       createdAt: new Date().toISOString(),
-      senderId: me.id, senderName: me.name || me.email, isRead: false,
-    };
-    update(d => { if (!d.messages) d.messages = []; d.messages.push(msg); });
+      senderId: me.id, senderName: me.name || me.email, isRead: false });
     setText(""); setIsUrgent(false);
   }
 
@@ -148,13 +171,10 @@ function MessagesTab() {
         const reader = new FileReader();
         reader.onload = () => {
           if (!me) return;
-          const msg: ChatMessage = {
-            id: uid(), text: "", isUrgent: false, isVoice: true,
+          pushMsg({ id: uid(), text: "", isUrgent: false, isVoice: true,
             audioUrl: reader.result as string,
             createdAt: new Date().toISOString(),
-            senderId: me.id, senderName: me.name || me.email, isRead: false,
-          };
-          update(d => { if (!d.messages) d.messages = []; d.messages.push(msg); });
+            senderId: me.id, senderName: me.name || me.email, isRead: false });
         };
         reader.readAsDataURL(blob);
         stream.getTracks().forEach(t => t.stop());
@@ -173,10 +193,39 @@ function MessagesTab() {
     if (timerRef.current) clearInterval(timerRef.current);
   }
 
+  // État d'attente coach sans client sélectionné
+  if (isElevated && clientList.length === 0) return (
+    <p className="rounded-xl bg-surface2 px-4 py-3 text-sm text-dim">Aucun sportif affecté.</p>
+  );
+
   return (
     <div className="space-y-3">
-      {/* Sélecteur de sportif (coach/admin uniquement) */}
-      {isElevated && <ConversationPicker />}
+      {/* Sélecteur de conversation (coach/admin) — indépendant du profil actif */}
+      {isElevated && (
+        <div className="space-y-1.5">
+          <p className="text-[12px] font-semibold text-dim">Conversation avec :</p>
+          <div className="flex gap-2 overflow-x-auto pb-1">
+            {clientList.map(c => (
+              <button
+                key={c.id}
+                onClick={() => setChatClientId(c.id)}
+                className={`shrink-0 rounded-xl px-3.5 py-2 text-sm font-semibold transition ${
+                  c.id === chatClientId
+                    ? "bg-accent text-[#1a1500]"
+                    : "border border-line bg-surface2 text-dim"
+                }`}
+              >
+                {c.name || c.email}
+              </button>
+            ))}
+          </div>
+        </div>
+      )}
+
+      {/* Loader pendant le chargement du chat client */}
+      {isElevated && chatLoading && (
+        <p className="py-4 text-center text-sm text-dim">Chargement…</p>
+      )}
 
       {/* Bulles */}
       <div className="min-h-[280px] max-h-[52vh] overflow-y-auto space-y-2 rounded-2xl border border-line bg-surface p-3">
