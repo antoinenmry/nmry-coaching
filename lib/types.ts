@@ -131,13 +131,17 @@ export interface CardioRecord {
 
 export interface ExerciseRecords {
   exId: string;
+  name?: string;   // snapshot nom (obligatoire pour les exercices personnalisés hors bibliothèque)
   visible: boolean;
   entries: StrengthRecord[]; // max 3
 }
 
 export interface RecordsData {
+  activeSports?: ("strength" | "cap" | "hyrox")[]; // sports activés (undefined = legacy)
   strength: ExerciseRecords[];
+  activeCap?: CapDistance[];       // distances CAP activées (undefined = legacy)
   cap: Record<CapDistance, CardioRecord[]>;
+  activeHyrox?: HyroxCategory[];   // catégories Hyrox activées (undefined = legacy)
   hyrox: Record<HyroxCategory, CardioRecord[]>;
 }
 
