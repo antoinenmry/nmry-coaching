@@ -22,8 +22,8 @@ const EMOJIS = ["😫", "😕", "😐", "🙂", "🤩"];
 const emojiOf = (n: number) => (n >= 1 && n <= 5 ? EMOJIS[n - 1] + " " : "");
 
 export default function PlanPage() {
-  const { state, update, role, setRole, loading, clients, activeUserId } = useData();
-  const isCoach = role === "coach";
+  const { state, update, role, setRole, loading, clients, activeUserId, me } = useData();
+  const isCoach = role === "coach" || role === "admin";
 
   const [mode, setMode] = useState<"month" | "week" | "synthesis">("month");
   const [cursor, setCursor] = useState(() => new Date());
@@ -37,9 +37,9 @@ export default function PlanPage() {
 
   const todayKey = ymd(new Date());
 
-  // Charger les objectifs de tous les sportifs (coach) — exclu le sportif actif déjà dans state.goals
+  // Charger les objectifs de tous les sportifs — uniquement quand le coach consulte SON propre profil
   useEffect(() => {
-    if (!isCoach || loading) return;
+    if (!isCoach || loading || activeUserId !== me?.id) { setOtherGoals([]); return; }
     const supabase = createClient();
     const otherClients = clients.filter((c) => c.role === "client" && c.id !== activeUserId);
     if (otherClients.length === 0) { setOtherGoals([]); return; }
