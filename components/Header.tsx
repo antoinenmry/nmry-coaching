@@ -46,7 +46,7 @@ export default function Header() {
 
       {/* Bandeau inférieur : sélecteur client à gauche, ⚙ à droite */}
       <div className="flex items-center justify-between border-t border-line/50 px-4 py-2">
-        {role === "coach" ? <ClientSelector /> : <div />}
+        {(role === "coach" || role === "admin") ? <ClientSelector /> : <div />}
         <Link
           href="/settings"
           aria-label="Réglages"

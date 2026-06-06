@@ -21,7 +21,7 @@ export default function OverviewPage() {
 
   useEffect(() => {
     if (ctxLoading) return;
-    if (role !== "coach") { setLoading(false); return; }
+    if (role !== "coach" && role !== "admin") { setLoading(false); return; }
 
     const supabase = createClient();
     const clientProfiles = clients.filter((c) => c.role === "client");
@@ -53,7 +53,7 @@ export default function OverviewPage() {
     return <p className="py-10 text-center text-dim">Chargement…</p>;
   }
 
-  if (role !== "coach") {
+  if (role !== "coach" && role !== "admin") {
     return <p className="py-10 text-center text-dim">Accès réservé au coach.</p>;
   }
 
