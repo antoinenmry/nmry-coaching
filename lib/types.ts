@@ -240,6 +240,7 @@ export interface NotifPrefs {
   newMessage: boolean;      // nouveau message chat (coach → sportif / sportif → coach)
   newPlan: boolean;         // nouveau programme publié par le coach (sportif uniquement)
   urgentMessage: boolean;   // message urgent d'un sportif (coach uniquement)
+  newInjury: boolean;       // blessure déclarée par un sportif (coach uniquement)
   goalReminder: boolean;    // rappel J-7 / J-1 avant objectif (sportif uniquement)
   sessionReminder: boolean; // rappel séance du jour à 7h (sportif uniquement)
 }

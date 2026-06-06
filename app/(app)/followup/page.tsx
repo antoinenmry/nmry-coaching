@@ -506,15 +506,25 @@ function SanteTab() {
 
   function add() {
     if (!text.trim()) return;
+    const entryText = text.trim();
     const entry: Followup = {
       id: uid(),
       date: type === "injury" ? dateStart : todayKey(),
       ...(type === "injury" && dateEnd ? { dateEnd } : {}),
       type,
-      text: text.trim(),
+      text: entryText,
     };
     update(d => { d.followups.unshift(entry); });
     setText(""); setDateStart(todayKey()); setDateEnd("");
+
+    // Notifier le coach si c'est une blessure (client uniquement)
+    if (type === "injury" && !isElevated && me) {
+      fetch("/api/followup/notify-injury", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ clientId: me.id, clientName: me.name || me.email, injuryText: entryText }),
+      }).catch(() => {});
+    }
   }
 
   const injuries = state.followups.filter(f => f.type === "injury");

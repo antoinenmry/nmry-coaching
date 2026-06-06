@@ -94,6 +94,7 @@ export default function NotifPrefsPanel() {
   const prefRows: PrefRow[] = ([
     { key: "newMessage"      as keyof NotifPrefs, label: "Nouveau message",   desc: "Message reçu dans le chat",                  forCoach: true, forClient: true },
     { key: "urgentMessage"   as keyof NotifPrefs, label: "Message urgent",    desc: "Un sportif envoie un message urgent",         forCoach: true },
+    { key: "newInjury"       as keyof NotifPrefs, label: "Blessure sportif",  desc: "Un sportif déclare une nouvelle blessure",    forCoach: true },
     { key: "newPlan"         as keyof NotifPrefs, label: "Nouveau programme", desc: "Le coach publie un nouveau programme",        forClient: true },
     { key: "sessionReminder" as keyof NotifPrefs, label: "Rappel séance",     desc: "Séance programmée aujourd'hui (7h du matin)", forClient: true },
     { key: "goalReminder"    as keyof NotifPrefs, label: "Rappel objectif",   desc: "J-7 et J-1 avant une compétition",            forClient: true },
