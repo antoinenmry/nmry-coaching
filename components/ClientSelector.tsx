@@ -99,7 +99,7 @@ export default function ClientSelector() {
         disabled={loading}
         className="flex items-center gap-1.5 rounded-xl border border-line bg-surface px-3 py-1.5 text-sm font-medium disabled:opacity-50"
       >
-        <span className="text-xs text-dim">Sportif :</span>
+        <span className="text-xs text-dim">{role === "admin" ? "Profil :" : "Sportif :"}</span>
         {loading ? (
           <span className="h-3.5 w-20 animate-pulse rounded bg-surface2" />
         ) : (
