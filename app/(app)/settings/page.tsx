@@ -17,8 +17,16 @@ const CARDS = [
 function fmtDate(iso: string | null): string {
   if (!iso) return "—";
   const d = new Date(iso);
-  return d.toLocaleDateString("fr-FR", { day: "2-digit", month: "2-digit", year: "numeric" })
-    + " " + d.toLocaleTimeString("fr-FR", { hour: "2-digit", minute: "2-digit" });
+  const diffMs = Date.now() - d.getTime();
+  const diffMin = Math.floor(diffMs / 60_000);
+  const diffH = Math.floor(diffMs / 3_600_000);
+  const diffDays = Math.floor(diffMs / 86_400_000);
+  if (diffMin < 1) return "À l'instant";
+  if (diffMin < 60) return `Il y a ${diffMin} min`;
+  if (diffH < 24) return `Il y a ${diffH} h`;
+  if (diffDays < 7) return `Il y a ${diffDays} jour${diffDays > 1 ? "s" : ""}`;
+  const sameYear = d.getFullYear() === new Date().getFullYear();
+  return d.toLocaleDateString("fr-FR", { day: "numeric", month: "long", ...(sameYear ? {} : { year: "numeric" }) });
 }
 
 // ─── Vue Gestion des Profils ─────────────────────────────────────────────────

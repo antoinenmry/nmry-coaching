@@ -9,6 +9,7 @@ export default function ClientSelector() {
   const [open, setOpen] = useState(false);
   const [dropdownStyle, setDropdownStyle] = useState<React.CSSProperties>({});
   const btnRef = useRef<HTMLButtonElement>(null);
+  const dropdownRef = useRef<HTMLDivElement>(null);
 
   // Positionner le dropdown en fixed sous le bouton
   useEffect(() => {
@@ -27,7 +28,11 @@ export default function ClientSelector() {
   useEffect(() => {
     if (!open) return;
     function handleClick(e: MouseEvent) {
-      if (btnRef.current && !btnRef.current.contains(e.target as Node)) setOpen(false);
+      const target = e.target as Node;
+      if (
+        btnRef.current && !btnRef.current.contains(target) &&
+        dropdownRef.current && !dropdownRef.current.contains(target)
+      ) setOpen(false);
     }
     document.addEventListener("mousedown", handleClick);
     return () => document.removeEventListener("mousedown", handleClick);
@@ -41,6 +46,7 @@ export default function ClientSelector() {
 
   const dropdown = open && typeof document !== "undefined" ? createPortal(
     <div
+      ref={dropdownRef}
       style={dropdownStyle}
       className="rounded-2xl border border-line bg-surface shadow-xl"
     >
