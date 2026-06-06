@@ -28,40 +28,126 @@ function isActive(f: Followup): boolean {
 }
 
 // ─── VoicePlayer ──────────────────────────────────────────────────────────────
+const SPEEDS = [0.5, 1, 1.5, 2] as const;
+type Speed = (typeof SPEEDS)[number];
+
 function VoicePlayer({ audioUrl, isMe }: { audioUrl?: string; isMe: boolean }) {
   const audioRef = useRef<HTMLAudioElement>(null);
   const [playing, setPlaying] = useState(false);
   const [duration, setDuration] = useState(0);
   const [current, setCurrent] = useState(0);
+  const [speed, setSpeed] = useState<Speed>(1);
+  const [error, setError] = useState(false);
 
   if (!audioUrl) return <span className="text-sm text-dim">🎤 Vocal</span>;
 
+  // ▶/⏸ — piloté par les events onPlay/onPause (plus fiable que setState direct)
   function toggle() {
     const a = audioRef.current;
     if (!a) return;
-    if (playing) { a.pause(); setPlaying(false); }
-    else { a.play().catch(() => null); setPlaying(true); }
+    if (playing) {
+      a.pause();
+    } else {
+      setError(false);
+      a.playbackRate = speed;
+      a.play().catch((err) => {
+        console.warn("[NMRY] Audio play error:", err);
+        setError(true);
+        setPlaying(false);
+      });
+    }
   }
 
+  // Seek en cliquant sur la barre
+  function seek(e: React.MouseEvent<HTMLDivElement>) {
+    const a = audioRef.current;
+    if (!a || !duration) return;
+    const rect = e.currentTarget.getBoundingClientRect();
+    const ratio = Math.max(0, Math.min(1, (e.clientX - rect.left) / rect.width));
+    a.currentTime = ratio * duration;
+    setCurrent(a.currentTime);
+  }
+
+  function changeSpeed(s: Speed) {
+    setSpeed(s);
+    if (audioRef.current) audioRef.current.playbackRate = s;
+  }
+
+  const progressPct = duration ? (current / duration) * 100 : 0;
+  const remaining = duration > 0 ? duration - current : 0;
+
   return (
-    <div className="flex min-w-[150px] items-center gap-2.5">
+    <div className="flex min-w-[170px] flex-col gap-1.5">
+      {/* Élément audio — preload + playsInline requis iOS Safari */}
       <audio
         ref={audioRef}
         src={audioUrl}
-        onLoadedMetadata={e => setDuration((e.target as HTMLAudioElement).duration)}
-        onTimeUpdate={e => setCurrent((e.target as HTMLAudioElement).currentTime)}
+        preload="metadata"
+        playsInline
+        onLoadedMetadata={(e) => {
+          const d = (e.target as HTMLAudioElement).duration;
+          setDuration(isFinite(d) ? d : 0);
+        }}
+        onTimeUpdate={(e) => setCurrent((e.target as HTMLAudioElement).currentTime)}
+        onPlay={() => setPlaying(true)}
+        onPause={() => setPlaying(false)}
         onEnded={() => { setPlaying(false); setCurrent(0); }}
+        onError={() => { setError(true); setPlaying(false); }}
       />
-      <button onClick={toggle} className="shrink-0 text-base leading-none">{playing ? "⏸" : "▶️"}</button>
-      <div className={`flex-1 h-1.5 rounded-full overflow-hidden ${isMe ? "bg-[#1a1500]/20" : "bg-surface2"}`}>
+
+      {/* Ligne principale : bouton + barre + durée */}
+      <div className="flex items-center gap-2">
+        <button
+          onClick={toggle}
+          className="shrink-0 text-base leading-none"
+          aria-label={playing ? "Pause" : "Lecture"}
+        >
+          {error ? "⚠️" : playing ? "⏸" : "▶️"}
+        </button>
+
+        {/* Barre de progression cliquable */}
         <div
-          className={`h-full rounded-full transition-all ${isMe ? "bg-[#1a1500]/60" : "bg-accent"}`}
-          style={{ width: duration ? `${(current / duration) * 100}%` : "0%" }}
-        />
+          role="progressbar"
+          aria-valuenow={progressPct}
+          aria-valuemin={0}
+          aria-valuemax={100}
+          className={`flex-1 h-2 rounded-full overflow-hidden cursor-pointer ${
+            isMe ? "bg-[#1a1500]/20" : "bg-surface2"
+          }`}
+          onClick={seek}
+        >
+          <div
+            className={`h-full rounded-full ${isMe ? "bg-[#1a1500]/70" : "bg-accent"}`}
+            style={{ width: `${progressPct}%`, transition: playing ? "none" : "width .1s" }}
+          />
+        </div>
+
+        {/* Temps restant */}
+        <span className="shrink-0 tabular-nums text-[11px]">
+          {duration > 0 ? `-${fmtSec(remaining)}` : "—"}
+        </span>
       </div>
-      <span className="shrink-0 tabular-nums text-[11px]">
-        {duration > 0 ? fmtSec(playing ? current : duration) : "—"}
-      </span>
+
+      {/* Contrôles de vitesse */}
+      <div className="flex items-center gap-1 pl-7">
+        {SPEEDS.map((s) => (
+          <button
+            key={s}
+            onClick={() => changeSpeed(s)}
+            className={`rounded px-1.5 py-0.5 text-[10px] font-bold transition ${
+              speed === s
+                ? isMe
+                  ? "bg-[#1a1500]/30 text-[#1a1500]"
+                  : "bg-accent/20 text-accent"
+                : isMe
+                  ? "text-[#1a1500]/40 hover:text-[#1a1500]/70"
+                  : "text-dim hover:text-ink"
+            }`}
+          >
+            {s}×
+          </button>
+        ))}
+      </div>
     </div>
   );
 }
@@ -151,30 +237,52 @@ function MessagesTab() {
     }
   }
 
-  function send() {
+  async function send() {
     if (!text.trim() || !me) return;
-    pushMsg({ id: uid(), text: text.trim(), isUrgent, isVoice: false,
+    const msgText = text.trim();
+    await pushMsg({
+      id: uid(), text: msgText, isUrgent, isVoice: false,
       createdAt: new Date().toISOString(),
-      senderId: me.id, senderName: me.name || me.email, isRead: false });
+      senderId: me.id, senderName: me.name || me.email, isRead: false,
+    });
     setText(""); setIsUrgent(false);
+
+    // Email d'alerte si message urgent (client uniquement — le coach ne se notifie pas lui-même)
+    if (isUrgent && !isElevated) {
+      fetch("/api/messages/urgent", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          clientId: me.id,
+          messageText: msgText,
+          clientName: me.name || me.email,
+        }),
+      }).catch((err) => console.warn("[NMRY] Urgent email failed:", err));
+    }
   }
 
   async function startRecording() {
     try {
       const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+      // Laisser le navigateur choisir le format supporté (mp4 sur iOS, webm sur Chrome)
+      // Ne pas forcer audio/webm — non supporté sur iOS Safari
       const mr = new MediaRecorder(stream);
       mrRef.current = mr;
       chunksRef.current = [];
       mr.ondataavailable = e => { if (e.data.size > 0) chunksRef.current.push(e.data); };
       mr.onstop = () => {
-        const blob = new Blob(chunksRef.current, { type: "audio/webm" });
+        // Utiliser le vrai MIME type choisi par le navigateur
+        const mimeType = mr.mimeType || "audio/webm";
+        const blob = new Blob(chunksRef.current, { type: mimeType });
         const reader = new FileReader();
         reader.onload = () => {
           if (!me) return;
-          pushMsg({ id: uid(), text: "", isUrgent: false, isVoice: true,
+          pushMsg({
+            id: uid(), text: "", isUrgent: false, isVoice: true,
             audioUrl: reader.result as string,
             createdAt: new Date().toISOString(),
-            senderId: me.id, senderName: me.name || me.email, isRead: false });
+            senderId: me.id, senderName: me.name || me.email, isRead: false,
+          });
         };
         reader.readAsDataURL(blob);
         stream.getTracks().forEach(t => t.stop());
@@ -183,7 +291,7 @@ function MessagesTab() {
       setRecording(true); setRecTime(0);
       timerRef.current = setInterval(() => setRecTime(t => t + 1), 1000);
     } catch {
-      alert("Accès au microphone refusé.");
+      alert("Accès au microphone refusé ou non disponible.");
     }
   }
 
