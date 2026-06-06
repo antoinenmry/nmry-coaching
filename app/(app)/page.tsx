@@ -13,10 +13,27 @@ const CARDS = [
   { href: "/library", icon: "📚", label: "Ma Bibliothèque", color: "var(--color-accent)" },
 ];
 
+function DashboardSkeleton() {
+  return (
+    <div className="animate-pulse">
+      {/* Placeholder bannière Vue d'ensemble */}
+      <div className="mb-3.5 h-[72px] rounded-2xl bg-surface2" />
+      {/* Grille 2×3 */}
+      <div className="grid grid-cols-2 gap-3.5">
+        {Array.from({ length: 6 }).map((_, i) => (
+          <div key={i} className="aspect-square rounded-2xl bg-surface2" />
+        ))}
+      </div>
+    </div>
+  );
+}
+
 export default function Dashboard() {
   const { me, state, loading, role } = useData();
   const isCoach = role === "coach";
   const displayName = state.profile.name || me?.name || me?.email || "Moi";
+
+  if (loading) return <DashboardSkeleton />;
   const cardColors = state.preferences?.cardColors ?? {};
   const cardColorMode = state.preferences?.cardColorMode ?? "arc";
 
