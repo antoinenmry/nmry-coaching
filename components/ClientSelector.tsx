@@ -40,52 +40,74 @@ export default function ClientSelector() {
 
   if (role !== "coach" && role !== "admin") return null;
 
-  // Coach : ses clients affectés. Admin : tous les profils (clients + coaches sauf soi)
-  const coachableClients = role === "admin"
-    ? clients.filter((c) => c.id !== me?.id)
-    : clients.filter((c) => c.role === "client");
-  const active = clients.find((c) => c.id === activeUserId);
+  const others = clients.filter((c) => c.id !== me?.id);
+  const coaches = others.filter((c) => c.role === "coach" || c.role === "admin");
+  const sportifs = others.filter((c) => c.role === "client");
+  const active = clients.find((c) => c.id === activeUserId) ?? me;
   const activeLabel = active ? (active.name || active.email) : "—";
+
+  function Row({ c, last }: { c: typeof me & object; last?: boolean }) {
+    if (!c) return null;
+    const isActive = c.id === activeUserId;
+    return (
+      <button
+        onClick={() => { switchClient(c.id); setOpen(false); }}
+        className={[
+          "flex w-full items-center gap-2 px-4 py-3 text-left text-sm hover:bg-surface2",
+          last ? "rounded-b-2xl" : "",
+          isActive ? "font-semibold text-accent" : "",
+        ].join(" ")}
+      >
+        <span className="flex-1 truncate">{c.name || c.email}</span>
+        <span className="truncate text-xs text-dim">{c.name ? c.email : ""}</span>
+        {isActive && <span className="text-ok">✓</span>}
+      </button>
+    );
+  }
 
   const dropdown = open && typeof document !== "undefined" ? createPortal(
     <div
       ref={dropdownRef}
       style={dropdownStyle}
-      className="rounded-2xl border border-line bg-surface shadow-xl"
+      className="overflow-hidden rounded-2xl border border-line bg-surface shadow-xl"
     >
-      {coachableClients.length === 0 && (
-        <p className="px-4 py-3 text-sm text-dim">Aucun sportif enregistré</p>
-      )}
-      {coachableClients.map((c, i) => (
-        <button
-          key={c.id}
-          onClick={() => { switchClient(c.id); setOpen(false); }}
-          className={[
-            "flex w-full items-center gap-2 px-4 py-3 text-left text-sm hover:bg-surface2",
-            i === 0 ? "rounded-t-2xl" : "",
-            i === coachableClients.length - 1 && !me ? "rounded-b-2xl" : "",
-            c.id === activeUserId ? "font-semibold text-accent" : "",
-          ].join(" ")}
-        >
-          <span className="flex-1 truncate">{c.name || c.email}</span>
-          <span className="truncate text-xs text-dim">{c.name ? c.email : ""}</span>
-          {c.id === activeUserId && <span className="text-ok">✓</span>}
-        </button>
-      ))}
-
-      {/* Le coach peut aussi consulter ses propres données */}
+      {/* Moi en premier */}
       {me && (
         <button
           onClick={() => { switchClient(me.id); setOpen(false); }}
           className={[
-            "flex w-full items-center gap-2 rounded-b-2xl border-t border-line px-4 py-3 text-left text-sm hover:bg-surface2",
-            me.id === activeUserId ? "font-semibold text-accent" : "text-dim",
+            "flex w-full items-center gap-2 rounded-t-2xl px-4 py-3 text-left text-sm hover:bg-surface2",
+            me.id === activeUserId ? "font-semibold text-accent" : "",
           ].join(" ")}
         >
           <span className="flex-1 truncate">{me.name || me.email}</span>
-          <span className="text-xs">(moi)</span>
+          <span className="text-xs text-dim">(moi)</span>
           {me.id === activeUserId && <span className="text-ok">✓</span>}
         </button>
+      )}
+
+      {/* Coaches */}
+      {coaches.length > 0 && (
+        <>
+          <div className="border-t border-line px-4 py-1.5">
+            <span className="text-[11px] font-semibold uppercase tracking-wide text-dim">Coachs</span>
+          </div>
+          {coaches.map((c) => <Row key={c.id} c={c} />)}
+        </>
+      )}
+
+      {/* Sportifs */}
+      {sportifs.length > 0 && (
+        <>
+          <div className="border-t border-line px-4 py-1.5">
+            <span className="text-[11px] font-semibold uppercase tracking-wide text-dim">Sportifs</span>
+          </div>
+          {sportifs.map((c, i) => <Row key={c.id} c={c} last={i === sportifs.length - 1} />)}
+        </>
+      )}
+
+      {others.length === 0 && (
+        <p className="rounded-b-2xl px-4 py-3 text-sm text-dim">Aucun profil enregistré</p>
       )}
     </div>,
     document.body
