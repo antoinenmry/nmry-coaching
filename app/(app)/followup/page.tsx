@@ -497,7 +497,8 @@ function MessagesTab() {
 
 // ─── Tab Santé ─────────────────────────────────────────────────────────────────
 function SanteTab() {
-  const { state, update } = useData();
+  const { state, update, role, me } = useData();
+  const isElevated = role === "coach" || role === "admin";
   const [type, setType] = useState<"pain" | "injury" | "note">("pain");
   const [text, setText] = useState("");
   const [dateStart, setDateStart] = useState(todayKey());
