@@ -30,7 +30,7 @@ function DashboardSkeleton() {
 
 export default function Dashboard() {
   const { me, state, loading, role } = useData();
-  const isCoach = role === "coach";
+  const isCoach = role === "coach" || role === "admin";
   const displayName = state.profile.name || me?.name || me?.email || "Moi";
 
   if (loading) return <DashboardSkeleton />;
