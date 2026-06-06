@@ -65,9 +65,40 @@ function VoicePlayer({ audioUrl, isMe }: { audioUrl?: string; isMe: boolean }) {
   );
 }
 
+// ─── Sélecteur de conversation (coach/admin) ──────────────────────────────────
+function ConversationPicker() {
+  const { clients, activeUserId, switchClient, loading } = useData();
+  const clientList = clients.filter(c => c.role === "client");
+  if (clientList.length === 0) return (
+    <p className="rounded-xl bg-surface2 px-4 py-3 text-sm text-dim">Aucun sportif affecté.</p>
+  );
+  return (
+    <div className="space-y-1.5">
+      <p className="text-[12px] font-semibold text-dim">Conversation avec :</p>
+      <div className="flex gap-2 overflow-x-auto pb-1">
+        {clientList.map(c => (
+          <button
+            key={c.id}
+            onClick={() => switchClient(c.id)}
+            disabled={loading}
+            className={`shrink-0 rounded-xl px-3.5 py-2 text-sm font-semibold transition ${
+              c.id === activeUserId
+                ? "bg-accent text-[#1a1500]"
+                : "border border-line bg-surface2 text-dim"
+            }`}
+          >
+            {c.name || c.email}
+          </button>
+        ))}
+      </div>
+    </div>
+  );
+}
+
 // ─── Tab Messages ─────────────────────────────────────────────────────────────
 function MessagesTab() {
-  const { state, update, me } = useData();
+  const { state, update, me, role } = useData();
+  const isElevated = role === "coach" || role === "admin";
   const messages = state.messages ?? [];
   const [text, setText] = useState("");
   const [isUrgent, setIsUrgent] = useState(false);
@@ -144,6 +175,9 @@ function MessagesTab() {
 
   return (
     <div className="space-y-3">
+      {/* Sélecteur de sportif (coach/admin uniquement) */}
+      {isElevated && <ConversationPicker />}
+
       {/* Bulles */}
       <div className="min-h-[280px] max-h-[52vh] overflow-y-auto space-y-2 rounded-2xl border border-line bg-surface p-3">
         {messages.length === 0 && (

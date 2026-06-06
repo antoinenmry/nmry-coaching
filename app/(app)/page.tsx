@@ -1,8 +1,11 @@
 "use client";
 
 import Link from "next/link";
+import { useEffect, useState } from "react";
 import { useData } from "@/components/DataProvider";
+import { createClient } from "@/lib/supabase/client";
 import { daysUntil, countdownLabel } from "@/lib/dates";
+import type { ChatMessage } from "@/lib/types";
 
 const CARDS = [
   { href: "/profile", icon: "👤", label: "Mon Profil", color: "var(--color-accent)" },
@@ -29,10 +32,36 @@ function DashboardSkeleton() {
 }
 
 export default function Dashboard() {
-  const { me, state, loading, role } = useData();
+  const { me, state, loading, role, clients } = useData();
   const isCoach = role === "coach" || role === "admin";
   const displayName = state.profile.name || me?.name || me?.email || "Moi";
-  const unreadMessages = (state.messages ?? []).filter(m => !m.isRead && m.senderId !== me?.id).length;
+
+  // Pour les clients : messages non lus dans leur propre state
+  const clientUnread = (state.messages ?? []).filter(m => !m.isRead && m.senderId !== me?.id).length;
+
+  // Pour le coach/admin : agréger les messages non lus de TOUS les clients
+  const [coachUnread, setCoachUnread] = useState(0);
+  useEffect(() => {
+    if (!isCoach || loading || !me) return;
+    const clientIds = clients.filter(c => c.role === "client").map(c => c.id);
+    if (clientIds.length === 0) return;
+    const supabase = createClient();
+    supabase
+      .from("app_state")
+      .select("data")
+      .in("user_id", clientIds)
+      .then(({ data: rows }) => {
+        if (!rows) return;
+        let count = 0;
+        for (const row of rows) {
+          const msgs = ((row.data as { messages?: ChatMessage[] })?.messages ?? []);
+          count += msgs.filter(m => !m.isRead && m.senderId !== me.id).length;
+        }
+        setCoachUnread(count);
+      });
+  }, [isCoach, loading, clients, me]); // eslint-disable-line
+
+  const unreadMessages = isCoach ? coachUnread : clientUnread;
 
   if (loading) return <DashboardSkeleton />;
   const cardColors = state.preferences?.cardColors ?? {};
