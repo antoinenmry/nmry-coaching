@@ -49,6 +49,8 @@ export interface ExerciseInstance {
   coachComment: string; // consigne/note du coach pour cet exercice
   clientComment: string; // retour libre du client
   failed?: boolean; // true si le sportif a marqué l'exercice comme raté
+  setsLabel?: string; // surcharge d'affichage pour sets (ex: "3-4")
+  repsLabel?: string; // surcharge d'affichage pour reps (ex: "8-12")
 }
 
 /** Une séance. `date` = null tant qu'elle est dans la banque « À placer ». */

@@ -7,9 +7,11 @@ import { useData } from "./DataProvider";
 export default function ExerciseMultiSelect({
   picked,
   onToggle,
+  showFilters = true,
 }: {
   picked: string[];
   onToggle: (id: string) => void;
+  showFilters?: boolean;
 }) {
   const { library } = useData();
   const { categories, exercises } = library;
@@ -42,7 +44,7 @@ export default function ExerciseMultiSelect({
       />
 
       {/* Filtres */}
-      <div className="mb-3 space-y-1.5">
+      {showFilters && <div className="mb-3 space-y-1.5">
         {categories.map((cat) => (
           <div key={cat.id} className="flex flex-wrap gap-1.5">
             <Chip active={!(sel[cat.id]?.length)} label="Tous" onClick={() => setSel((s) => ({ ...s, [cat.id]: [] }))} />
@@ -66,7 +68,7 @@ export default function ExerciseMultiSelect({
             ))}
           </div>
         ))}
-      </div>
+      </div>}
 
       {/* Liste */}
       {filtered.length === 0 ? (

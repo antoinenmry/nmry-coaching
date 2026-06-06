@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useRef, useState } from "react";
 import { useData } from "./DataProvider";
 import ExercisePicker, { type InlineExercise } from "./ExercisePicker";
 import { exerciseInstanceFromLibrary, SESSION_COLORS } from "@/lib/data";
@@ -28,7 +28,8 @@ export default function SessionEditor({
   const [picking, setPicking] = useState(false);
 
   const videoById = Object.fromEntries(state.library.exercises.map((e) => [e.id, e.video]));
-  const isCoach = role === "coach";
+  const isCoach = role === "coach" || role === "admin";
+  const backdropRef = useRef(false);
 
   const patchSession = (patch: Partial<typeof session>) =>
     update((d) => {
@@ -74,7 +75,8 @@ export default function SessionEditor({
   return (
     <div
       className="fixed inset-0 z-50 flex items-end justify-center bg-black/60 sm:items-center"
-      onClick={(e) => e.target === e.currentTarget && onClose()}
+      onPointerDown={(e) => { backdropRef.current = e.target === e.currentTarget; }}
+      onClick={(e) => { if (backdropRef.current && e.target === e.currentTarget) onClose(); }}
     >
       <div className="max-h-[90vh] w-full max-w-xl overflow-y-auto rounded-t-3xl border-t border-line bg-surface p-5 sm:rounded-3xl sm:border">
         <button onClick={onClose} className="float-right grid h-9 w-9 place-items-center rounded-lg bg-surface2" aria-label="Fermer">✕</button>
@@ -251,11 +253,31 @@ function ExerciseBlock({
           <div className="grid grid-cols-2 gap-2.5">
             <label className="block">
               <span className="mb-1 block text-[13px] text-dim">Séries</span>
-              <input type="number" min={0} value={ex.sets} onChange={(e) => onPatch({ sets: +e.target.value || 0 })} />
+              <input
+                type="text"
+                inputMode="numeric"
+                placeholder="3 ou 2-4"
+                value={ex.setsLabel ?? (ex.sets || "")}
+                onChange={(e) => {
+                  const raw = e.target.value;
+                  const num = parseInt(raw.split("-")[0], 10);
+                  onPatch({ setsLabel: raw, sets: isNaN(num) ? 0 : num });
+                }}
+              />
             </label>
             <label className="block">
               <span className="mb-1 block text-[13px] text-dim">Répétitions</span>
-              <input type="number" min={0} value={ex.reps} onChange={(e) => onPatch({ reps: +e.target.value || 0 })} />
+              <input
+                type="text"
+                inputMode="numeric"
+                placeholder="10 ou 8-12"
+                value={ex.repsLabel ?? (ex.reps || "")}
+                onChange={(e) => {
+                  const raw = e.target.value;
+                  const num = parseInt(raw.split("-")[0], 10);
+                  onPatch({ repsLabel: raw, reps: isNaN(num) ? 0 : num });
+                }}
+              />
             </label>
           </div>
           <div className="mt-2.5">
@@ -282,7 +304,7 @@ function ExerciseBlock({
       ) : (
         <>
           <div className="flex flex-wrap gap-x-4 gap-y-1 text-sm">
-            <span><strong>{ex.sets}</strong> × <strong>{ex.reps}</strong> reps</span>
+            <span><strong>{ex.setsLabel ?? ex.sets}</strong> × <strong>{ex.repsLabel ?? ex.reps}</strong> reps</span>
             {ex.weight > 0 && <span className="text-dim">{ex.weight} kg</span>}
             {ex.rpeCoach > 0 && <span className="text-dim">RPE coach {ex.rpeCoach}/10</span>}
           </div>

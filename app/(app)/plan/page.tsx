@@ -1,10 +1,9 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { useData } from "@/components/DataProvider";
 import SessionEditor from "@/components/SessionEditor";
 import ExerciseMultiSelect from "@/components/ExerciseMultiSelect";
-import type { InlineExercise } from "@/components/ExercisePicker";
 import GoalInfoModal from "@/components/GoalInfoModal";
 import { AUTH_ENABLED } from "@/lib/config";
 import { SESSION_COLORS, newSession, exerciseInstanceFromLibrary } from "@/lib/data";
@@ -286,45 +285,79 @@ export default function PlanPage() {
 }
 
 // Modale de création d'une séance (coach) : nom + couleur + exercices → dans la banque.
+// Exercice sélectionné (bibliothèque ou inline) dans ComposeModal.
+interface SelectedEx {
+  id: string;
+  name: string;
+  isInline: boolean;
+  tags: Record<string, string[]>;
+  video: string;
+}
+
 function ComposeModal({ onClose, onCreated }: { onClose: () => void; onCreated: (id: string) => void }) {
   const { update, updateLibrary, library } = useData();
   const { categories } = library;
 
-  const [name, setName] = useState("Séance");
+  // --- état principal ---
+  const [name, setName] = useState("");
   const [color, setColor] = useState(SESSION_COLORS[0]);
-  const [picked, setPicked] = useState<string[]>([]);
-  const [inlineExercises, setInlineExercises] = useState<InlineExercise[]>([]);
+  // Liste unifiée et ordonnée (biblio + custom)
+  const [exercises, setExercises] = useState<SelectedEx[]>([]);
   const [saveToLib, setSaveToLib] = useState(true);
-
-  // Formulaire de création inline
+  // Filtres visibles/masqués
+  const [filtersOpen, setFiltersOpen] = useState(false);
+  // Formulaire exercice custom
   const [newName, setNewName] = useState("");
   const [newTags, setNewTags] = useState<Record<string, string[]>>({});
   const [newVideo, setNewVideo] = useState("");
   const [showTagsForm, setShowTagsForm] = useState(false);
+  // Backdrop — évite la fermeture lors de la sélection de texte
+  const backdropDown = useRef(false);
 
-  const toggle = (id: string) => setPicked((p) => (p.includes(id) ? p.filter((x) => x !== id) : [...p, id]));
+  // Toggle exercice bibliothèque
+  function toggleLibEx(id: string) {
+    setExercises((prev) => {
+      if (prev.find((e) => e.id === id)) return prev.filter((e) => e.id !== id);
+      const libEx = library.exercises.find((e) => e.id === id);
+      return [...prev, { id, name: libEx?.name ?? id, isInline: false, tags: {}, video: "" }];
+    });
+  }
 
+  // Toggle tag dans le formulaire custom
   const toggleTag = (catId: string, optId: string) =>
     setNewTags((prev) => {
       const cur = prev[catId] ?? [];
       return { ...prev, [catId]: cur.includes(optId) ? cur.filter((x) => x !== optId) : [...cur, optId] };
     });
 
+  // Ajouter l'exercice custom à la liste
   function addInline() {
     const trimmed = newName.trim();
     if (!trimmed) return;
-    setInlineExercises((prev) => [...prev, { id: crypto.randomUUID(), name: trimmed, tags: newTags, video: newVideo }]);
+    setExercises((prev) => [...prev, { id: crypto.randomUUID(), name: trimmed, isInline: true, tags: newTags, video: newVideo }]);
     setNewName("");
     setNewTags({});
     setNewVideo("");
     setShowTagsForm(false);
   }
 
+  // Réordonner
+  function moveEx(index: number, dir: -1 | 1) {
+    setExercises((prev) => {
+      const next = [...prev];
+      const target = index + dir;
+      if (target < 0 || target >= next.length) return prev;
+      [next[index], next[target]] = [next[target], next[index]];
+      return next;
+    });
+  }
+
   function create() {
-    // 1. Sauvegarder les exercices inline dans la bibliothèque partagée (via updateLibrary → API)
-    if (saveToLib && inlineExercises.length > 0) {
+    // 1. Sauvegarder les customs dans la bibliothèque partagée
+    const customs = exercises.filter((e) => e.isInline);
+    if (saveToLib && customs.length > 0) {
       updateLibrary((lib) => {
-        inlineExercises.forEach(({ id, name: exName, tags, video }) => {
+        customs.forEach(({ id, name: exName, tags, video }) => {
           if (!lib.exercises.find((e) => e.id === id)) {
             lib.exercises.push({ id, name: exName, tags, video, comment: "" });
           }
@@ -332,38 +365,42 @@ function ComposeModal({ onClose, onCreated }: { onClose: () => void; onCreated: 
       });
     }
 
-    // 2. Créer la séance dans l'app_state
+    // 2. Créer la séance dans l'app_state dans l'ordre voulu
     let newId = "";
     update((d) => {
       const s = newSession(name.trim() || "Séance", color);
       newId = s.id;
-      picked.forEach((id) => {
+      exercises.forEach(({ id, name: exName }) => {
         const libEx = library.exercises.find((e) => e.id === id);
-        s.exercises.push(exerciseInstanceFromLibrary({ id, name: libEx?.name ?? "Exercice" }));
-      });
-      inlineExercises.forEach(({ id, name: exName }) => {
-        s.exercises.push(exerciseInstanceFromLibrary({ id, name: exName }));
+        s.exercises.push(exerciseInstanceFromLibrary({ id, name: libEx?.name ?? exName }));
       });
       d.sessions.push(s);
     });
     onCreated(newId);
   }
 
-  const totalExercises = picked.length + inlineExercises.length;
+  const pickedIds = exercises.filter((e) => !e.isInline).map((e) => e.id);
 
   return (
-    <div className="fixed inset-0 z-50 flex items-end justify-center bg-black/60 sm:items-center" onClick={(e) => e.target === e.currentTarget && onClose()}>
+    <div
+      className="fixed inset-0 z-50 flex items-end justify-center bg-black/60 sm:items-center"
+      onPointerDown={(e) => { backdropDown.current = e.target === e.currentTarget; }}
+      onClick={(e) => { if (backdropDown.current && e.target === e.currentTarget) onClose(); }}
+    >
       <div className="flex max-h-[92vh] w-full max-w-xl flex-col overflow-y-auto rounded-t-3xl border-t border-line bg-surface p-5 sm:rounded-3xl sm:border">
+        {/* En-tête */}
         <div className="mb-3 flex items-center justify-between">
           <h2 className="text-lg font-bold">Nouvelle séance</h2>
           <button onClick={onClose} className="grid h-9 w-9 place-items-center rounded-lg bg-surface2">✕</button>
         </div>
 
+        {/* Nom */}
         <label className="mb-3 block">
           <span className="mb-1 block text-[13px] text-dim">Nom de la séance</span>
-          <input value={name} onChange={(e) => setName(e.target.value)} placeholder="Ex : Haut du corps A" />
+          <input value={name} onChange={(e) => setName(e.target.value)} placeholder="Ex : Haut du corps A" autoFocus />
         </label>
 
+        {/* Couleur */}
         <div className="mb-3">
           <span className="mb-1.5 block text-[13px] text-dim">Couleur</span>
           <div className="flex gap-2">
@@ -373,25 +410,35 @@ function ComposeModal({ onClose, onCreated }: { onClose: () => void; onCreated: 
           </div>
         </div>
 
-        <span className="mb-1.5 block text-[13px] text-dim">
-          Exercices de la bibliothèque ({picked.length} sélectionné{picked.length > 1 ? "s" : ""})
-        </span>
-        <ExerciseMultiSelect picked={picked} onToggle={toggle} />
+        {/* Bibliothèque : en-tête + toggle filtres */}
+        <div className="mb-1.5 flex items-center justify-between">
+          <span className="text-[13px] text-dim">
+            Bibliothèque ({pickedIds.length} sélectionné{pickedIds.length > 1 ? "s" : ""})
+          </span>
+          <button
+            type="button"
+            onClick={() => setFiltersOpen((v) => !v)}
+            className="rounded-lg bg-surface2 px-2.5 py-1 text-[12px] font-medium text-dim hover:text-ink"
+          >
+            {filtersOpen ? "▲ Masquer les filtres" : "▼ Filtres"}
+          </button>
+        </div>
+        <ExerciseMultiSelect picked={pickedIds} onToggle={toggleLibEx} showFilters={filtersOpen} />
 
-        {/* Création d'exercices inline */}
+        {/* Exercice personnalisé */}
         <div className="mt-4 rounded-xl border border-dashed border-line bg-surface2 p-3">
-          <p className="mb-2 text-[13px] font-semibold text-dim">Nouvel exercice</p>
+          <p className="mb-2 text-[13px] font-semibold text-dim">Nouvel exercice personnalisé</p>
 
-          {/* Nom */}
           <div className="flex gap-2">
             <input
               value={newName}
               onChange={(e) => setNewName(e.target.value)}
-              onKeyDown={(e) => e.key === "Enter" && newName.trim() && setShowTagsForm(true)}
+              onKeyDown={(e) => { if (e.key === "Enter" && newName.trim()) { e.preventDefault(); setShowTagsForm(true); } }}
               placeholder="Nom de l'exercice…"
               className="flex-1"
             />
             <button
+              type="button"
               onClick={() => { if (newName.trim()) setShowTagsForm(true); }}
               disabled={!newName.trim()}
               className="rounded-lg bg-accent px-3 py-2 text-sm font-semibold text-[#1a1500] disabled:opacity-40"
@@ -400,7 +447,7 @@ function ComposeModal({ onClose, onCreated }: { onClose: () => void; onCreated: 
             </button>
           </div>
 
-          {/* Formulaire étendu (filtres + vidéo) */}
+          {/* Formulaire étendu tags + vidéo */}
           {showTagsForm && newName.trim() && (
             <div className="mt-3 space-y-2.5 border-t border-line/50 pt-3">
               {categories.map((cat) => (
@@ -410,14 +457,8 @@ function ComposeModal({ onClose, onCreated }: { onClose: () => void; onCreated: 
                     {cat.options.map((opt) => {
                       const active = (newTags[cat.id] ?? []).includes(opt.id);
                       return (
-                        <button
-                          key={opt.id}
-                          type="button"
-                          onClick={() => toggleTag(cat.id, opt.id)}
-                          className={`rounded-full border px-2.5 py-1 text-[12px] transition ${
-                            active ? "border-accent bg-accent/15 text-accent" : "border-line bg-surface text-ink"
-                          }`}
-                        >
+                        <button key={opt.id} type="button" onClick={() => toggleTag(cat.id, opt.id)}
+                          className={`rounded-full border px-2.5 py-1 text-[12px] transition ${active ? "border-accent bg-accent/15 text-accent" : "border-line bg-surface text-ink"}`}>
                           {opt.label}
                         </button>
                       );
@@ -428,68 +469,69 @@ function ComposeModal({ onClose, onCreated }: { onClose: () => void; onCreated: 
               ))}
               <div>
                 <p className="mb-1 text-[11px] uppercase tracking-wide text-dim">Lien vidéo (optionnel)</p>
-                <input
-                  value={newVideo}
-                  onChange={(e) => setNewVideo(e.target.value)}
-                  placeholder="https://…"
-                  className="text-sm"
-                />
+                <input value={newVideo} onChange={(e) => setNewVideo(e.target.value)} placeholder="https://…" className="text-sm" />
               </div>
-              <button
-                type="button"
-                onClick={addInline}
-                className="w-full rounded-lg bg-ok py-2 text-sm font-semibold text-[#06210a]"
-              >
+              <button type="button" onClick={addInline}
+                className="w-full rounded-lg bg-ok py-2 text-sm font-semibold text-[#06210a]">
                 ✓ Ajouter « {newName.trim()} »
               </button>
             </div>
           )}
-
-          {/* Liste des exercices inline créés */}
-          {inlineExercises.length > 0 && (
-            <>
-              <ul className="mt-2.5 space-y-1.5">
-                {inlineExercises.map((ex) => {
-                  const labels = categories.flatMap((c) =>
-                    (ex.tags[c.id] ?? [])
-                      .map((id) => c.options.find((o) => o.id === id)?.label)
-                      .filter(Boolean) as string[]
-                  );
-                  return (
-                    <li key={ex.id} className="flex items-center justify-between rounded-lg bg-surface px-2.5 py-1.5 text-sm">
-                      <div className="min-w-0">
-                        <span className="font-medium">{ex.name}</span>
-                        {labels.length > 0 && (
-                          <span className="ml-2 text-[11px] text-dim">{labels.join(", ")}</span>
-                        )}
-                        {ex.video && <span className="ml-1 text-[11px] text-accent2">▶</span>}
-                      </div>
-                      <button onClick={() => setInlineExercises((p) => p.filter((e) => e.id !== ex.id))} className="ml-2 shrink-0 text-dim">✕</button>
-                    </li>
-                  );
-                })}
-              </ul>
-              <label className="mt-2.5 flex cursor-pointer items-center gap-2 text-[13px]">
-                <span
-                  className={`grid h-5 w-5 shrink-0 place-items-center rounded border text-xs font-bold transition ${
-                    saveToLib ? "border-ok bg-ok text-[#06210a]" : "border-line bg-surface"
-                  }`}
-                  onClick={() => setSaveToLib((v) => !v)}
-                >
-                  {saveToLib ? "✓" : ""}
-                </span>
-                <input type="checkbox" className="sr-only" checked={saveToLib} onChange={(e) => setSaveToLib(e.target.checked)} />
-                Ajouter aussi à la bibliothèque commune
-              </label>
-            </>
-          )}
         </div>
+
+        {/* Récapitulatif ordonné — tous les exercices sélectionnés */}
+        {exercises.length > 0 && (
+          <div className="mt-4 rounded-xl border border-line bg-surface p-3">
+            <div className="mb-2 flex items-center justify-between">
+              <p className="text-[13px] font-semibold text-dim">
+                Récapitulatif · {exercises.length} exercice{exercises.length > 1 ? "s" : ""}
+              </p>
+              {exercises.some((e) => e.isInline) && (
+                <label className="flex cursor-pointer items-center gap-1.5 text-[12px] text-dim">
+                  <span
+                    className={`grid h-4 w-4 shrink-0 place-items-center rounded border text-[10px] font-bold transition ${saveToLib ? "border-ok bg-ok text-[#06210a]" : "border-line bg-surface"}`}
+                    onClick={() => setSaveToLib((v) => !v)}
+                  >
+                    {saveToLib ? "✓" : ""}
+                  </span>
+                  <input type="checkbox" className="sr-only" checked={saveToLib} onChange={(e) => setSaveToLib(e.target.checked)} />
+                  Sauver customs en bibliothèque
+                </label>
+              )}
+            </div>
+            <ol className="space-y-1">
+              {exercises.map((ex, i) => {
+                const labels = categories.flatMap((c) =>
+                  (ex.tags[c.id] ?? []).map((tid) => c.options.find((o) => o.id === tid)?.label).filter(Boolean) as string[]
+                );
+                return (
+                  <li key={ex.id} className="flex items-center gap-2 rounded-lg bg-surface2 px-2.5 py-1.5 text-sm">
+                    <span className="w-5 shrink-0 text-center text-[11px] text-dim font-bold">{i + 1}</span>
+                    <div className="min-w-0 flex-1">
+                      <span className="font-medium">{ex.name}</span>
+                      {ex.isInline && <span className="ml-1.5 rounded-full bg-accent/15 px-1.5 py-0.5 text-[10px] text-accent">custom</span>}
+                      {labels.length > 0 && <span className="ml-2 text-[11px] text-dim">{labels.join(", ")}</span>}
+                    </div>
+                    <div className="flex shrink-0 items-center gap-0.5">
+                      <button type="button" onClick={() => moveEx(i, -1)} disabled={i === 0}
+                        className="grid h-7 w-7 place-items-center rounded text-dim disabled:opacity-20 hover:text-ink" aria-label="Monter">▲</button>
+                      <button type="button" onClick={() => moveEx(i, 1)} disabled={i === exercises.length - 1}
+                        className="grid h-7 w-7 place-items-center rounded text-dim disabled:opacity-20 hover:text-ink" aria-label="Descendre">▼</button>
+                      <button type="button" onClick={() => setExercises((p) => p.filter((e) => e.id !== ex.id))}
+                        className="grid h-7 w-7 place-items-center rounded text-dim hover:text-danger" aria-label="Retirer">✕</button>
+                    </div>
+                  </li>
+                );
+              })}
+            </ol>
+          </div>
+        )}
 
         <button
           onClick={create}
           className="mt-4 w-full rounded-xl bg-accent py-3 font-semibold text-[#1a1500]"
         >
-          Créer la séance {totalExercises > 0 ? `(${totalExercises} exercice${totalExercises > 1 ? "s" : ""})` : ""}
+          Créer la séance{exercises.length > 0 ? ` (${exercises.length} exercice${exercises.length > 1 ? "s" : ""})` : ""}
         </button>
       </div>
     </div>
@@ -846,7 +888,7 @@ function SynthesisView({ cursor, todayKey, sessionsByDate, goalsByDate, injuries
                         <div className="border-t border-line divide-y divide-line">
                           {s.exercises.map((ex) => {
                             const prescription = [
-                              ex.sets ? `${ex.sets} × ${ex.reps || "?"}` : null,
+                              ex.sets ? `${ex.setsLabel ?? ex.sets} × ${(ex.repsLabel ?? ex.reps) || "?"}` : null,
                               ex.weight ? `${ex.weight} kg` : null,
                               ex.rpeCoach ? `RPE coach ${ex.rpeCoach}` : null,
                             ].filter(Boolean).join(" · ");
