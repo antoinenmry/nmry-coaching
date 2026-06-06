@@ -186,6 +186,28 @@ interface NotifPrefs {
 ```
 Géré dans Settings → Affichage → Notifications (toggles role-based via `NotifPrefsPanel`).
 
+### CardInfoOption & personnalisation de l'accueil
+```typescript
+type CardInfoOption =
+  | "hidden"
+  | "nextSession"       // prochaine séance à venir (plan)
+  | "weekPct"           // % séances réalisées cette semaine (plan)
+  | "remaining"         // nombre de séances restantes (plan)
+  | "lastRecord"        // dernier record enregistré (records)
+  | "chosenRecord"      // record d'un exercice au choix (records)
+  | "activeInjury"      // blessure active (suivi)
+  | "lastNote"          // dernier bloc-note (suivi)
+  | "exerciseCount"     // nombre d'exercices disponibles (bibliothèque)
+  | "favoriteExercise"; // exercice favori ⭐ (bibliothèque)
+```
+- `cardInfoMode?: Record<string, CardInfoOption>` — option par carte (`href → option`), défaut `"hidden"` sauf Objectifs (toujours affiché)
+- `chosenRecordExerciseId?: string` — exercice choisi pour `"chosenRecord"`
+- `favoriteExerciseId?: string` — exercice marqué ⭐ dans la bibliothèque (un seul à la fois)
+- Géré dans Settings → Cartes → sous-onglet **🏠 Accueil** (pills de sélection + picker exercice)
+- Affiché sur l'accueil en `text-[11px] text-dim` sous le label de chaque carte
+- La bibliothèque affiche un bouton ⭐/☆ sur chaque exercice (coach et sportif)
+- `cardColorMode` défaut : `"full"` (fond complet)
+
 ### Templates (coach/admin uniquement)
 Stockés dans `template_state` (singleton Supabase, RLS `is_coach()`).
 Chargés dans `DataProvider` → `templates: TemplateLibrary`.
