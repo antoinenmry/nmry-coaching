@@ -3,8 +3,6 @@ import { createClient } from "@/lib/supabase/server";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { Resend } from "resend";
 
-const resend = new Resend(process.env.RESEND_API_KEY);
-
 /**
  * POST /api/messages/urgent
  * Déclenche un email d'alerte au coach lorsqu'un sportif envoie un message urgent.
@@ -45,7 +43,12 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ sent: false, reason: "coach_email_not_found" });
   }
 
-  // 4. Envoyer l'email via Resend
+  // 4. Envoyer l'email via Resend (instancié ici, pas au module-level)
+  if (!process.env.RESEND_API_KEY) {
+    console.warn("[NMRY] RESEND_API_KEY manquant — email non envoyé");
+    return NextResponse.json({ sent: false, reason: "resend_not_configured" });
+  }
+  const resend = new Resend(process.env.RESEND_API_KEY);
   const fromEmail = process.env.RESEND_FROM_EMAIL ?? "NMRY Coaching <onboarding@resend.dev>";
   const senderLabel = clientName || "Un sportif";
   const preview = messageText
