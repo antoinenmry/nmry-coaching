@@ -30,9 +30,12 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: "Forbidden" }, { status: 403 });
   }
 
-  const { message, expiresInHours = 24 } = await req.json();
+  const { message, expiresInHours = 24 } = await req.json().catch(() => ({}));
   if (!message?.trim()) {
     return NextResponse.json({ error: "Message requis" }, { status: 400 });
+  }
+  if (message.length > 2000) {
+    return NextResponse.json({ error: "Message trop long (max 2000 caractères)" }, { status: 400 });
   }
 
   const expires_at = new Date(Date.now() + expiresInHours * 3_600_000).toISOString();
@@ -45,7 +48,7 @@ export async function POST(req: NextRequest) {
 
   if (error) {
     console.error("[broadcasts] insert error:", error);
-    return NextResponse.json({ error: error.message }, { status: 500 });
+    return NextResponse.json({ error: "Erreur lors de l'envoi" }, { status: 500 });
   }
 
   // Notification push à tous les sportifs (fire-and-forget)

@@ -14,7 +14,10 @@ export async function POST(req: NextRequest) {
   const { data: { user } } = await supabase.auth.getUser();
   if (!user) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
 
-  const { clientId, clientName, injuryText } = await req.json();
+  const { clientId, clientName, injuryText } = await req.json().catch(() => ({}));
+  if (injuryText && injuryText.length > 500) {
+    return NextResponse.json({ error: "injuryText trop long" }, { status: 400 });
+  }
   if (!clientId) return NextResponse.json({ error: "Missing clientId" }, { status: 400 });
 
   // Vérifier que clientId correspond bien à l'utilisateur connecté (anti-usurpation)

@@ -16,6 +16,12 @@ export async function POST(req: NextRequest) {
   const { data: { user } } = await supabase.auth.getUser();
   if (!user) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
 
+  // Anti-replay : le compte doit avoir été créé il y a moins de 5 minutes
+  const createdAt = new Date(user.created_at ?? 0).getTime();
+  if (Date.now() - createdAt > 5 * 60 * 1000) {
+    return NextResponse.json({ skipped: true, reason: "not_new" });
+  }
+
   const { userName, userEmail } = await req.json().catch(() => ({}));
   const displayName = userName || userEmail || "Nouvel utilisateur";
 

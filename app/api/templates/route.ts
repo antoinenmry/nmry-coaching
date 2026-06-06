@@ -31,7 +31,7 @@ export async function GET() {
     .eq("id", 1)
     .maybeSingle();
 
-  if (error) return NextResponse.json({ error: error.message }, { status: 500 });
+  if (error) { console.error("[templates] error:", error); return NextResponse.json({ error: "Erreur interne" }, { status: 500 }); }
   return NextResponse.json((data?.data as TemplateLibrary) ?? EMPTY);
 }
 
@@ -50,6 +50,6 @@ export async function PUT(req: NextRequest) {
     .from("template_state")
     .upsert({ id: 1, data: body, updated_at: new Date().toISOString() });
 
-  if (error) return NextResponse.json({ error: error.message }, { status: 500 });
+  if (error) { console.error("[templates] error:", error); return NextResponse.json({ error: "Erreur interne" }, { status: 500 }); }
   return NextResponse.json({ success: true });
 }

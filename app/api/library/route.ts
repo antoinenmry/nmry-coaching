@@ -21,12 +21,13 @@ export async function PUT(req: NextRequest) {
   const user = await requireElevated();
   if (!user) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
 
-  const body = await req.json();
+  const body = await req.json().catch(() => null);
+  if (!body) return NextResponse.json({ error: "Corps de requête invalide" }, { status: 400 });
   const adminClient = createAdminClient();
   const { error } = await adminClient
     .from("library_state")
     .upsert({ id: 1, data: body, updated_at: new Date().toISOString() });
 
-  if (error) return NextResponse.json({ error: error.message }, { status: 500 });
+  if (error) { console.error("[library] upsert error:", error); return NextResponse.json({ error: "Erreur de sauvegarde" }, { status: 500 }); }
   return NextResponse.json({ success: true });
 }

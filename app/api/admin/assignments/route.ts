@@ -28,6 +28,18 @@ export async function POST(req: NextRequest) {
 
   const adminClient = createAdminClient();
 
+  // Vérifier que coachId est bien un coach/admin et clientId un sportif
+  const [coachRes, clientRes] = await Promise.all([
+    adminClient.from("profiles").select("role").eq("id", coachId).maybeSingle(),
+    adminClient.from("profiles").select("role").eq("id", clientId).maybeSingle(),
+  ]);
+  if (!coachRes.data || !["coach", "admin"].includes(coachRes.data.role)) {
+    return NextResponse.json({ error: "coachId invalide" }, { status: 400 });
+  }
+  if (clientRes.data?.role !== "client") {
+    return NextResponse.json({ error: "clientId invalide" }, { status: 400 });
+  }
+
   // Supprimer l'affectation précédente du client (un client = un coach)
   await adminClient.from("coach_client").delete().eq("client_id", clientId);
 
@@ -35,6 +47,6 @@ export async function POST(req: NextRequest) {
     .from("coach_client")
     .insert({ coach_id: coachId, client_id: clientId });
 
-  if (error) return NextResponse.json({ error: error.message }, { status: 500 });
+  if (error) return NextResponse.json({ error: "Erreur lors de l'affectation" }, { status: 500 });
   return NextResponse.json({ success: true });
 }

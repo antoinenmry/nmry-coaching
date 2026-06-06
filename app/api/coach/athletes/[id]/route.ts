@@ -33,8 +33,20 @@ export async function DELETE(
   }
 
   const admin = createAdminClient();
+
+  // Un coach ne peut supprimer que ses propres clients affectés
+  if (caller.role === "coach") {
+    const { data: link } = await admin
+      .from("coach_client")
+      .select("id")
+      .eq("coach_id", caller.user.id)
+      .eq("client_id", id)
+      .maybeSingle();
+    if (!link) return NextResponse.json({ error: "Ce sportif ne vous est pas affecté" }, { status: 403 });
+  }
+
   const { error } = await admin.auth.admin.deleteUser(id);
-  if (error) return NextResponse.json({ error: error.message }, { status: 500 });
+  if (error) return NextResponse.json({ error: "Erreur lors de la suppression" }, { status: 500 });
   return NextResponse.json({ success: true });
 }
 
@@ -63,7 +75,7 @@ export async function PATCH(
       return NextResponse.json({ error: "role invalide" }, { status: 400 });
     }
     const { error } = await admin.from("profiles").update({ role }).eq("id", id);
-    if (error) return NextResponse.json({ error: error.message }, { status: 500 });
+    if (error) { console.error("[athletes] role update error:", error); return NextResponse.json({ error: "Erreur interne" }, { status: 500 }); }
     return NextResponse.json({ success: true });
   }
 
@@ -83,6 +95,6 @@ export async function PATCH(
   }
 
   const { error } = await admin.from("profiles").update({ status }).eq("id", id);
-  if (error) return NextResponse.json({ error: error.message }, { status: 500 });
+  if (error) { console.error("[athletes] status update error:", error); return NextResponse.json({ error: "Erreur interne" }, { status: 500 }); }
   return NextResponse.json({ success: true });
 }

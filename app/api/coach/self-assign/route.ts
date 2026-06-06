@@ -21,10 +21,20 @@ export async function POST(req: NextRequest) {
   const user = await requireCoach();
   if (!user) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
 
-  const { clientId } = await req.json();
+  const { clientId } = await req.json().catch(() => ({}));
   if (!clientId) return NextResponse.json({ error: "clientId required" }, { status: 400 });
 
   const adminClient = createAdminClient();
+
+  // Vérifier que clientId correspond bien à un sportif (pas un coach ou admin)
+  const { data: clientProfile } = await adminClient
+    .from("profiles")
+    .select("role")
+    .eq("id", clientId)
+    .maybeSingle();
+  if (!clientProfile || clientProfile.role !== "client") {
+    return NextResponse.json({ error: "Cet utilisateur n'est pas un sportif" }, { status: 400 });
+  }
 
   // Vérifier que ce client n'est pas déjà affecté à un autre coach
   const { data: existing } = await adminClient

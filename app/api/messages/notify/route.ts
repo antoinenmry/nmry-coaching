@@ -11,12 +11,19 @@ import { getUserNotifPrefs } from "@/lib/notifPrefs";
  *
  * Body: { recipientId: string, senderName: string, messageText?: string, isVoice?: boolean }
  */
+const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+
 export async function POST(req: NextRequest) {
   const supabase = await createClient();
   const { data: { user } } = await supabase.auth.getUser();
   if (!user) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
 
-  const { recipientId, clientId, senderName, messageText, isVoice } = await req.json();
+  const { recipientId, clientId, senderName, messageText, isVoice } = await req.json().catch(() => ({}));
+
+  // Valider recipientId si fourni (évite l'injection dans le filtre PostgREST)
+  if (recipientId && !UUID_RE.test(recipientId)) {
+    return NextResponse.json({ skipped: true, reason: "invalid_recipient" });
+  }
 
   const admin = createAdminClient();
   let targetId: string | null = recipientId ?? null;

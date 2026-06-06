@@ -22,7 +22,7 @@ export async function POST(req: NextRequest) {
   const { data: { user } } = await supabase.auth.getUser();
   if (!user) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
 
-  const { clientId, messageText, clientName } = await req.json();
+  const { clientId, messageText, clientName } = await req.json().catch(() => ({}));
   if (!clientId) return NextResponse.json({ error: "Missing clientId" }, { status: 400 });
 
   // Vérifier que clientId correspond bien à l'utilisateur connecté (anti-usurpation)
@@ -125,7 +125,7 @@ export async function POST(req: NextRequest) {
     });
   } catch (err) {
     console.error("[NMRY] Gmail SMTP error:", err);
-    return NextResponse.json({ sent: false, reason: String(err) }, { status: 500 });
+    return NextResponse.json({ sent: false, reason: "email_error" }, { status: 500 });
   }
 
   // Notification push au coach si pref activée (fire-and-forget)
