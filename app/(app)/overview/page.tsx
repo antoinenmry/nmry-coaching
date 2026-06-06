@@ -4,13 +4,14 @@ import { useEffect, useState } from "react";
 import { useData } from "@/components/DataProvider";
 import { createClient } from "@/lib/supabase/client";
 import { daysUntil, countdownLabel, frenchDate } from "@/lib/dates";
-import type { AppState, Goal, Followup, Profile } from "@/lib/types";
+import type { AppState, Goal, Followup, Profile, ChatMessage } from "@/lib/types";
 import { emptyState } from "@/lib/types";
 
 interface ClientData {
   profile: Profile;
   goals: Goal[];
   injuries: Followup[];
+  urgentMessages: ChatMessage[];
 }
 
 export default function OverviewPage() {
@@ -41,6 +42,7 @@ export default function OverviewPage() {
           profile,
           goals: state.goals ?? [],
           injuries: (state.followups ?? []).filter((f) => f.type === "injury"),
+          urgentMessages: (state.messages ?? []).filter(m => m.isUrgent && !m.isRead),
         };
       });
 
@@ -56,6 +58,14 @@ export default function OverviewPage() {
   if (role !== "coach" && role !== "admin") {
     return <p className="py-10 text-center text-dim">Accès réservé au coach.</p>;
   }
+
+  // Agrégation globale — messages urgents non lus
+  const allUrgent = data.flatMap(cd =>
+    cd.urgentMessages.map(m => ({
+      ...m,
+      clientName: cd.profile.name || cd.profile.email,
+    }))
+  );
 
   // Agrégation globale — blessures
   const allInjuries: (Followup & { clientName: string })[] = data
@@ -97,6 +107,24 @@ export default function OverviewPage() {
   return (
     <div>
       <p className="mb-4 text-sm text-dim">{data.length} sportif{data.length > 1 ? "s" : ""}</p>
+
+      {/* Bandeau messages urgents non lus */}
+      {allUrgent.length > 0 && (
+        <div className="mb-4 rounded-2xl border border-danger/50 bg-danger/8 p-4">
+          <p className="mb-2.5 flex items-center gap-2 font-bold text-danger">
+            🚨 {allUrgent.length} message{allUrgent.length > 1 ? "s" : ""} urgent{allUrgent.length > 1 ? "s" : ""} non lu{allUrgent.length > 1 ? "s" : ""}
+          </p>
+          <div className="space-y-2">
+            {allUrgent.map(m => (
+              <div key={m.id} className="flex items-start gap-2 rounded-xl bg-danger/10 px-3 py-2">
+                <span className="mt-0.5 shrink-0 text-[13px] font-bold text-danger">{m.clientName}</span>
+                <span className="text-dim">—</span>
+                <span className="text-[13px] leading-snug">{m.isVoice ? "🎤 Message vocal" : m.text.slice(0, 80)}</span>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
 
       {/* Bandeau blessures actives */}
       {activeInjuries.length > 0 && (

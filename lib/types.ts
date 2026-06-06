@@ -72,6 +72,7 @@ export interface UserProfileData {
   weight: string;     // kg
   sports: string[];   // sports sélectionnés
   diet: string;
+  dietComment?: string; // commentaire / retour du sportif sur sa diète
 }
 
 export interface GoalEvent {
@@ -95,8 +96,20 @@ export interface Followup {
   id: string;
   date: string;       // date de début (ou date d'ajout pour les notes)
   dateEnd?: string;   // date de fin (blessures uniquement)
-  type: "note" | "injury";
+  type: "note" | "injury" | "pain"; // pain = douleur confinée au suivi ; injury = visible plan + overview
   text: string;
+}
+
+export interface ChatMessage {
+  id: string;
+  text: string;
+  isUrgent: boolean;
+  isVoice: boolean;
+  audioUrl?: string;    // base64 data URL audio/webm
+  createdAt: string;    // ISO timestamp
+  senderId: string;     // user id de l'expéditeur
+  senderName?: string;  // dénormalisé pour affichage
+  isRead: boolean;
 }
 
 // ---- Bibliothèque d'exercices (filtres personnalisables) ----
@@ -173,6 +186,7 @@ export interface AppState {
   sessions: SessionInstance[]; // toutes les séances (date = null si dans la banque)
   goals: Goal[];
   followups: Followup[];
+  messages: ChatMessage[];     // chat coach ↔ sportif (stocké côté sportif)
   library: ExerciseLibrary;
   records: RecordsData;
   preferences: UserPreferences;
@@ -233,6 +247,7 @@ export const emptyState = (): AppState => ({
   sessions: [],
   goals: [],
   followups: [],
+  messages: [],
   library: defaultLibrary(),
   records: emptyRecords(),
   preferences: { cardColors: {}, cardColorMode: "arc" },

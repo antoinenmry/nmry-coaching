@@ -32,6 +32,7 @@ export default function Dashboard() {
   const { me, state, loading, role } = useData();
   const isCoach = role === "coach" || role === "admin";
   const displayName = state.profile.name || me?.name || me?.email || "Moi";
+  const unreadMessages = (state.messages ?? []).filter(m => !m.isRead && m.senderId !== me?.id).length;
 
   if (loading) return <DashboardSkeleton />;
   const cardColors = state.preferences?.cardColors ?? {};
@@ -78,6 +79,12 @@ export default function Dashboard() {
   <img src={state.profile.photo} alt="avatar" className="h-10 w-10 shrink-0 rounded-full object-cover border border-line" />
 ) : (
   <span className="text-3xl">{c.icon}</span>
+)}
+{/* Badge messages non lus sur Mon Suivi */}
+{c.href === "/followup" && unreadMessages > 0 && (
+  <span className="flex h-5 w-5 items-center justify-center rounded-full bg-danger text-[10px] font-bold text-white">
+    {unreadMessages > 9 ? "9+" : unreadMessages}
+  </span>
 )}
   
 {/* Le badge avec J-X, Nom et Lieu de la compétition au centre */}
