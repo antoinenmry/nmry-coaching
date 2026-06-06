@@ -1,11 +1,16 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
 import { createAdminClient } from "@/lib/supabase/admin";
-import { Resend } from "resend";
+import nodemailer from "nodemailer";
 
 /**
  * POST /api/messages/urgent
  * Déclenche un email d'alerte au coach lorsqu'un sportif envoie un message urgent.
+ * Utilise Gmail SMTP avec un mot de passe d'application Google.
+ *
+ * Variables d'env requises :
+ *   GMAIL_USER         ex: simon.nemery@gmail.com
+ *   GMAIL_APP_PASSWORD ex: abcdefghijklmnop (16 chars, sans espaces)
  *
  * Body: { clientId: string, messageText: string, clientName: string }
  */
@@ -43,69 +48,77 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ sent: false, reason: "coach_email_not_found" });
   }
 
-  // 4. Envoyer l'email via Resend (instancié ici, pas au module-level)
-  if (!process.env.RESEND_API_KEY) {
-    console.warn("[NMRY] RESEND_API_KEY manquant — email non envoyé");
-    return NextResponse.json({ sent: false, reason: "resend_not_configured" });
+  // 4. Vérifier que Gmail est configuré
+  if (!process.env.GMAIL_USER || !process.env.GMAIL_APP_PASSWORD) {
+    console.warn("[NMRY] GMAIL_USER ou GMAIL_APP_PASSWORD manquant — email non envoyé");
+    return NextResponse.json({ sent: false, reason: "gmail_not_configured" });
   }
-  const resend = new Resend(process.env.RESEND_API_KEY);
-  const fromEmail = process.env.RESEND_FROM_EMAIL ?? "NMRY Coaching <onboarding@resend.dev>";
-  const senderLabel = clientName || "Un sportif";
-  const preview = messageText
-    ? messageText.slice(0, 200)
-    : "🎤 Message vocal";
 
-  const { error } = await resend.emails.send({
-    from: fromEmail,
-    to: [coach.email],
-    subject: `🚨 Message urgent de ${senderLabel} — NMRY Coaching`,
-    html: `
+  // 5. Envoyer via Gmail SMTP
+  const transporter = nodemailer.createTransport({
+    service: "gmail",
+    auth: {
+      user: process.env.GMAIL_USER,
+      pass: process.env.GMAIL_APP_PASSWORD,
+    },
+  });
+
+  const senderLabel = clientName || "Un sportif";
+  const preview = messageText ? messageText.slice(0, 200) : null;
+
+  try {
+    await transporter.sendMail({
+      from: `NMRY Coaching <${process.env.GMAIL_USER}>`,
+      to: coach.email,
+      subject: `🚨 Message urgent de ${senderLabel} — NMRY Coaching`,
+      html: `
 <!DOCTYPE html>
 <html lang="fr">
 <head><meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1"></head>
-<body style="margin:0;padding:0;background:#0d0d0d;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;">
-  <div style="max-width:520px;margin:40px auto;background:#1a1a1a;border-radius:16px;overflow:hidden;border:1px solid #2a2a2a;">
-    <!-- Header -->
+<body style="margin:0;padding:0;background:#f5f5f5;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;">
+  <div style="max-width:520px;margin:40px auto;background:#ffffff;border-radius:16px;overflow:hidden;border:1px solid #e5e5e5;">
+
+    <!-- Header rouge -->
     <div style="background:#ef4444;padding:24px 28px;">
-      <p style="margin:0;color:#fff;font-size:13px;font-weight:600;letter-spacing:.05em;text-transform:uppercase;">NMRY Coaching</p>
+      <p style="margin:0;color:#fff;font-size:12px;font-weight:600;letter-spacing:.08em;text-transform:uppercase;opacity:.85;">NMRY Coaching</p>
       <h1 style="margin:6px 0 0;color:#fff;font-size:22px;font-weight:800;">🚨 Message urgent</h1>
     </div>
 
     <!-- Corps -->
     <div style="padding:28px;">
-      <p style="margin:0 0 6px;color:#a0a0a0;font-size:13px;">De la part de</p>
-      <p style="margin:0 0 20px;color:#ffffff;font-size:18px;font-weight:700;">${senderLabel}</p>
+      <p style="margin:0 0 4px;color:#888;font-size:13px;">De la part de</p>
+      <p style="margin:0 0 24px;color:#111;font-size:20px;font-weight:700;">${senderLabel}</p>
 
-      ${messageText ? `
-      <div style="background:#262626;border-left:3px solid #ef4444;border-radius:8px;padding:16px 18px;margin-bottom:24px;">
-        <p style="margin:0;color:#e5e5e5;font-size:15px;line-height:1.55;">${preview}</p>
+      ${preview ? `
+      <div style="background:#fef2f2;border-left:4px solid #ef4444;border-radius:8px;padding:16px 18px;margin-bottom:28px;">
+        <p style="margin:0;color:#333;font-size:15px;line-height:1.6;">${preview}</p>
       </div>
       ` : `
-      <div style="background:#262626;border-left:3px solid #ef4444;border-radius:8px;padding:16px 18px;margin-bottom:24px;">
-        <p style="margin:0;color:#a0a0a0;font-size:14px;">🎤 Message vocal — écouter dans l'application</p>
+      <div style="background:#fef2f2;border-left:4px solid #ef4444;border-radius:8px;padding:16px 18px;margin-bottom:28px;">
+        <p style="margin:0;color:#888;font-size:14px;">🎤 Message vocal — écouter dans l'application</p>
       </div>
       `}
 
       <a href="https://nmry-coaching.vercel.app/followup"
-         style="display:inline-block;background:#f59e0b;color:#1a1500;padding:14px 28px;border-radius:12px;font-weight:700;font-size:15px;text-decoration:none;">
+         style="display:inline-block;background:#f59e0b;color:#1a1500;padding:14px 32px;border-radius:12px;font-weight:700;font-size:15px;text-decoration:none;">
         Ouvrir les messages →
       </a>
     </div>
 
     <!-- Footer -->
-    <div style="padding:16px 28px;border-top:1px solid #2a2a2a;">
-      <p style="margin:0;color:#555;font-size:12px;">
-        Cet email a été envoyé automatiquement par NMRY Coaching car un message a été marqué comme urgent.
+    <div style="padding:16px 28px;border-top:1px solid #f0f0f0;background:#fafafa;">
+      <p style="margin:0;color:#aaa;font-size:12px;">
+        Email automatique — NMRY Coaching · message marqué comme urgent
       </p>
     </div>
+
   </div>
 </body>
 </html>`,
-  });
-
-  if (error) {
-    console.error("[NMRY] Resend error:", error);
-    return NextResponse.json({ sent: false, reason: error.message }, { status: 500 });
+    });
+  } catch (err) {
+    console.error("[NMRY] Gmail SMTP error:", err);
+    return NextResponse.json({ sent: false, reason: String(err) }, { status: 500 });
   }
 
   return NextResponse.json({ sent: true });
