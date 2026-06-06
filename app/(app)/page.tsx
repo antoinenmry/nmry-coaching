@@ -18,6 +18,12 @@ const CARDS = [
 
 // ─── Helpers info dynamique cartes ──────────────────────────────────────────
 
+type CardInfo = {
+  main: string;  // valeur principale (grande, impactante)
+  sub: string;   // sous-titre discret
+  big?: boolean; // true = valeur courte → très grand (chiffres, %, ✓…)
+};
+
 function getWeekBounds(): [string, string] {
   const d = new Date();
   const day = d.getDay(); // 0 = Dim
@@ -35,7 +41,7 @@ function getCardInfo(
   state: AppState,
   library: ExerciseLibrary,
   today: string,
-): string | null {
+): CardInfo | null {
   const mode = state.preferences?.cardInfoMode?.[href] ?? "hidden";
   if (mode === "hidden") return null;
 
@@ -44,17 +50,22 @@ function getCardInfo(
       const upcoming = state.sessions
         .filter((s) => s.date && s.date >= today)
         .sort((a, b) => a.date!.localeCompare(b.date!));
-      if (mode === "nextSession") return upcoming[0]?.name ?? "Aucune séance prévue";
+      if (mode === "nextSession") {
+        const name = upcoming[0]?.name;
+        return name
+          ? { main: name, sub: "Prochaine séance" }
+          : { main: "—", sub: "Aucune séance prévue", big: true };
+      }
       if (mode === "weekPct") {
         const [mon, sun] = getWeekBounds();
         const week = state.sessions.filter((s) => s.date && s.date >= mon && s.date <= sun);
-        if (!week.length) return "0 séance cette semaine";
+        if (!week.length) return { main: "—", sub: "Aucune séance cette semaine", big: true };
         const done = week.filter((s) => s.done).length;
-        return `${Math.round((done / week.length) * 100)}% réalisées cette semaine`;
+        return { main: `${Math.round((done / week.length) * 100)}%`, sub: "réalisées cette semaine", big: true };
       }
       if (mode === "remaining") {
         const n = upcoming.length;
-        return n === 0 ? "Aucune séance prévue" : `${n} séance${n > 1 ? "s" : ""} à venir`;
+        return { main: String(n), sub: n === 1 ? "séance à venir" : "séances à venir", big: true };
       }
       return null;
     }
@@ -67,41 +78,44 @@ function getCardInfo(
               latest = { date: entry.date, name: ex.name ?? ex.exId, weight: entry.weight, reps: entry.reps };
           }
         }
-        if (!latest) return "Aucun record enregistré";
-        return `${latest.name} · ${latest.weight} kg × ${latest.reps}`;
+        if (!latest) return { main: "—", sub: "Aucun record enregistré", big: true };
+        return { main: `${latest.weight} kg × ${latest.reps}`, sub: latest.name };
       }
       if (mode === "chosenRecord") {
         const exId = state.preferences?.chosenRecordExerciseId;
-        if (!exId) return "→ Choisir un exercice (Settings)";
+        if (!exId) return { main: "→", sub: "Choisir un exercice (Settings)" };
         const exRec = state.records.strength.find((e) => e.exId === exId);
-        if (!exRec?.entries.length) return exRec?.name ?? exId;
+        if (!exRec?.entries.length) return { main: "—", sub: exRec?.name ?? exId };
         const best = [...exRec.entries].sort((a, b) => b.weight - a.weight)[0];
-        return `${exRec.name ?? exId} · ${best.weight} kg × ${best.reps}`;
+        return { main: `${best.weight} kg × ${best.reps}`, sub: exRec.name ?? exId };
       }
       return null;
     }
     case "/followup": {
       if (mode === "activeInjury") {
         const injury = state.followups.find((f) => f.type === "injury" && !f.dateEnd);
-        return injury ? `🤕 ${injury.text}` : "Aucune blessure active";
+        if (!injury) return { main: "✓", sub: "Aucune blessure active", big: true };
+        const txt = injury.text.length > 28 ? injury.text.slice(0, 28) + "…" : injury.text;
+        return { main: txt, sub: "🤕 Blessure active" };
       }
       if (mode === "lastNote") {
         const last = [...state.notes].sort((a, b) => b.createdAt.localeCompare(a.createdAt))[0];
-        if (!last?.text) return "Aucune note";
-        return last.text.length > 42 ? last.text.slice(0, 42) + "…" : last.text;
+        if (!last?.text) return { main: "—", sub: "Aucune note", big: true };
+        const txt = last.text.length > 36 ? last.text.slice(0, 36) + "…" : last.text;
+        return { main: txt, sub: "Dernier bloc-note" };
       }
       return null;
     }
     case "/library": {
       if (mode === "exerciseCount") {
         const n = library.exercises.length;
-        return `${n} exercice${n > 1 ? "s" : ""} disponible${n > 1 ? "s" : ""}`;
+        return { main: String(n), sub: `exercice${n > 1 ? "s" : ""} disponible${n > 1 ? "s" : ""}`, big: true };
       }
       if (mode === "favoriteExercise") {
         const favId = state.preferences?.favoriteExerciseId;
-        if (!favId) return "⭐ Aucun favori défini";
+        if (!favId) return { main: "☆", sub: "Aucun favori défini", big: true };
         const fav = library.exercises.find((e) => e.id === favId);
-        return fav ? `⭐ ${fav.name}` : "⭐ Favori introuvable";
+        return fav ? { main: fav.name, sub: "⭐ Favori" } : { main: "☆", sub: "Favori introuvable", big: true };
       }
       return null;
     }
@@ -231,20 +245,15 @@ export default function Dashboard() {
   </span>
 )}
   
-{/* Le badge avec J-X, Nom et Lieu de la compétition au centre */}
+{/* Overlay Objectifs : J-X, nom, lieu */}
   {c.href === "/goals" && nextGoal && (
     <div className="absolute inset-0 flex flex-col items-center justify-center p-4 text-center">
-      {/* 1. Le J-X */}
       <span className="text-2xl font-black text-ok">
         {countdownLabel(nextGoal.date)}
       </span>
-      
-      {/* 2. Le nom exact de la compétition */}
       <span className="mt-1 text-xs font-bold truncate w-full px-1">
         {nextGoal.competition}
       </span>
-      
-      {/* 3. Le lieu exact */}
       {nextGoal.place && (
         <span className="mt-0.5 text-[11px] text-dim truncate w-full px-1">
           📍 {nextGoal.place}
@@ -252,19 +261,27 @@ export default function Dashboard() {
       )}
     </div>
   )}
+  {/* Overlay info dynamique : même style que Objectifs */}
+  {c.href !== "/profile" && c.href !== "/goals" && (() => {
+    const info = getCardInfo(c.href, state, library, today);
+    if (!info) return null;
+    return (
+      <div className="absolute inset-0 flex flex-col items-center justify-center p-3 text-center">
+        <span className={info.big
+          ? "text-3xl font-black leading-none"
+          : "text-sm font-bold leading-snug line-clamp-3 px-1"
+        }>
+          {info.main}
+        </span>
+        <span className="mt-1.5 text-[11px] text-dim leading-tight px-1">{info.sub}</span>
+      </div>
+    );
+  })()}
 </div>
             
-            {/* Label + info dynamique */}
-            <div className="mt-2">
-              <div className="font-semibold text-lg truncate w-full">
-                {c.href === "/profile" ? displayName : c.label}
-              </div>
-              {c.href !== "/profile" && c.href !== "/goals" && (() => {
-                const info = getCardInfo(c.href, state, library, today);
-                return info ? (
-                  <p className="mt-0.5 text-[11px] text-dim leading-tight line-clamp-2">{info}</p>
-                ) : null;
-              })()}
+            {/* Label (visible quand pas d'overlay) */}
+            <div className="mt-2 font-semibold text-lg truncate w-full">
+              {c.href === "/profile" ? displayName : c.label}
             </div>
           </Link>
         ))}
