@@ -219,11 +219,13 @@ export function DataProvider({ children }: { children: React.ReactNode }) {
 
   const pushLibraryNow = useCallback(async () => {
     if (modeRef.current !== "auth") return;
-    const { error } = await supabase
-      .from("library_state")
-      .upsert({ id: 1, data: libraryRef.current, updated_at: new Date().toISOString() });
-    if (error) console.error("Sauvegarde bibliothèque échouée", error);
-  }, [supabase]);
+    const res = await fetch("/api/library", {
+      method: "PUT",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(libraryRef.current),
+    });
+    if (!res.ok) console.error("Sauvegarde bibliothèque échouée", await res.text());
+  }, []);
 
   const update = useCallback(
     (recipe: (draft: AppState) => void) => {
@@ -249,10 +251,6 @@ export function DataProvider({ children }: { children: React.ReactNode }) {
 
   const updateLibrary = useCallback(
     (recipe: (draft: ExerciseLibrary) => void) => {
-      if (modeRef.current === "auth" && !["coach","admin"].includes(meRef.current?.role ?? "")) {
-        console.error("[NMRY] Modification bibliothèque refusée : rôle insuffisant.");
-        return;
-      }
       if (modeRef.current !== "auth") {
         // Mode invité/local : la bibliothèque vit dans state.library (localStorage)
         update((s) => { recipe(s.library); });

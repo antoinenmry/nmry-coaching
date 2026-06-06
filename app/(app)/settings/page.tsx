@@ -380,7 +380,7 @@ function AdminManager() {
 // ─── Page principale ──────────────────────────────────────────────────────────
 export default function SettingsPage() {
   const { me, role, signOut, state, update } = useData();
-  const { theme, toggleTheme } = useTheme();
+  const { theme, toggleTheme, bgColor, setBgColor, resetBgColor } = useTheme();
   const cardColors = state.preferences?.cardColors ?? {};
   const cardColorMode = state.preferences?.cardColorMode ?? "arc";
   const [tab, setTab] = useState<"affichage" | "sportifs" | "admin">("affichage");
@@ -463,6 +463,49 @@ export default function SettingsPage() {
                 {theme === "dark" ? "🌙 Sombre" : "☀️ Clair"}
               </button>
             </div>
+            {isElevated && (
+              <>
+                <hr className="my-3 border-line" />
+                <div className="flex items-center justify-between">
+                  <div>
+                    <p className="text-sm font-medium">Couleur de fond</p>
+                    <p className="text-[12px] text-dim">Différenciation visuelle coach / sportif</p>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <input
+                      type="color"
+                      value={bgColor}
+                      onChange={(e) => setBgColor(e.target.value)}
+                      className="h-9 w-12 cursor-pointer rounded-lg border border-line bg-surface2 p-1"
+                    />
+                    <button
+                      onClick={resetBgColor}
+                      className="rounded-lg bg-surface2 px-3 py-1.5 text-[12px] text-dim hover:text-ink"
+                    >
+                      Reset
+                    </button>
+                  </div>
+                </div>
+                {/* Presets de couleurs */}
+                <div className="mt-2.5 flex gap-2">
+                  {(theme === "dark"
+                    ? ["#0f1115", "#0a0f1a", "#10091a", "#091510", "#150909", "#0f120a"]
+                    : ["#f4f5f7", "#e8f0fe", "#f3e8ff", "#e8f5e9", "#fce8e6", "#fffde7"]
+                  ).map((preset) => (
+                    <button
+                      key={preset}
+                      onClick={() => setBgColor(preset)}
+                      title={preset}
+                      className="h-7 w-7 shrink-0 rounded-full border-2 transition"
+                      style={{
+                        background: preset,
+                        borderColor: bgColor === preset ? "var(--color-accent)" : "var(--color-line)",
+                      }}
+                    />
+                  ))}
+                </div>
+              </>
+            )}
           </section>
 
           <section className="rounded-2xl border border-line bg-surface p-4">
