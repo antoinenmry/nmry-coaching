@@ -16,7 +16,9 @@ const CARDS = [
 
 function fmtDate(iso: string | null): string {
   if (!iso) return "—";
-  const d = new Date(iso);
+  // Supabase peut retourner des timestamps sans indicateur de timezone → forcer UTC
+  const normalized = /[Z+]/.test(iso.slice(10)) ? iso : iso.replace(" ", "T") + "Z";
+  const d = new Date(normalized);
   const diffMs = Date.now() - d.getTime();
   const diffMin = Math.floor(diffMs / 60_000);
   const diffH = Math.floor(diffMs / 3_600_000);
@@ -187,7 +189,7 @@ export default function SettingsPage() {
   const { theme, toggleTheme } = useTheme();
   const cardColors = state.preferences?.cardColors ?? {};
   const cardColorMode = state.preferences?.cardColorMode ?? "arc";
-  const [athleteView, setAthleteView] = useState<"standard" | "management">("standard");
+  const [tab, setTab] = useState<"affichage" | "sportifs">("affichage");
 
   function setCardColor(href: string, color: string) {
     update((s) => {
@@ -203,7 +205,7 @@ export default function SettingsPage() {
   return (
     <div className="space-y-4">
 
-      {/* Compte */}
+      {/* Compte — toujours visible */}
       <section className="rounded-2xl border border-line bg-surface p-4">
         <h2 className="mb-3 font-bold">Compte</h2>
         <div className="flex items-center justify-between gap-3">
@@ -225,88 +227,87 @@ export default function SettingsPage() {
         </button>
       </section>
 
-      {/* Gestion des sportifs — coach uniquement */}
+      {/* Switch pleine largeur — coach uniquement */}
       {role === "coach" && (
-        <section className="rounded-2xl border border-line bg-surface p-4">
-          <div className="mb-4 flex items-center justify-between gap-3">
-            <h2 className="font-bold">Sportifs</h2>
-            <div className="flex rounded-xl bg-surface2 p-1">
-              {(["standard", "management"] as const).map((m) => (
-                <button
-                  key={m}
-                  onClick={() => setAthleteView(m)}
-                  className={`rounded-lg px-3 py-1.5 text-sm font-semibold transition ${
-                    athleteView === m ? "bg-accent text-[#1a1500]" : "text-dim"
-                  }`}
-                >
-                  {m === "standard" ? "Affichage" : "Gestion"}
-                </button>
-              ))}
-            </div>
-          </div>
-
-          {athleteView === "standard" ? (
-            <p className="text-sm text-dim">
-              Utilisez le sélecteur de sportif dans l&apos;en-tête pour naviguer entre les profils.
-            </p>
-          ) : (
-            <AthletesManager />
-          )}
-        </section>
-      )}
-
-      {/* Apparence */}
-      <section className="rounded-2xl border border-line bg-surface p-4">
-        <h2 className="mb-3 font-bold">Apparence</h2>
-        <div className="flex items-center justify-between">
-          <span className="text-sm">Mode d&apos;affichage</span>
-          <button
-            onClick={toggleTheme}
-            className="rounded-xl border border-line bg-surface2 px-4 py-2 text-sm font-semibold"
-          >
-            {theme === "dark" ? "🌙 Sombre" : "☀️ Clair"}
-          </button>
-        </div>
-      </section>
-
-      {/* Couleurs des cartes */}
-      <section className="rounded-2xl border border-line bg-surface p-4">
-        <h2 className="mb-3 font-bold">Couleurs des cartes</h2>
-        <div className="mb-4 flex rounded-xl bg-surface2 p-1">
-          {(["arc", "full"] as const).map((m) => (
+        <div className="flex rounded-2xl bg-surface2 p-1">
+          {(["affichage", "sportifs"] as const).map((t) => (
             <button
-              key={m}
-              onClick={() => update((s) => { s.preferences.cardColorMode = m; })}
-              className={`flex-1 rounded-lg py-1.5 text-sm font-semibold transition ${
-                cardColorMode === m ? "bg-accent text-[#1a1500]" : "text-dim"
+              key={t}
+              onClick={() => setTab(t)}
+              className={`flex-1 rounded-xl py-2.5 text-sm font-semibold transition ${
+                tab === t ? "bg-accent text-[#1a1500] shadow-sm" : "text-dim"
               }`}
             >
-              {m === "arc" ? "Arc de cercle" : "Fond complet"}
+              {t === "affichage" ? "☀️ Affichage" : "👥 Sportifs"}
             </button>
           ))}
         </div>
-        <div className="space-y-3">
-          {CARDS.map((card) => (
-            <div key={card.href} className="flex items-center justify-between gap-3">
-              <div className="flex items-center gap-2">
-                <span
-                  className="h-5 w-5 shrink-0 rounded-full"
-                  style={{ background: cardColors[card.href] || card.defaultColor }}
-                />
-                <span className="text-sm">{card.icon} {card.label}</span>
-              </div>
-              <input
-                type="color"
-                value={cardColors[card.href] || card.defaultColor}
-                onChange={(e) => setCardColor(card.href, e.target.value)}
-              />
+      )}
+
+      {/* Contenu onglet Affichage (ou toujours visible si athlete) */}
+      {(role !== "coach" || tab === "affichage") && (
+        <>
+          {/* Apparence */}
+          <section className="rounded-2xl border border-line bg-surface p-4">
+            <h2 className="mb-3 font-bold">Apparence</h2>
+            <div className="flex items-center justify-between">
+              <span className="text-sm">Mode d&apos;affichage</span>
+              <button
+                onClick={toggleTheme}
+                className="rounded-xl border border-line bg-surface2 px-4 py-2 text-sm font-semibold"
+              >
+                {theme === "dark" ? "🌙 Sombre" : "☀️ Clair"}
+              </button>
             </div>
-          ))}
-        </div>
-        <button onClick={resetColors} className="mt-4 text-xs text-dim underline">
-          Réinitialiser les couleurs
-        </button>
-      </section>
+          </section>
+
+          {/* Couleurs des cartes */}
+          <section className="rounded-2xl border border-line bg-surface p-4">
+            <h2 className="mb-3 font-bold">Couleurs des cartes</h2>
+            <div className="mb-4 flex rounded-xl bg-surface2 p-1">
+              {(["arc", "full"] as const).map((m) => (
+                <button
+                  key={m}
+                  onClick={() => update((s) => { s.preferences.cardColorMode = m; })}
+                  className={`flex-1 rounded-lg py-1.5 text-sm font-semibold transition ${
+                    cardColorMode === m ? "bg-accent text-[#1a1500]" : "text-dim"
+                  }`}
+                >
+                  {m === "arc" ? "Arc de cercle" : "Fond complet"}
+                </button>
+              ))}
+            </div>
+            <div className="space-y-3">
+              {CARDS.map((card) => (
+                <div key={card.href} className="flex items-center justify-between gap-3">
+                  <div className="flex items-center gap-2">
+                    <span
+                      className="h-5 w-5 shrink-0 rounded-full"
+                      style={{ background: cardColors[card.href] || card.defaultColor }}
+                    />
+                    <span className="text-sm">{card.icon} {card.label}</span>
+                  </div>
+                  <input
+                    type="color"
+                    value={cardColors[card.href] || card.defaultColor}
+                    onChange={(e) => setCardColor(card.href, e.target.value)}
+                  />
+                </div>
+              ))}
+            </div>
+            <button onClick={resetColors} className="mt-4 text-xs text-dim underline">
+              Réinitialiser les couleurs
+            </button>
+          </section>
+        </>
+      )}
+
+      {/* Contenu onglet Sportifs */}
+      {role === "coach" && tab === "sportifs" && (
+        <section className="rounded-2xl border border-line bg-surface p-4">
+          <AthletesManager />
+        </section>
+      )}
 
     </div>
   );
