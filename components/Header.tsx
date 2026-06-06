@@ -1,8 +1,10 @@
 "use client";
 
 import Link from "next/link";
+import Image from "next/image";
 import { usePathname, useRouter } from "next/navigation";
 import { useData } from "./DataProvider";
+import { useTheme } from "./ThemeProvider";
 import ClientSelector from "./ClientSelector";
 
 const TITLES: Record<string, string> = {
@@ -21,6 +23,7 @@ export default function Header() {
   const pathname = usePathname();
   const router = useRouter();
   const { saving, role, me, activeUserId, previewAsClient, setPreviewAsClient } = useData();
+  const { theme } = useTheme();
   const isHome = pathname === "/";
   const realRole = me?.role;
   const isElevated = realRole === "coach" || realRole === "admin";
@@ -42,7 +45,18 @@ export default function Header() {
           <div className="h-10 w-10" />
         )}
         <h1 className="flex-1 text-center text-lg font-bold tracking-[0.15em]">
-          {TITLES[pathname] ?? "NMRY"}
+          {isHome ? (
+            <Image
+              src={theme === "dark" ? "/logo-dark.png" : "/logo-light.png"}
+              alt="NMRY Coaching"
+              width={140}
+              height={48}
+              className="mx-auto h-10 w-auto object-contain"
+              priority
+            />
+          ) : (
+            TITLES[pathname] ?? "NMRY"
+          )}
         </h1>
         <div className="grid h-10 w-10 place-items-center text-xs text-dim">
           {saving ? "…" : ""}
