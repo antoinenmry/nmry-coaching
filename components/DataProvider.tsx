@@ -11,13 +11,21 @@ import {
 import { useRouter } from "next/navigation";
 import { createClient } from "@/lib/supabase/client";
 import { AUTH_ENABLED } from "@/lib/config";
-import { emptyState, type AppState, type ExerciseLibrary, type Profile, type Role } from "@/lib/types";
+import {
+  emptyState,
+  type AppState,
+  type ExerciseLibrary,
+  type Profile,
+  type Role,
+  type TemplateLibrary,
+} from "@/lib/types";
 type Mode = "auth" | "local";
 
 const LOCAL_KEY = "nmry-local-state";
 const LOCAL_ROLE_KEY = "nmry-local-role";
 const COACH_CLIENT_KEY = "nmry-coach-selected-client";
 const LOCAL_PROFILE: Profile = { id: "local", email: "", name: "Moi", role: "client" };
+const EMPTY_TEMPLATES: TemplateLibrary = { sessionTemplates: [], weekTemplates: [] };
 
 function loadLocal(): AppState {
   if (typeof window === "undefined") return emptyState();
@@ -40,6 +48,8 @@ interface DataContextValue {
   update: (recipe: (draft: AppState) => void) => void;
   library: ExerciseLibrary;
   updateLibrary: (recipe: (draft: ExerciseLibrary) => void) => void;
+  templates: TemplateLibrary;
+  updateTemplates: (recipe: (draft: TemplateLibrary) => void) => void;
   loading: boolean;
   saving: boolean;
   activeUserId: string | null;
@@ -70,6 +80,7 @@ export function DataProvider({ children }: { children: React.ReactNode }) {
   const [activeUserId, setActiveUserId] = useState<string | null>(null);
   const [state, setState] = useState<AppState>(emptyState());
   const [library, setLibraryState] = useState<ExerciseLibrary>(emptyState().library);
+  const [templates, setTemplates] = useState<TemplateLibrary>(EMPTY_TEMPLATES);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [role, setRoleState] = useState<Role>("client");
@@ -82,13 +93,16 @@ export function DataProvider({ children }: { children: React.ReactNode }) {
 
   const saveTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const libraryTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const templatesTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const stateRef = useRef(state);
   const libraryRef = useRef(library);
+  const templatesRef = useRef(templates);
   const activeRef = useRef(activeUserId);
   const modeRef = useRef(mode);
   const meRef = useRef(me);
   stateRef.current = state;
   libraryRef.current = library;
+  templatesRef.current = templates;
   activeRef.current = activeUserId;
   modeRef.current = mode;
   meRef.current = me;
@@ -151,6 +165,12 @@ export function DataProvider({ children }: { children: React.ReactNode }) {
         .maybeSingle();
       setLibraryState((libRow?.data as ExerciseLibrary | null) ?? emptyState().library);
 
+      // Charger les templates (coach/admin uniquement — RLS bloque les clients)
+      if (myProfile.role === "coach" || myProfile.role === "admin") {
+        const res = await fetch("/api/templates");
+        if (res.ok) setTemplates((await res.json()) as TemplateLibrary);
+      }
+
       if (myProfile.role === "admin") {
         // Admin : voit tous les profils (clients + coaches)
         const { data: all } = await supabase
@@ -161,7 +181,6 @@ export function DataProvider({ children }: { children: React.ReactNode }) {
         setClients(list);
         const savedId = typeof window !== "undefined" ? localStorage.getItem(COACH_CLIENT_KEY) : null;
         const savedClient = savedId ? list.find((c) => c.id === savedId) : null;
-        // Par défaut : profil propre (pas le premier client de la liste)
         await loadStateFor(savedClient ? savedClient.id : user.id);
       } else if (myProfile.role === "coach") {
         // Coach : uniquement ses clients affectés
@@ -182,7 +201,6 @@ export function DataProvider({ children }: { children: React.ReactNode }) {
         setClients(list);
         const savedId = typeof window !== "undefined" ? localStorage.getItem(COACH_CLIENT_KEY) : null;
         const savedClient = savedId ? list.find((c) => c.id === savedId) : null;
-        // Par défaut : profil propre (pas le premier client de la liste)
         await loadStateFor(savedClient ? savedClient.id : user.id);
       } else {
         await loadStateFor(user.id);
@@ -196,7 +214,6 @@ export function DataProvider({ children }: { children: React.ReactNode }) {
     const userId = activeRef.current;
     if (!userId) return;
 
-    // Mode local ou invité : persistance navigateur.
     if (modeRef.current !== "auth") {
       localStorage.setItem(LOCAL_KEY, JSON.stringify(stateRef.current));
       return;
@@ -227,9 +244,18 @@ export function DataProvider({ children }: { children: React.ReactNode }) {
     if (!res.ok) console.error("Sauvegarde bibliothèque échouée", await res.text());
   }, []);
 
+  const pushTemplatesNow = useCallback(async () => {
+    if (modeRef.current !== "auth") return;
+    const res = await fetch("/api/templates", {
+      method: "PUT",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(templatesRef.current),
+    });
+    if (!res.ok) console.error("Sauvegarde templates échouée", await res.text());
+  }, []);
+
   const update = useCallback(
     (recipe: (draft: AppState) => void) => {
-      // Guard sécurité : un client ne peut jamais écrire sur les données d'un autre utilisateur.
       if (
         modeRef.current === "auth" &&
         meRef.current?.role === "client" &&
@@ -252,7 +278,6 @@ export function DataProvider({ children }: { children: React.ReactNode }) {
   const updateLibrary = useCallback(
     (recipe: (draft: ExerciseLibrary) => void) => {
       if (modeRef.current !== "auth") {
-        // Mode invité/local : la bibliothèque vit dans state.library (localStorage)
         update((s) => { recipe(s.library); });
         return;
       }
@@ -265,6 +290,23 @@ export function DataProvider({ children }: { children: React.ReactNode }) {
       libraryTimer.current = setTimeout(pushLibraryNow, 500);
     },
     [pushLibraryNow, update],
+  );
+
+  const updateTemplates = useCallback(
+    (recipe: (draft: TemplateLibrary) => void) => {
+      if (modeRef.current === "auth" && !["coach","admin"].includes(meRef.current?.role ?? "")) {
+        console.error("[NMRY] Modification templates refusée : rôle insuffisant.");
+        return;
+      }
+      setTemplates((prev) => {
+        const next = structuredClone(prev);
+        recipe(next);
+        return next;
+      });
+      if (templatesTimer.current) clearTimeout(templatesTimer.current);
+      templatesTimer.current = setTimeout(pushTemplatesNow, 500);
+    },
+    [pushTemplatesNow],
   );
 
   const switchClient = useCallback(
@@ -284,7 +326,15 @@ export function DataProvider({ children }: { children: React.ReactNode }) {
 
   return (
     <DataContext.Provider
-      value={{ me, state, update, library, updateLibrary, loading, saving, activeUserId, clients, switchClient, signOut, role: previewAsClient ? "client" : role, setRole, previewAsClient, setPreviewAsClient }}
+      value={{
+        me, state, update,
+        library, updateLibrary,
+        templates, updateTemplates,
+        loading, saving,
+        activeUserId, clients, switchClient, signOut,
+        role: previewAsClient ? "client" : role,
+        setRole, previewAsClient, setPreviewAsClient,
+      }}
     >
       {children}
     </DataContext.Provider>

@@ -144,6 +144,51 @@ export interface ExerciseLibrary {
   exercises: LibraryExercise[];
 }
 
+// ---- Templates (Séances types & Semaines types) — visibles coach/admin seulement ----
+
+/** Exercice prescrit dans une séance type (valeurs par défaut modifiables). */
+export interface TemplateExercise {
+  uid: string;           // identifiant unique dans la séance type
+  exId: string;          // → LibraryExercise.id
+  name: string;          // snapshot du nom (robuste si la biblio évolue)
+  sets: number;
+  setsLabel?: string;    // ex: "3-4"
+  reps: number;
+  repsLabel?: string;    // ex: "8-12"
+  weight: number;        // 0 = non prescrit
+  rpeCoach: number;      // 0 = non prescrit
+  coachComment: string;
+}
+
+/** Séance type : un modèle réutilisable de séance (coach/admin only). */
+export interface SessionTemplate {
+  id: string;
+  name: string;
+  color: string;
+  description: string;
+  exercises: TemplateExercise[];
+}
+
+/** Un slot dans une semaine type : plusieurs séances sur un jour. */
+export interface WeekTemplateDay {
+  dayIndex: number;                      // 0=Lun … 6=Dim
+  sessions: { tplId: string }[];         // références à SessionTemplate.id
+}
+
+/** Semaine type : un modèle de semaine d'entraînement (coach/admin only). */
+export interface WeekTemplate {
+  id: string;
+  name: string;
+  description: string;
+  days: WeekTemplateDay[];               // 0..7 entrées (jours non vides seulement)
+}
+
+/** Ensemble des templates, stocké dans template_state (Supabase). */
+export interface TemplateLibrary {
+  sessionTemplates: SessionTemplate[];
+  weekTemplates: WeekTemplate[];
+}
+
 // ---- Records ----
 
 export type CapDistance = "1km" | "5km" | "10km" | "21km" | "42km";
