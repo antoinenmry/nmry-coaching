@@ -1,8 +1,9 @@
-export type Role = "coach" | "client";
+export type Role = "coach" | "client" | "admin";
 export type AthleteStatus = "active" | "inactive";
 
 /** Données enrichies retournées par GET /api/coach/athletes */
 export interface AthleteAdminData {
+  coach_id?: string | null;    // coach affecté (null = non affecté)
   id: string;
   name: string;
   email: string;
@@ -18,6 +19,21 @@ export interface Profile {
   name: string;
   role: Role;
   status?: AthleteStatus; // "active" par défaut (champ optionnel pour rétrocompat)
+}
+
+/** Vue admin : un coach avec ses clients affectés */
+export interface CoachWithClients {
+  id: string;
+  name: string;
+  email: string;
+  role: "coach" | "admin";
+  clients: Profile[];
+}
+
+/** Vue admin : données complètes pour le panneau d'administration */
+export interface AdminOverview {
+  coaches: CoachWithClients[];
+  unassigned: Profile[]; // clients sans coach
 }
 
 /** Un exercice dans une séance posée (la prescription, éditable). */

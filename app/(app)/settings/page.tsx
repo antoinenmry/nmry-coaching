@@ -3,7 +3,7 @@
 import { useCallback, useEffect, useState } from "react";
 import { useData } from "@/components/DataProvider";
 import { useTheme } from "@/components/ThemeProvider";
-import type { AthleteAdminData, AthleteStatus } from "@/lib/types";
+import type { AthleteAdminData, AthleteStatus, AdminOverview, CoachWithClients, Profile } from "@/lib/types";
 
 const CARDS = [
   { href: "/profile",  icon: "👤", label: "Mon Profil",      defaultColor: "#ffb300" },
@@ -183,13 +183,165 @@ function AthletesManager() {
   );
 }
 
+// ─── Panneau Administration (admin uniquement) ────────────────────────────────
+function AdminManager() {
+  const [overview, setOverview] = useState<AdminOverview | null>(null);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+  const [pending, setPending] = useState<string | null>(null);
+
+  const load = useCallback(async () => {
+    setLoading(true); setError(null);
+    try {
+      const res = await fetch("/api/admin/overview");
+      if (!res.ok) throw new Error(await res.text());
+      setOverview(await res.json());
+    } catch (e) { setError((e as Error).message); }
+    finally { setLoading(false); }
+  }, []);
+
+  useEffect(() => { load(); }, [load]);
+
+  async function changeRole(userId: string, newRole: "client" | "coach") {
+    setPending(userId + "-role");
+    await fetch(`/api/coach/athletes/${userId}`, {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ role: newRole }),
+    });
+    await load();
+    setPending(null);
+  }
+
+  async function unassign(clientId: string) {
+    setPending(clientId + "-unassign");
+    await fetch(`/api/admin/assignments/${clientId}`, { method: "DELETE" });
+    await load();
+    setPending(null);
+  }
+
+  async function assign(clientId: string, coachId: string) {
+    setPending(clientId + "-assign");
+    await fetch("/api/admin/assignments", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ clientId, coachId }),
+    });
+    await load();
+    setPending(null);
+  }
+
+  if (loading) return <p className="py-6 text-center text-sm text-dim">Chargement…</p>;
+  if (error) return <p className="py-6 text-center text-sm text-danger">Erreur : {error}</p>;
+  if (!overview) return null;
+
+  const coaches = overview.coaches;
+  const allCoaches = coaches.filter((c) => c.role === "coach" || c.role === "admin");
+
+  return (
+    <div className="space-y-4">
+      {/* Coaches et leurs clients */}
+      {coaches.map((coach) => (
+        <div key={coach.id} className="rounded-2xl border border-line bg-surface2 p-4">
+          <div className="mb-3 flex items-center justify-between gap-2">
+            <div className="min-w-0">
+              <p className="truncate font-semibold">{coach.name || "—"}</p>
+              <p className="truncate text-xs text-dim">{coach.email}</p>
+            </div>
+            <div className="flex shrink-0 items-center gap-2">
+              <span className={`rounded-full px-2.5 py-1 text-[12px] font-bold ${
+                coach.role === "admin" ? "bg-[#a855f7]/20 text-[#a855f7]" : "bg-accent/20 text-accent"
+              }`}>
+                {coach.role === "admin" ? "Admin" : "Coach"}
+              </span>
+              {coach.role === "coach" && (
+                <button
+                  onClick={() => changeRole(coach.id, "client")}
+                  disabled={!!pending}
+                  className="rounded-lg bg-surface px-2.5 py-1 text-[12px] font-semibold text-dim hover:bg-danger/10 hover:text-danger"
+                >
+                  {pending === coach.id + "-role" ? "…" : "→ Client"}
+                </button>
+              )}
+            </div>
+          </div>
+
+          {/* Clients affectés */}
+          {coach.clients.length === 0 ? (
+            <p className="text-sm text-dim">Aucun client affecté.</p>
+          ) : (
+            <div className="space-y-1.5">
+              {coach.clients.map((client) => (
+                <div key={client.id} className="flex items-center justify-between rounded-xl bg-surface px-3 py-2">
+                  <div className="min-w-0">
+                    <span className="text-sm font-medium">{client.name || client.email}</span>
+                    {client.name && <span className="ml-2 text-xs text-dim">{client.email}</span>}
+                  </div>
+                  <button
+                    onClick={() => unassign(client.id)}
+                    disabled={!!pending}
+                    className="shrink-0 text-[12px] text-dim hover:text-danger"
+                  >
+                    {pending === client.id + "-unassign" ? "…" : "✕"}
+                  </button>
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
+      ))}
+
+      {/* Clients sans coach */}
+      {overview.unassigned.length > 0 && (
+        <div className="rounded-2xl border border-dashed border-line p-4">
+          <p className="mb-3 text-sm font-semibold text-dim">
+            Clients sans coach ({overview.unassigned.length})
+          </p>
+          <div className="space-y-2">
+            {overview.unassigned.map((client) => (
+              <div key={client.id} className="flex items-center justify-between gap-2 rounded-xl bg-surface px-3 py-2">
+                <div className="min-w-0">
+                  <span className="text-sm">{client.name || client.email}</span>
+                  {client.name && <span className="ml-2 text-xs text-dim">{client.email}</span>}
+                </div>
+                <div className="flex shrink-0 items-center gap-2">
+                  <select
+                    defaultValue=""
+                    onChange={(e) => e.target.value && assign(client.id, e.target.value)}
+                    disabled={!!pending}
+                    className="rounded-lg border border-line bg-surface2 px-2 py-1 text-[12px]"
+                  >
+                    <option value="" disabled>Affecter à…</option>
+                    {allCoaches.map((c) => (
+                      <option key={c.id} value={c.id}>{c.name || c.email}</option>
+                    ))}
+                  </select>
+                  <button
+                    onClick={() => changeRole(client.id, "coach")}
+                    disabled={!!pending}
+                    className="rounded-lg bg-surface2 px-2.5 py-1 text-[12px] font-semibold text-dim hover:bg-accent/10 hover:text-accent"
+                  >
+                    {pending === client.id + "-role" ? "…" : "→ Coach"}
+                  </button>
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
 // ─── Page principale ──────────────────────────────────────────────────────────
 export default function SettingsPage() {
   const { me, role, signOut, state, update } = useData();
   const { theme, toggleTheme } = useTheme();
   const cardColors = state.preferences?.cardColors ?? {};
   const cardColorMode = state.preferences?.cardColorMode ?? "arc";
-  const [tab, setTab] = useState<"affichage" | "sportifs">("affichage");
+  const [tab, setTab] = useState<"affichage" | "sportifs" | "admin">("affichage");
+
+  const isElevated = role === "coach" || role === "admin";
 
   function setCardColor(href: string, color: string) {
     update((s) => {
@@ -201,6 +353,13 @@ export default function SettingsPage() {
   function resetColors() {
     update((s) => { s.preferences = { cardColors: {}, cardColorMode: s.preferences?.cardColorMode ?? "arc" }; });
   }
+
+  // Définir les onglets selon le rôle
+  const tabs = [
+    { id: "affichage" as const, label: "☀️ Affichage" },
+    ...(isElevated ? [{ id: "sportifs" as const, label: "👥 Sportifs" }] : []),
+    ...(role === "admin" ? [{ id: "admin" as const, label: "🛡 Admin" }] : []),
+  ];
 
   return (
     <div className="space-y-4">
@@ -214,9 +373,11 @@ export default function SettingsPage() {
             <p className="truncate text-sm text-dim">{me?.email}</p>
           </div>
           <span className={`shrink-0 rounded-full px-2.5 py-1 text-sm font-bold ${
-            role === "coach" ? "bg-accent/20 text-accent" : "bg-accent2/20 text-accent2"
+            role === "admin"  ? "bg-[#a855f7]/20 text-[#a855f7]" :
+            role === "coach"  ? "bg-accent/20 text-accent" :
+                                "bg-accent2/20 text-accent2"
           }`}>
-            {role === "coach" ? "Coach" : "Sportif"}
+            {role === "admin" ? "Admin" : role === "coach" ? "Coach" : "Sportif"}
           </span>
         </div>
         <button
@@ -227,27 +388,26 @@ export default function SettingsPage() {
         </button>
       </section>
 
-      {/* Switch pleine largeur — coach uniquement */}
-      {role === "coach" && (
+      {/* Switch pleine largeur */}
+      {tabs.length > 1 && (
         <div className="flex rounded-2xl bg-surface2 p-1">
-          {(["affichage", "sportifs"] as const).map((t) => (
+          {tabs.map((t) => (
             <button
-              key={t}
-              onClick={() => setTab(t)}
+              key={t.id}
+              onClick={() => setTab(t.id)}
               className={`flex-1 rounded-xl py-2.5 text-sm font-semibold transition ${
-                tab === t ? "bg-accent text-[#1a1500] shadow-sm" : "text-dim"
+                tab === t.id ? "bg-accent text-[#1a1500] shadow-sm" : "text-dim"
               }`}
             >
-              {t === "affichage" ? "☀️ Affichage" : "👥 Sportifs"}
+              {t.label}
             </button>
           ))}
         </div>
       )}
 
-      {/* Contenu onglet Affichage (ou toujours visible si athlete) */}
-      {(role !== "coach" || tab === "affichage") && (
+      {/* Onglet Affichage */}
+      {tab === "affichage" && (
         <>
-          {/* Apparence */}
           <section className="rounded-2xl border border-line bg-surface p-4">
             <h2 className="mb-3 font-bold">Apparence</h2>
             <div className="flex items-center justify-between">
@@ -261,7 +421,6 @@ export default function SettingsPage() {
             </div>
           </section>
 
-          {/* Couleurs des cartes */}
           <section className="rounded-2xl border border-line bg-surface p-4">
             <h2 className="mb-3 font-bold">Couleurs des cartes</h2>
             <div className="mb-4 flex rounded-xl bg-surface2 p-1">
@@ -302,10 +461,17 @@ export default function SettingsPage() {
         </>
       )}
 
-      {/* Contenu onglet Sportifs */}
-      {role === "coach" && tab === "sportifs" && (
+      {/* Onglet Sportifs */}
+      {tab === "sportifs" && isElevated && (
         <section className="rounded-2xl border border-line bg-surface p-4">
           <AthletesManager />
+        </section>
+      )}
+
+      {/* Onglet Admin */}
+      {tab === "admin" && role === "admin" && (
+        <section className="rounded-2xl border border-line bg-surface p-4">
+          <AdminManager />
         </section>
       )}
 

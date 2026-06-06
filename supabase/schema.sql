@@ -116,9 +116,77 @@ create trigger check_role_escalation
   for each row execute function public.prevent_role_escalation();
 
 -- =========================================================================
--- 8) ⚠️ TE DÉSIGNER COMME COACH
---    Inscris-toi d'abord dans l'app avec ton email, PUIS lance cette ligne
---    (remplace l'email) pour passer ton compte en coach :
---
---    update public.profiles set role = 'coach' where email = 'TON_EMAIL_ICI';
+-- 9) MULTI-COACH + SUPER-ADMIN
+-- =========================================================================
+
+-- 9a) Rôle 'admin' autorisé dans profiles
+alter table public.profiles drop constraint if exists profiles_role_check;
+alter table public.profiles add constraint profiles_role_check
+  check (role in ('client','coach','admin'));
+
+-- 9b) Fonction is_admin()
+create or replace function public.is_admin()
+returns boolean language sql security definer stable
+set search_path = public as $$
+  select exists (select 1 from public.profiles where id = auth.uid() and role = 'admin');
+$$;
+
+-- 9c) is_coach() inclut maintenant l'admin (accès équivalent)
+create or replace function public.is_coach()
+returns boolean language sql security definer stable
+set search_path = public as $$
+  select exists (select 1 from public.profiles where id = auth.uid() and role in ('coach','admin'));
+$$;
+
+-- 9d) Trigger : seul l'admin peut changer les rôles
+create or replace function public.prevent_role_escalation()
+returns trigger language plpgsql security definer
+set search_path = public as $$
+begin
+  if OLD.role != NEW.role and not public.is_admin() then
+    raise exception 'Modification du rôle non autorisée';
+  end if;
+  return NEW;
+end;
+$$;
+
+-- 9e) Table d'affectation coach ↔ client
+create table if not exists public.coach_client (
+  coach_id    uuid references auth.users(id) on delete cascade,
+  client_id   uuid references auth.users(id) on delete cascade,
+  assigned_at timestamptz default now(),
+  primary key (coach_id, client_id)
+);
+alter table public.coach_client enable row level security;
+
+drop policy if exists cc_read  on public.coach_client;
+drop policy if exists cc_admin on public.coach_client;
+-- Un coach voit ses propres affectations ; l'admin voit tout
+create policy cc_read on public.coach_client for select
+  using (coach_id = auth.uid() or public.is_admin());
+-- Seul l'admin peut créer/modifier/supprimer les affectations
+create policy cc_admin on public.coach_client for all
+  using (public.is_admin()) with check (public.is_admin());
+
+-- 9f) Policies admin sur profiles et app_state
+drop policy if exists profiles_admin_all on public.profiles;
+create policy profiles_admin_all on public.profiles for all
+  using (public.is_admin()) with check (public.is_admin());
+
+drop policy if exists state_admin_all on public.app_state;
+create policy state_admin_all on public.app_state for all
+  using (public.is_admin()) with check (public.is_admin());
+
+-- =========================================================================
+-- ⚠️  INSTRUCTIONS DE DÉPLOIEMENT
+-- 1) Lancer ce script complet dans Supabase → SQL Editor
+-- 2) Te désigner admin (remplace l'email) :
+--    UPDATE public.profiles SET role = 'admin' WHERE email = 'TON_EMAIL_ICI';
+--    (désactiver le trigger d'abord si nécessaire — voir README)
+-- 3) Pour un coach :
+--    UPDATE public.profiles SET role = 'coach' WHERE email = 'EMAIL_COACH';
+-- 4) Pour affecter un client à un coach :
+--    INSERT INTO public.coach_client (coach_id, client_id)
+--    SELECT c.id, cl.id FROM profiles c, profiles cl
+--    WHERE c.email='coach@email.com' AND cl.email='client@email.com';
 -- =========================================================================

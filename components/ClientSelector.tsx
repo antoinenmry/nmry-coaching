@@ -38,9 +38,12 @@ export default function ClientSelector() {
     return () => document.removeEventListener("mousedown", handleClick);
   }, [open]);
 
-  if (role !== "coach") return null;
+  if (role !== "coach" && role !== "admin") return null;
 
-  const coachableClients = clients.filter((c) => c.role === "client");
+  // Coach : ses clients affectés. Admin : tous les profils (clients + coaches sauf soi)
+  const coachableClients = role === "admin"
+    ? clients.filter((c) => c.id !== me?.id)
+    : clients.filter((c) => c.role === "client");
   const active = clients.find((c) => c.id === activeUserId);
   const activeLabel = active ? (active.name || active.email) : "—";
 

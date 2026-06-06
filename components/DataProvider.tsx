@@ -31,7 +31,7 @@ function loadLocal(): AppState {
 function savedRole(): Role {
   if (typeof window === "undefined") return "client";
   const r = localStorage.getItem(LOCAL_ROLE_KEY);
-  return r === "coach" || r === "client" ? r : "client";
+  return r === "coach" || r === "client" || r === "admin" ? r : "client";
 }
 
 interface DataContextValue {
@@ -148,17 +148,37 @@ export function DataProvider({ children }: { children: React.ReactNode }) {
         .maybeSingle();
       setLibraryState((libRow?.data as ExerciseLibrary | null) ?? emptyState().library);
 
-      if (myProfile.role === "coach") {
+      if (myProfile.role === "admin") {
+        // Admin : voit tous les profils (clients + coaches)
         const { data: all } = await supabase
           .from("profiles")
           .select("id,email,name,role,status")
           .order("created_at");
         const list = (all ?? []) as Profile[];
         setClients(list);
-        // Restaurer le dernier client sélectionné, sinon prendre le premier client
-        const savedId = typeof window !== "undefined"
-          ? localStorage.getItem(COACH_CLIENT_KEY)
-          : null;
+        const savedId = typeof window !== "undefined" ? localStorage.getItem(COACH_CLIENT_KEY) : null;
+        const savedClient = savedId ? list.find((c) => c.id === savedId) : null;
+        const firstClient = list.find((c) => c.role === "client");
+        const target = savedClient ?? firstClient;
+        await loadStateFor(target ? target.id : user.id);
+      } else if (myProfile.role === "coach") {
+        // Coach : uniquement ses clients affectés
+        const { data: assignments } = await supabase
+          .from("coach_client")
+          .select("client_id")
+          .eq("coach_id", user.id);
+        const assignedIds = (assignments ?? []).map((a: { client_id: string }) => a.client_id);
+        let list: Profile[] = [];
+        if (assignedIds.length > 0) {
+          const { data: assigned } = await supabase
+            .from("profiles")
+            .select("id,email,name,role,status")
+            .in("id", assignedIds)
+            .order("created_at");
+          list = (assigned ?? []) as Profile[];
+        }
+        setClients(list);
+        const savedId = typeof window !== "undefined" ? localStorage.getItem(COACH_CLIENT_KEY) : null;
         const savedClient = savedId ? list.find((c) => c.id === savedId) : null;
         const firstClient = list.find((c) => c.role === "client");
         const target = savedClient ?? firstClient;
@@ -183,7 +203,7 @@ export function DataProvider({ children }: { children: React.ReactNode }) {
 
     setSaving(true);
     const now = new Date().toISOString();
-    const isCoachSaving = meRef.current?.role === "coach";
+    const isCoachSaving = ["coach","admin"].includes(meRef.current?.role ?? "");
     const { error } = await supabase.from("app_state").upsert({
       user_id: userId,
       data: stateRef.current,
@@ -228,7 +248,7 @@ export function DataProvider({ children }: { children: React.ReactNode }) {
 
   const updateLibrary = useCallback(
     (recipe: (draft: ExerciseLibrary) => void) => {
-      if (modeRef.current === "auth" && meRef.current?.role !== "coach") {
+      if (modeRef.current === "auth" && !["coach","admin"].includes(meRef.current?.role ?? "")) {
         console.error("[NMRY] Modification bibliothèque refusée : rôle insuffisant.");
         return;
       }
