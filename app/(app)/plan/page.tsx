@@ -300,7 +300,7 @@ function ComposeModal({ onClose, onCreated }: { onClose: () => void; onCreated: 
   function addInline() {
     const trimmed = newName.trim();
     if (!trimmed) return;
-    setInlineExercises((prev) => [...prev, { id: crypto.randomUUID(), name: trimmed }]);
+    setInlineExercises((prev) => [...prev, { id: crypto.randomUUID(), name: trimmed, tags: {}, video: "" }]);
     setNewName("");
   }
 

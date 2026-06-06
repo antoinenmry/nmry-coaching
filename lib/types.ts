@@ -134,6 +134,7 @@ export interface LibraryExercise {
   name: string;
   tags: Record<string, string[]>; // categoryId -> optionId[] (multi-sélection)
   video: string; // URL
+  comment?: string; // notes/description libres (visibles par tous)
 }
 
 export interface ExerciseLibrary {

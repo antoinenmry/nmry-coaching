@@ -8,12 +8,12 @@ import type { LibraryExercise } from "@/lib/types";
 
 export default function LibraryPage() {
   const { library: lib, updateLibrary, loading, role } = useData();
-  const isCoach = role === "coach";
+  const canEdit = role === "coach" || role === "admin";
 
   // catégorie -> options sélectionnées (tableau vide = "Tous")
   const [selected, setSelected] = useState<Record<string, string[]>>({});
   const [search, setSearch] = useState("");
-  const [editing, setEditing] = useState<LibraryExercise | null>(null);
+  const [viewing, setViewing] = useState<{ ex: LibraryExercise; edit: boolean } | null>(null);
   const [creating, setCreating] = useState(false);
   const [managingFilters, setManagingFilters] = useState(false);
 
@@ -53,7 +53,7 @@ export default function LibraryPage() {
         <h2 className="text-xl font-bold">
           📚 Bibliothèque <span className="text-dim">({lib.exercises.length})</span>
         </h2>
-        {isCoach && (
+        {canEdit && (
           <div className="flex gap-2">
             <button
               onClick={() => setManagingFilters(true)}
@@ -124,8 +124,9 @@ export default function LibraryPage() {
               key={ex.id}
               ex={ex}
               tagLabels={tagLabels(ex, lib.categories)}
-              isCoach={isCoach}
-              onEdit={() => setEditing(ex)}
+              canEdit={canEdit}
+              onView={() => setViewing({ ex, edit: false })}
+              onEdit={() => setViewing({ ex, edit: true })}
               onDelete={() =>
                 updateLibrary((lib) => {
                   lib.exercises = lib.exercises.filter((e) => e.id !== ex.id);
@@ -136,16 +137,25 @@ export default function LibraryPage() {
         </div>
       )}
 
-      {(creating || editing) && (
+      {/* Modal création */}
+      {creating && (
         <ExerciseModal
           categories={lib.categories}
-          exercise={editing}
-          onClose={() => {
-            setCreating(false);
-            setEditing(null);
-          }}
+          exercise={null}
+          onClose={() => setCreating(false)}
         />
       )}
+
+      {/* Modal visualisation / édition */}
+      {viewing && (
+        <ExerciseModal
+          categories={lib.categories}
+          exercise={viewing.ex}
+          readOnly={!viewing.edit}
+          onClose={() => setViewing(null)}
+        />
+      )}
+
       {managingFilters && (
         <FiltersModal categories={lib.categories} onClose={() => setManagingFilters(false)} />
       )}
@@ -186,25 +196,44 @@ function Chip({
 function ExerciseCard({
   ex,
   tagLabels,
-  isCoach,
+  canEdit,
+  onView,
   onEdit,
   onDelete,
 }: {
   ex: LibraryExercise;
   tagLabels: string[];
-  isCoach: boolean;
+  canEdit: boolean;
+  onView: () => void;
   onEdit: () => void;
   onDelete: () => void;
 }) {
   return (
-    <div className="rounded-2xl border border-line bg-surface p-4">
+    <div
+      className="group cursor-pointer rounded-2xl border border-line bg-surface p-4 transition hover:border-accent/40"
+      onClick={canEdit ? onEdit : onView}
+    >
       <div className="flex items-start justify-between gap-2">
-        <h3 className="font-bold">{ex.name}</h3>
-        {isCoach && (
+        <h3 className="font-bold group-hover:text-accent transition-colors">{ex.name}</h3>
+        {canEdit ? (
           <div className="flex shrink-0 gap-1">
-            <button onClick={onEdit} className="grid h-8 w-8 place-items-center rounded-lg bg-surface2" aria-label="Modifier">✏️</button>
-            <button onClick={onDelete} className="grid h-8 w-8 place-items-center rounded-lg bg-surface2" aria-label="Supprimer">🗑️</button>
+            <button
+              onClick={(e) => { e.stopPropagation(); onEdit(); }}
+              className="grid h-8 w-8 place-items-center rounded-lg bg-surface2"
+              aria-label="Modifier"
+            >
+              ✏️
+            </button>
+            <button
+              onClick={(e) => { e.stopPropagation(); onDelete(); }}
+              className="grid h-8 w-8 place-items-center rounded-lg bg-surface2"
+              aria-label="Supprimer"
+            >
+              🗑️
+            </button>
           </div>
+        ) : (
+          <span className="shrink-0 text-[12px] text-dim">Voir →</span>
         )}
       </div>
 
@@ -216,11 +245,14 @@ function ExerciseCard({
         </div>
       )}
 
-      {ex.video && (
-        <a href={ex.video} target="_blank" rel="noreferrer" className="mt-3 inline-block text-sm text-accent2">
-          ▶ Voir la vidéo
-        </a>
-      )}
+      <div className="mt-2 flex flex-wrap items-center gap-3">
+        {ex.video && (
+          <span className="text-sm text-accent2">▶ Vidéo</span>
+        )}
+        {ex.comment && (
+          <span className="text-[12px] text-dim italic truncate">💬 {ex.comment}</span>
+        )}
+      </div>
     </div>
   );
 }
