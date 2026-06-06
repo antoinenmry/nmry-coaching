@@ -158,9 +158,8 @@ export function DataProvider({ children }: { children: React.ReactNode }) {
         setClients(list);
         const savedId = typeof window !== "undefined" ? localStorage.getItem(COACH_CLIENT_KEY) : null;
         const savedClient = savedId ? list.find((c) => c.id === savedId) : null;
-        const firstClient = list.find((c) => c.role === "client");
-        const target = savedClient ?? firstClient;
-        await loadStateFor(target ? target.id : user.id);
+        // Par défaut : profil propre (pas le premier client de la liste)
+        await loadStateFor(savedClient ? savedClient.id : user.id);
       } else if (myProfile.role === "coach") {
         // Coach : uniquement ses clients affectés
         const { data: assignments } = await supabase
@@ -180,9 +179,8 @@ export function DataProvider({ children }: { children: React.ReactNode }) {
         setClients(list);
         const savedId = typeof window !== "undefined" ? localStorage.getItem(COACH_CLIENT_KEY) : null;
         const savedClient = savedId ? list.find((c) => c.id === savedId) : null;
-        const firstClient = list.find((c) => c.role === "client");
-        const target = savedClient ?? firstClient;
-        await loadStateFor(target ? target.id : user.id);
+        // Par défaut : profil propre (pas le premier client de la liste)
+        await loadStateFor(savedClient ? savedClient.id : user.id);
       } else {
         await loadStateFor(user.id);
       }
