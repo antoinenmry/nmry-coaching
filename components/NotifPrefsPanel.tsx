@@ -23,6 +23,7 @@ const DEFAULTS: NotifPrefs = {
   newMessage: true,
   newPlan: true,
   urgentMessage: true,
+  newInjury: true,
   goalReminder: true,
   sessionReminder: true,
 };
