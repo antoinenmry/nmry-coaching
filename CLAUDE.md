@@ -103,21 +103,35 @@ Intercepte `?error=access_denied` sur `/` → redirect `/login?error=lien_invali
   L'architecture supporte plusieurs coachs simultanément.
 
 ## Sécurité
-- **RLS** : `state_self_all` (sportif → ses données), `state_coach_all` (coach → tout le monde),
-  `library_read_all` (tous → lecture), `library_coach_write` (coach → écriture).
+
+### RLS Supabase
+- `state_self_all` (sportif → ses données), `state_coach_all` (coach → tout le monde), `library_read_all` (tous → lecture), `library_coach_write` (coach → écriture).
 - **`template_state`** : RLS `template_coach_all` — `is_coach()` uniquement (bloque les clients).
 - **`broadcasts`** : RLS `broadcast_coach` (coach → ses broadcasts), `broadcast_client_read` (client → broadcasts de son coach).
 - **`push_subscriptions`** : RLS `push_own` (utilisateur → ses propres subscriptions).
 - **`coach_client`** : RLS `cc_read` (coach_id = auth.uid() ou is_admin()). ⚠️ Le client ne peut PAS lire cette table directement → utiliser `/api/me/has-coach` (admin client bypass).
 - **Trigger `prevent_role_escalation`** : empêche un sportif de se passer coach via l'API.
-- **Guard applicatif** : `update()` dans DataProvider refuse si `role=client` et `activeUserId ≠ me.id`.
-- **`updateLibrary()`** : `PUT /api/library` restreint aux coaches/admins (RLS + route guard).
-- **`updateTemplates()`** refuse si rôle n'est pas coach/admin.
-- **Open redirect** : le paramètre `?next=` des callbacks est validé (chemin relatif uniquement).
-- **Routes API coach** : vérifient session + rôle + appartenance (un coach ne peut modifier que ses propres clients).
-- **`clientId` dans body** : vérifié contre `user.id` dans toutes les routes (anti-usurpation).
-- **`CRON_SECRET`** : si absent → 503 (jamais `Bearer undefined` accepté).
-- **`/api/coach/self-assign`** : bloque si client déjà affecté à un autre coach (409 Conflict).
+
+### Guards applicatifs
+- `update()` dans DataProvider refuse si `role=client` et `activeUserId ≠ me.id`.
+- `PUT /api/library` restreint aux coaches/admins (RLS + route guard).
+- `updateTemplates()` refuse si rôle n'est pas coach/admin.
+- Open redirect : `?next=` validé chemin relatif uniquement (`startsWith("/") && !startsWith("//")`) dans `/auth/callback`.
+
+### Guards API (audit complet — dernière passe)
+- **Session** : toutes les routes vérifient `supabase.auth.getUser()` avant toute action.
+- **Rôle** : routes elevées vérifient `role === "coach"|"admin"`, routes admin vérifient `role === "admin"`.
+- **Ownership DELETE** : `DELETE /api/coach/athletes/[id]` — un coach ne peut supprimer que ses propres clients affectés.
+- **Ownership PATCH** : `PATCH /api/coach/athletes/[id]` — un coach ne peut modifier le statut que de ses propres clients.
+- **`clientId` anti-usurpation** : vérifié `=== user.id` dans `urgent`, `notify-injury`, `messages/notify`.
+- **UUID validation** : `recipientId` dans `messages/notify` validé regex UUID avant interpolation PostgREST.
+- **`/api/coach/self-assign`** : vérifie que `clientId` a le rôle `"client"` + bloque si déjà affecté à un autre coach (409).
+- **`/api/admin/assignments`** : vérifie que `coachId` est coach/admin et `clientId` est client avant insertion.
+- **`/api/auth/on-signup`** : anti-replay — `Max(created_at, email_confirmed_at) < 5 min` (couvre session immédiate et flow confirmation email).
+- **`CRON_SECRET`** : si absent → 503 ; si mauvais → 401 (jamais `Bearer undefined` accepté).
+- **Taille** : `broadcasts` max 2 000 chars, `injuryText` max 500 chars.
+- **Erreurs 500** : messages Supabase internes remplacés par messages génériques (pas de fuite d'info).
+- **`req.json()`** : wrappé dans `.catch(() => ({}))` sur toutes les routes POST/DELETE.
 
 ## Rôles coach / sportif
 Exposés par `useData()` : `role`, `me`, `clients`, `activeUserId`, `switchClient`, `library`,
