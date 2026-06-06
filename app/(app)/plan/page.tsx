@@ -774,11 +774,13 @@ function SynthesisView({ cursor, todayKey, sessionsByDate, goalsByDate, injuries
                               <div key={ex.uid} className="px-3 py-2">
                                 <div className="flex items-start justify-between gap-2">
                                   <span className="text-[13px] font-medium">{ex.name}</span>
-                                  {ex.rpeClient > 0 && (
+                                  {ex.failed ? (
+                                    <span className="shrink-0 text-[11px] font-semibold text-danger">❌ Raté</span>
+                                  ) : ex.rpeClient > 0 ? (
                                     <span className="shrink-0 text-[11px] font-semibold text-accent">
                                       RPE client {ex.rpeClient}
                                     </span>
-                                  )}
+                                  ) : null}
                                 </div>
                                 {prescription && (
                                   <p className="mt-0.5 text-[12px] text-dim">{prescription}</p>

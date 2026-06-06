@@ -48,6 +48,7 @@ export interface ExerciseInstance {
   rpeClient: number; // RPE ressenti par le client (0 = non renseigné)
   coachComment: string; // consigne/note du coach pour cet exercice
   clientComment: string; // retour libre du client
+  failed?: boolean; // true si le sportif a marqué l'exercice comme raté
 }
 
 /** Une séance. `date` = null tant qu'elle est dans la banque « À placer ». */

@@ -292,14 +292,28 @@ function ExerciseBlock({
         </>
       )}
 
-      {/* RPE client — éditable client / lecture seule coach */}
+      {/* RPE client + échec — éditable client / lecture seule coach */}
       <div className="mt-2.5 flex items-center gap-2">
         <span className="w-24 shrink-0 text-[13px] text-dim">RPE sportif</span>
-        <span className={`rounded-lg px-2.5 py-1 text-sm font-bold ${ex.rpeClient ? "bg-accent2 text-[#06121f]" : "bg-surface text-dim"}`}>
-          {ex.rpeClient ? `${ex.rpeClient}/10` : "—"}
-        </span>
-        {!isCoach && (
+        {ex.failed ? (
+          <span className="rounded-lg bg-danger/20 px-2.5 py-1 text-sm font-bold text-danger">❌ Raté</span>
+        ) : (
+          <span className={`rounded-lg px-2.5 py-1 text-sm font-bold ${ex.rpeClient ? "bg-accent2 text-[#06121f]" : "bg-surface text-dim"}`}>
+            {ex.rpeClient ? `${ex.rpeClient}/10` : "—"}
+          </span>
+        )}
+        {!isCoach && !ex.failed && (
           <input type="range" min={0} max={10} step={1} value={ex.rpeClient} onChange={(e) => onPatch({ rpeClient: +e.target.value })} className="flex-1" />
+        )}
+        {!isCoach && (
+          <button
+            type="button"
+            onClick={() => onPatch({ failed: !ex.failed, ...(ex.failed ? {} : { rpeClient: 0 }) })}
+            title={ex.failed ? "Retirer l'échec" : "Marquer comme raté"}
+            className={`shrink-0 rounded-lg px-2 py-1 text-[13px] transition ${ex.failed ? "bg-danger text-white" : "bg-surface2 text-dim hover:text-danger"}`}
+          >
+            ❌
+          </button>
         )}
       </div>
 
