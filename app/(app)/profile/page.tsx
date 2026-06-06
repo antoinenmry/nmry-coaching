@@ -55,7 +55,7 @@ export default function ProfilePage() {
         {/* Nom + Photo */}
         <div className="mb-4 flex items-center gap-4">
           <label className="min-w-0 flex-1 block">
-            <span className="mb-1.5 block text-[13px] text-dim">Nom Prénom</span>
+            <span className="mb-1.5 block text-[13px] text-dim">Prénom Nom</span>
             <input value={p.name} onChange={set("name")} placeholder="Prénom Nom" />
           </label>
 

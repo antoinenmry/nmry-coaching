@@ -48,6 +48,8 @@ interface DataContextValue {
   signOut: () => Promise<void>;
   role: Role;
   setRole: (r: Role) => void;
+  previewAsClient: boolean;
+  setPreviewAsClient: (v: boolean) => void;
 }
 
 const DataContext = createContext<DataContextValue | null>(null);
@@ -71,6 +73,7 @@ export function DataProvider({ children }: { children: React.ReactNode }) {
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [role, setRoleState] = useState<Role>("client");
+  const [previewAsClient, setPreviewAsClient] = useState(false);
 
   const setRole = useCallback((r: Role) => {
     setRoleState(r);
@@ -283,7 +286,7 @@ export function DataProvider({ children }: { children: React.ReactNode }) {
 
   return (
     <DataContext.Provider
-      value={{ me, state, update, library, updateLibrary, loading, saving, activeUserId, clients, switchClient, signOut, role, setRole }}
+      value={{ me, state, update, library, updateLibrary, loading, saving, activeUserId, clients, switchClient, signOut, role: previewAsClient ? "client" : role, setRole, previewAsClient, setPreviewAsClient }}
     >
       {children}
     </DataContext.Provider>

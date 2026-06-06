@@ -6,12 +6,13 @@ import { useData } from "./DataProvider";
 import ClientSelector from "./ClientSelector";
 
 const TITLES: Record<string, string> = {
-  "/": "NMRY-coaching",
-  "/profile": "Profil",
-  "/plan": "Planning",
-  "/goals": "Objectifs",
-  "/followup": "Suivi",
-  "/library": "Bibliothèque",
+  "/": "NMRY",
+  "/profile": "Mon Profil",
+  "/plan": "Programmation",
+  "/goals": "Mes Objectifs",
+  "/records": "Mes Records",
+  "/followup": "Mon Suivi",
+  "/library": "Ma Bibliothèque",
   "/settings": "Réglages",
   "/overview": "Vue d'ensemble",
 };
@@ -19,8 +20,12 @@ const TITLES: Record<string, string> = {
 export default function Header() {
   const pathname = usePathname();
   const router = useRouter();
-  const { saving, role } = useData();
+  const { saving, role, me, activeUserId, previewAsClient, setPreviewAsClient } = useData();
   const isHome = pathname === "/";
+  const realRole = me?.role;
+  const isElevated = realRole === "coach" || realRole === "admin";
+  // Affiche le toggle aperçu uniquement si coach/admin consulte le profil d'un autre
+  const showPreview = isElevated && activeUserId !== me?.id;
 
   return (
     <header className="sticky top-0 z-10 border-b border-line bg-bg/90 backdrop-blur">
@@ -44,16 +49,31 @@ export default function Header() {
         </div>
       </div>
 
-      {/* Bandeau inférieur : sélecteur client à gauche, ⚙ à droite */}
+      {/* Bandeau inférieur : sélecteur client à gauche, aperçu + ⚙ à droite */}
       <div className="flex items-center justify-between border-t border-line/50 px-4 py-2">
         {(role === "coach" || role === "admin") ? <ClientSelector /> : <div />}
-        <Link
-          href="/settings"
-          aria-label="Réglages"
-          className="grid h-10 w-10 shrink-0 place-items-center rounded-lg bg-surface2 text-base"
-        >
-          ⚙
-        </Link>
+        <div className="flex items-center gap-2">
+          {showPreview && (
+            <button
+              onClick={() => setPreviewAsClient(!previewAsClient)}
+              title={previewAsClient ? "Quitter l'aperçu sportif" : "Voir en tant que sportif"}
+              className={`rounded-lg px-2.5 py-1.5 text-[12px] font-semibold transition ${
+                previewAsClient
+                  ? "bg-accent text-[#1a1500]"
+                  : "bg-surface2 text-dim hover:text-ink"
+              }`}
+            >
+              {previewAsClient ? "👁 Aperçu actif" : "👁 Aperçu"}
+            </button>
+          )}
+          <Link
+            href="/settings"
+            aria-label="Réglages"
+            className="grid h-10 w-10 shrink-0 place-items-center rounded-lg bg-surface2 text-base"
+          >
+            ⚙
+          </Link>
+        </div>
       </div>
     </header>
   );

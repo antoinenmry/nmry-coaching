@@ -33,25 +33,41 @@ function fmtDate(iso: string | null): string {
 
 // ─── Vue Gestion des Profils ─────────────────────────────────────────────────
 function AthletesManager() {
+  const { role } = useData();
   const [athletes, setAthletes] = useState<AthleteAdminData[]>([]);
+  const [unassigned, setUnassigned] = useState<Profile[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
-  const [deletingId, setDeletingId] = useState<string | null>(null); // modale confirm
-  const [pendingAction, setPendingAction] = useState<string | null>(null); // spinner
+  const [deletingId, setDeletingId] = useState<string | null>(null);
+  const [pendingAction, setPendingAction] = useState<string | null>(null);
 
   const fetchAthletes = useCallback(async () => {
-    setLoading(true);
-    setError(null);
+    setLoading(true); setError(null);
     try {
-      const res = await fetch("/api/coach/athletes");
+      const [res, resU] = await Promise.all([
+        fetch("/api/coach/athletes"),
+        role === "coach" ? fetch("/api/coach/unassigned") : Promise.resolve(null),
+      ]);
       if (!res.ok) throw new Error(await res.text());
       setAthletes(await res.json());
+      if (resU && resU.ok) setUnassigned(await resU.json());
     } catch (e) {
       setError((e as Error).message);
     } finally {
       setLoading(false);
     }
-  }, []);
+  }, [role]);
+
+  async function selfAssign(clientId: string) {
+    setPendingAction(clientId + "-assign");
+    await fetch("/api/coach/self-assign", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ clientId }),
+    });
+    await fetchAthletes();
+    setPendingAction(null);
+  }
 
   useEffect(() => { fetchAthletes(); }, [fetchAthletes]);
 
@@ -82,10 +98,12 @@ function AthletesManager() {
 
   if (loading) return <p className="py-6 text-center text-sm text-dim">Chargement des sportifs…</p>;
   if (error)   return <p className="py-6 text-center text-sm text-danger">Erreur : {error}</p>;
-  if (athletes.length === 0) return <p className="py-6 text-center text-sm text-dim">Aucun sportif enregistré.</p>;
 
   return (
     <>
+      {athletes.length === 0 && unassigned.length === 0 && (
+        <p className="py-6 text-center text-sm text-dim">Aucun sportif enregistré.</p>
+      )}
       <div className="space-y-3">
         {athletes.map((a) => {
           const isActive = a.status === "active";
@@ -142,6 +160,32 @@ function AthletesManager() {
           );
         })}
       </div>
+
+      {/* Sportifs sans coach (coach uniquement) */}
+      {role === "coach" && unassigned.length > 0 && (
+        <div className="mt-4 rounded-2xl border border-dashed border-line p-4">
+          <p className="mb-3 text-sm font-semibold text-dim">
+            Sportifs sans coach ({unassigned.length})
+          </p>
+          <div className="space-y-2">
+            {unassigned.map((c) => (
+              <div key={c.id} className="flex items-center justify-between gap-2 rounded-xl bg-surface px-3 py-2.5">
+                <div className="min-w-0">
+                  <p className="truncate text-sm font-medium">{c.name || "—"}</p>
+                  <p className="truncate text-[12px] text-dim">{c.email}</p>
+                </div>
+                <button
+                  onClick={() => selfAssign(c.id)}
+                  disabled={!!pendingAction}
+                  className="shrink-0 rounded-lg bg-accent/15 px-3 py-1.5 text-[12px] font-semibold text-accent hover:bg-accent/25 disabled:opacity-50"
+                >
+                  {pendingAction === c.id + "-assign" ? "…" : "M'affecter"}
+                </button>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
 
       {/* Modale confirmation suppression */}
       {deletingId && (() => {

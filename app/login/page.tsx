@@ -99,7 +99,7 @@ function LoginForm() {
       <main className="mx-auto flex min-h-screen max-w-sm flex-col justify-center p-5">
         <div className="mb-6 text-center">
           <h1 className="text-2xl font-extrabold tracking-[0.2em]">NMRY</h1>
-          <p className="text-sm text-dim">Coaching musculation</p>
+          <p className="text-sm text-dim">Coaching</p>
         </div>
         <div className="rounded-2xl border border-line bg-surface p-6 text-center">
           <div className="mb-3 text-4xl">📬</div>
@@ -125,7 +125,7 @@ function LoginForm() {
       <main className="mx-auto flex min-h-screen max-w-sm flex-col justify-center p-5">
         <div className="mb-6 text-center">
           <h1 className="text-2xl font-extrabold tracking-[0.2em]">NMRY</h1>
-          <p className="text-sm text-dim">Coaching musculation</p>
+          <p className="text-sm text-dim">Coaching</p>
         </div>
         <div className="rounded-2xl border border-line bg-surface p-6 text-center">
           <div className="mb-3 text-4xl">✉️</div>
@@ -151,7 +151,7 @@ function LoginForm() {
       <main className="mx-auto flex min-h-screen max-w-sm flex-col justify-center p-5">
         <div className="mb-6 text-center">
           <h1 className="text-2xl font-extrabold tracking-[0.2em]">NMRY</h1>
-          <p className="text-sm text-dim">Coaching musculation</p>
+          <p className="text-sm text-dim">Coaching</p>
         </div>
         <form onSubmit={submitForgot} className="rounded-2xl border border-line bg-surface p-5">
           <h2 className="mb-1 text-lg font-bold">Mot de passe oublié</h2>
@@ -190,7 +190,7 @@ function LoginForm() {
     <main className="mx-auto flex min-h-screen max-w-sm flex-col justify-center p-5">
       <div className="mb-6 text-center">
         <h1 className="text-2xl font-extrabold tracking-[0.2em]">NMRY</h1>
-        <p className="text-sm text-dim">Coaching musculation</p>
+        <p className="text-sm text-dim">Coaching</p>
       </div>
 
       <form onSubmit={submitAuth} className="rounded-2xl border border-line bg-surface p-5">
