@@ -245,11 +245,27 @@ export interface NotifPrefs {
   sessionReminder: boolean; // rappel séance du jour à 7h (sportif uniquement)
 }
 
+/** Option d'info affichée sur une carte de l'accueil. */
+export type CardInfoOption =
+  | "hidden"
+  | "nextSession"       // prochaine séance à venir (plan)
+  | "weekPct"           // % séances réalisées cette semaine (plan)
+  | "remaining"         // nombre de séances restantes (plan)
+  | "lastRecord"        // dernier record enregistré (records)
+  | "chosenRecord"      // record d'un exercice au choix (records)
+  | "activeInjury"      // blessure active (suivi)
+  | "lastNote"          // dernier bloc-note (suivi)
+  | "exerciseCount"     // nombre d'exercices disponibles (bibliothèque)
+  | "favoriteExercise"; // exercice favori ⭐ (bibliothèque)
+
 /** Préférences visuelles par compte (couleurs cartes accueil…). */
 export interface UserPreferences {
-  cardColors: Record<string, string>; // href → couleur hex
-  cardColorMode: "arc" | "full";      // arc de cercle ou fond entier
-  notifPrefs?: NotifPrefs;            // préférences notifications (undefined = tout activé par défaut)
+  cardColors: Record<string, string>;              // href → couleur hex
+  cardColorMode: "arc" | "full";                   // arc de cercle ou fond entier
+  cardInfoMode?: Record<string, CardInfoOption>;   // option d'info par carte (href → option)
+  chosenRecordExerciseId?: string;                 // exercice choisi pour "chosenRecord"
+  favoriteExerciseId?: string;                     // exercice favori ⭐ bibliothèque
+  notifPrefs?: NotifPrefs;                         // préférences notifications
 }
 
 /** Document complet d'un client (stocké en JSON dans app_state.data). */
@@ -324,5 +340,5 @@ export const emptyState = (): AppState => ({
   notes: [],
   library: defaultLibrary(),
   records: emptyRecords(),
-  preferences: { cardColors: {}, cardColorMode: "arc" },
+  preferences: { cardColors: {}, cardColorMode: "full" },
 });

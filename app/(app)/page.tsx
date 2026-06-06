@@ -5,7 +5,7 @@ import { useEffect, useState } from "react";
 import { useData } from "@/components/DataProvider";
 import { createClient } from "@/lib/supabase/client";
 import { daysUntil, countdownLabel } from "@/lib/dates";
-import type { ChatMessage } from "@/lib/types";
+import type { AppState, ChatMessage, ExerciseLibrary } from "@/lib/types";
 
 const CARDS = [
   { href: "/profile", icon: "👤", label: "Mon Profil", color: "var(--color-accent)" },
@@ -15,6 +15,100 @@ const CARDS = [
   { href: "/followup", icon: "📝", label: "Mon Suivi", color: "var(--color-danger)" },
   { href: "/library", icon: "📚", label: "Ma Bibliothèque", color: "var(--color-accent)" },
 ];
+
+// ─── Helpers info dynamique cartes ──────────────────────────────────────────
+
+function getWeekBounds(): [string, string] {
+  const d = new Date();
+  const day = d.getDay(); // 0 = Dim
+  const diff = day === 0 ? -6 : 1 - day;
+  const mon = new Date(d);
+  mon.setDate(d.getDate() + diff);
+  const sun = new Date(mon);
+  sun.setDate(mon.getDate() + 6);
+  const fmt = (dt: Date) => dt.toISOString().slice(0, 10);
+  return [fmt(mon), fmt(sun)];
+}
+
+function getCardInfo(
+  href: string,
+  state: AppState,
+  library: ExerciseLibrary,
+  today: string,
+): string | null {
+  const mode = state.preferences?.cardInfoMode?.[href] ?? "hidden";
+  if (mode === "hidden") return null;
+
+  switch (href) {
+    case "/plan": {
+      const upcoming = state.sessions
+        .filter((s) => s.date && s.date >= today)
+        .sort((a, b) => a.date!.localeCompare(b.date!));
+      if (mode === "nextSession") return upcoming[0]?.name ?? "Aucune séance prévue";
+      if (mode === "weekPct") {
+        const [mon, sun] = getWeekBounds();
+        const week = state.sessions.filter((s) => s.date && s.date >= mon && s.date <= sun);
+        if (!week.length) return "0 séance cette semaine";
+        const done = week.filter((s) => s.done).length;
+        return `${Math.round((done / week.length) * 100)}% réalisées cette semaine`;
+      }
+      if (mode === "remaining") {
+        const n = upcoming.length;
+        return n === 0 ? "Aucune séance prévue" : `${n} séance${n > 1 ? "s" : ""} à venir`;
+      }
+      return null;
+    }
+    case "/records": {
+      if (mode === "lastRecord") {
+        let latest: { date: string; name: string; weight: number; reps: number } | null = null;
+        for (const ex of state.records.strength) {
+          for (const entry of ex.entries) {
+            if (!latest || entry.date > latest.date)
+              latest = { date: entry.date, name: ex.name ?? ex.exId, weight: entry.weight, reps: entry.reps };
+          }
+        }
+        if (!latest) return "Aucun record enregistré";
+        return `${latest.name} · ${latest.weight} kg × ${latest.reps}`;
+      }
+      if (mode === "chosenRecord") {
+        const exId = state.preferences?.chosenRecordExerciseId;
+        if (!exId) return "→ Choisir un exercice (Settings)";
+        const exRec = state.records.strength.find((e) => e.exId === exId);
+        if (!exRec?.entries.length) return exRec?.name ?? exId;
+        const best = [...exRec.entries].sort((a, b) => b.weight - a.weight)[0];
+        return `${exRec.name ?? exId} · ${best.weight} kg × ${best.reps}`;
+      }
+      return null;
+    }
+    case "/followup": {
+      if (mode === "activeInjury") {
+        const injury = state.followups.find((f) => f.type === "injury" && !f.dateEnd);
+        return injury ? `🤕 ${injury.text}` : "Aucune blessure active";
+      }
+      if (mode === "lastNote") {
+        const last = [...state.notes].sort((a, b) => b.createdAt.localeCompare(a.createdAt))[0];
+        if (!last?.text) return "Aucune note";
+        return last.text.length > 42 ? last.text.slice(0, 42) + "…" : last.text;
+      }
+      return null;
+    }
+    case "/library": {
+      if (mode === "exerciseCount") {
+        const n = library.exercises.length;
+        return `${n} exercice${n > 1 ? "s" : ""} disponible${n > 1 ? "s" : ""}`;
+      }
+      if (mode === "favoriteExercise") {
+        const favId = state.preferences?.favoriteExerciseId;
+        if (!favId) return "⭐ Aucun favori défini";
+        const fav = library.exercises.find((e) => e.id === favId);
+        return fav ? `⭐ ${fav.name}` : "⭐ Favori introuvable";
+      }
+      return null;
+    }
+    default:
+      return null;
+  }
+}
 
 function DashboardSkeleton() {
   return (
@@ -32,7 +126,8 @@ function DashboardSkeleton() {
 }
 
 export default function Dashboard() {
-  const { me, state, loading, role, clients } = useData();
+  const { me, state, library, loading, role, clients } = useData();
+  const today = new Date().toISOString().slice(0, 10);
   const isCoach = role === "coach" || role === "admin";
   const displayName = state.profile.name || me?.name || me?.email || "Moi";
 
@@ -70,7 +165,7 @@ export default function Dashboard() {
 
   if (loading) return <DashboardSkeleton />;
   const cardColors = state.preferences?.cardColors ?? {};
-  const cardColorMode = state.preferences?.cardColorMode ?? "arc";
+  const cardColorMode = state.preferences?.cardColorMode ?? "full";
 
   // Prochain objectif à venir (le plus proche dans le futur).
   const nextGoal = state.goals
@@ -159,10 +254,18 @@ export default function Dashboard() {
   )}
 </div>
             
-            {/* On affiche le nom de l'utilisateur à la place de "Mon Profil" */}
-          <div className="mt-2 font-semibold text-lg truncate w-full">
-  {c.href === "/profile" ? displayName : c.label}
-</div>
+            {/* Label + info dynamique */}
+            <div className="mt-2">
+              <div className="font-semibold text-lg truncate w-full">
+                {c.href === "/profile" ? displayName : c.label}
+              </div>
+              {c.href !== "/profile" && c.href !== "/goals" && (() => {
+                const info = getCardInfo(c.href, state, library, today);
+                return info ? (
+                  <p className="mt-0.5 text-[11px] text-dim leading-tight line-clamp-2">{info}</p>
+                ) : null;
+              })()}
+            </div>
           </Link>
         ))}
       </div>

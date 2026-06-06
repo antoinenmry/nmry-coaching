@@ -4,7 +4,7 @@ import { useCallback, useEffect, useState } from "react";
 import { useData } from "@/components/DataProvider";
 import { useTheme } from "@/components/ThemeProvider";
 import NotifPrefsPanel from "@/components/NotifPrefsPanel";
-import type { AthleteAdminData, AthleteStatus, AdminOverview, CoachWithClients, Profile } from "@/lib/types";
+import type { AthleteAdminData, AthleteStatus, AdminOverview, CoachWithClients, Profile, CardInfoOption } from "@/lib/types";
 
 const CARDS = [
   { href: "/profile",  icon: "👤", label: "Mon Profil",      defaultColor: "#ffb300" },
@@ -14,6 +14,38 @@ const CARDS = [
   { href: "/followup", icon: "📝", label: "Suivi",            defaultColor: "#ef5350" },
   { href: "/library",  icon: "📚", label: "Bibliothèque",     defaultColor: "#ffb300" },
 ];
+
+// Options d'info par carte (cartes configurables uniquement)
+const CARD_INFO_OPTS: Record<string, { value: CardInfoOption; label: string }[]> = {
+  "/plan": [
+    { value: "hidden",      label: "Masqué" },
+    { value: "nextSession", label: "Prochaine séance" },
+    { value: "weekPct",     label: "% semaine" },
+    { value: "remaining",   label: "Séances restantes" },
+  ],
+  "/records": [
+    { value: "hidden",      label: "Masqué" },
+    { value: "lastRecord",  label: "Dernier record" },
+    { value: "chosenRecord",label: "Au choix ★" },
+  ],
+  "/followup": [
+    { value: "hidden",        label: "Masqué" },
+    { value: "activeInjury",  label: "Blessure active" },
+    { value: "lastNote",      label: "Bloc-note" },
+  ],
+  "/library": [
+    { value: "hidden",           label: "Masqué" },
+    { value: "exerciseCount",    label: "Nb exercices" },
+    { value: "favoriteExercise", label: "Favori ⭐" },
+  ],
+};
+
+const CARD_INFO_LABELS: Record<string, string> = {
+  "/plan":     "🗓️ Programmation",
+  "/records":  "🏆 Mes Records",
+  "/followup": "📝 Mon Suivi",
+  "/library":  "📚 Ma Bibliothèque",
+};
 
 function fmtDate(iso: string | null): string {
   if (!iso) return "—";
@@ -438,8 +470,9 @@ export default function SettingsPage() {
   const { me, role, signOut, state, update } = useData();
   const { theme, toggleTheme, bgColor, setBgColor, resetBgColor } = useTheme();
   const cardColors = state.preferences?.cardColors ?? {};
-  const cardColorMode = state.preferences?.cardColorMode ?? "arc";
+  const cardColorMode = state.preferences?.cardColorMode ?? "full";
   const [tab, setTab] = useState<"affichage" | "sportifs" | "admin">("affichage");
+  const [cardSubTab, setCardSubTab] = useState<"couleurs" | "accueil">("couleurs");
 
   const isElevated = role === "coach" || role === "admin";
 
@@ -570,41 +603,131 @@ export default function SettingsPage() {
           </section>
 
           <section className="rounded-2xl border border-line bg-surface p-4">
-            <h2 className="mb-3 font-bold">Couleurs des cartes</h2>
+            <h2 className="mb-3 font-bold">Cartes</h2>
+
+            {/* Sous-onglets */}
             <div className="mb-4 flex rounded-xl bg-surface2 p-1">
-              {(["arc", "full"] as const).map((m) => (
+              {(["couleurs", "accueil"] as const).map((t) => (
                 <button
-                  key={m}
-                  onClick={() => update((s) => { s.preferences.cardColorMode = m; })}
+                  key={t}
+                  onClick={() => setCardSubTab(t)}
                   className={`flex-1 rounded-lg py-1.5 text-sm font-semibold transition ${
-                    cardColorMode === m ? "bg-accent text-[#1a1500]" : "text-dim"
+                    cardSubTab === t ? "bg-accent text-[#1a1500]" : "text-dim"
                   }`}
                 >
-                  {m === "arc" ? "Arc de cercle" : "Fond complet"}
+                  {t === "couleurs" ? "🎨 Couleurs" : "🏠 Accueil"}
                 </button>
               ))}
             </div>
-            <div className="space-y-3">
-              {CARDS.map((card) => (
-                <div key={card.href} className="flex items-center justify-between gap-3">
-                  <div className="flex items-center gap-2">
-                    <span
-                      className="h-5 w-5 shrink-0 rounded-full"
-                      style={{ background: cardColors[card.href] || card.defaultColor }}
-                    />
-                    <span className="text-sm">{card.icon} {card.label}</span>
-                  </div>
-                  <input
-                    type="color"
-                    value={cardColors[card.href] || card.defaultColor}
-                    onChange={(e) => setCardColor(card.href, e.target.value)}
-                  />
+
+            {/* ─── Sous-onglet Couleurs ─── */}
+            {cardSubTab === "couleurs" && (
+              <>
+                <div className="mb-4 flex rounded-xl bg-surface2 p-1">
+                  {(["arc", "full"] as const).map((m) => (
+                    <button
+                      key={m}
+                      onClick={() => update((s) => { s.preferences.cardColorMode = m; })}
+                      className={`flex-1 rounded-lg py-1.5 text-sm font-semibold transition ${
+                        cardColorMode === m ? "bg-accent text-[#1a1500]" : "text-dim"
+                      }`}
+                    >
+                      {m === "arc" ? "Arc de cercle" : "Fond complet"}
+                    </button>
+                  ))}
                 </div>
-              ))}
-            </div>
-            <button onClick={resetColors} className="mt-4 text-xs text-dim underline">
-              Réinitialiser les couleurs
-            </button>
+                <div className="space-y-3">
+                  {CARDS.map((card) => (
+                    <div key={card.href} className="flex items-center justify-between gap-3">
+                      <div className="flex items-center gap-2">
+                        <span
+                          className="h-5 w-5 shrink-0 rounded-full"
+                          style={{ background: cardColors[card.href] || card.defaultColor }}
+                        />
+                        <span className="text-sm">{card.icon} {card.label}</span>
+                      </div>
+                      <input
+                        type="color"
+                        value={cardColors[card.href] || card.defaultColor}
+                        onChange={(e) => setCardColor(card.href, e.target.value)}
+                      />
+                    </div>
+                  ))}
+                </div>
+                <button onClick={resetColors} className="mt-4 text-xs text-dim underline">
+                  Réinitialiser les couleurs
+                </button>
+              </>
+            )}
+
+            {/* ─── Sous-onglet Accueil ─── */}
+            {cardSubTab === "accueil" && (
+              <div className="space-y-5">
+                <p className="text-[12px] text-dim -mt-1">
+                  Choisissez l&apos;info affichée sur chaque carte. &quot;Masqué&quot; = aucune info.
+                </p>
+
+                {Object.entries(CARD_INFO_OPTS).map(([href, opts]) => {
+                  const current = (state.preferences?.cardInfoMode?.[href] ?? "hidden") as CardInfoOption;
+                  return (
+                    <div key={href}>
+                      <p className="mb-2 text-sm font-semibold">{CARD_INFO_LABELS[href]}</p>
+                      <div className="flex flex-wrap gap-1.5">
+                        {opts.map((opt) => (
+                          <button
+                            key={opt.value}
+                            onClick={() =>
+                              update((s) => {
+                                if (!s.preferences.cardInfoMode) s.preferences.cardInfoMode = {};
+                                s.preferences.cardInfoMode[href] = opt.value;
+                              })
+                            }
+                            className={`rounded-full px-3 py-1.5 text-xs font-semibold transition ${
+                              current === opt.value
+                                ? "bg-accent text-[#1a1500]"
+                                : "bg-surface2 text-dim hover:text-ink"
+                            }`}
+                          >
+                            {opt.label}
+                          </button>
+                        ))}
+                      </div>
+                      {/* Picker exercice pour "Au choix ★" */}
+                      {href === "/records" && current === "chosenRecord" && (
+                        <div className="mt-2">
+                          {state.records.strength.length === 0 ? (
+                            <p className="text-[12px] text-dim">Aucun record enregistré.</p>
+                          ) : (
+                            <select
+                              value={state.preferences?.chosenRecordExerciseId ?? ""}
+                              onChange={(e) =>
+                                update((s) => {
+                                  s.preferences.chosenRecordExerciseId = e.target.value || undefined;
+                                })
+                              }
+                              className="w-full rounded-xl border border-line bg-surface2 px-3 py-2 text-sm"
+                            >
+                              <option value="">Sélectionner un exercice…</option>
+                              {state.records.strength.map((ex) => (
+                                <option key={ex.exId} value={ex.exId}>{ex.name ?? ex.exId}</option>
+                              ))}
+                            </select>
+                          )}
+                        </div>
+                      )}
+                    </div>
+                  );
+                })}
+
+                {/* Objectifs — non configurable */}
+                <div>
+                  <p className="mb-1 text-sm font-semibold">🎯 Mes Objectifs</p>
+                  <p className="text-[12px] text-dim">
+                    Toujours affiché — compte à rebours J-X, nom et lieu de la compétition.
+                  </p>
+                </div>
+              </div>
+            )}
           </section>
         </>
       )}

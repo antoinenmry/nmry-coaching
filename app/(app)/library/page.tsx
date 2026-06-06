@@ -13,7 +13,7 @@ type Tab = "exercises" | "sessions" | "weeks";
 const DAYS = ["Lun", "Mar", "Mer", "Jeu", "Ven", "Sam", "Dim"];
 
 export default function LibraryPage() {
-  const { library: lib, updateLibrary, templates, updateTemplates, loading, role } = useData();
+  const { library: lib, updateLibrary, templates, updateTemplates, loading, role, state, update } = useData();
   const canEdit = role === "coach" || role === "admin";
   const [tab, setTab] = useState<Tab>("exercises");
 
@@ -151,6 +151,13 @@ export default function LibraryPage() {
                   ex={ex}
                   tagLabels={tagLabels(ex, lib.categories)}
                   canEdit={canEdit}
+                  isFav={state.preferences?.favoriteExerciseId === ex.id}
+                  onFav={() =>
+                    update((s) => {
+                      s.preferences.favoriteExerciseId =
+                        s.preferences.favoriteExerciseId === ex.id ? undefined : ex.id;
+                    })
+                  }
                   onView={() => setViewing({ ex, edit: false })}
                   onEdit={() => setViewing({ ex, edit: true })}
                   onDelete={() =>
@@ -328,8 +335,9 @@ function Chip({ active, label, count, onClick }: {
   );
 }
 
-function ExerciseCard({ ex, tagLabels, canEdit, onView, onEdit, onDelete }: {
+function ExerciseCard({ ex, tagLabels, canEdit, isFav, onFav, onView, onEdit, onDelete }: {
   ex: LibraryExercise; tagLabels: string[]; canEdit: boolean;
+  isFav: boolean; onFav: () => void;
   onView: () => void; onEdit: () => void; onDelete: () => void;
 }) {
   return (
@@ -339,16 +347,27 @@ function ExerciseCard({ ex, tagLabels, canEdit, onView, onEdit, onDelete }: {
     >
       <div className="flex items-start justify-between gap-2">
         <h3 className="font-bold transition-colors group-hover:text-accent">{ex.name}</h3>
-        {canEdit ? (
-          <div className="flex shrink-0 gap-1">
-            <button onClick={(e) => { e.stopPropagation(); onEdit(); }}
-              className="grid h-8 w-8 place-items-center rounded-lg bg-surface2" aria-label="Modifier">✏️</button>
-            <button onClick={(e) => { e.stopPropagation(); onDelete(); }}
-              className="grid h-8 w-8 place-items-center rounded-lg bg-surface2" aria-label="Supprimer">🗑️</button>
-          </div>
-        ) : (
-          <span className="shrink-0 text-[12px] text-dim">Voir →</span>
-        )}
+        <div className="flex shrink-0 items-center gap-1">
+          {/* Étoile favori — visible par tous */}
+          <button
+            onClick={(e) => { e.stopPropagation(); onFav(); }}
+            className="grid h-8 w-8 place-items-center rounded-lg bg-surface2 text-base transition hover:scale-110"
+            aria-label={isFav ? "Retirer des favoris" : "Ajouter aux favoris"}
+            title={isFav ? "Retirer des favoris" : "Ajouter aux favoris"}
+          >
+            {isFav ? "⭐" : "☆"}
+          </button>
+          {canEdit ? (
+            <>
+              <button onClick={(e) => { e.stopPropagation(); onEdit(); }}
+                className="grid h-8 w-8 place-items-center rounded-lg bg-surface2" aria-label="Modifier">✏️</button>
+              <button onClick={(e) => { e.stopPropagation(); onDelete(); }}
+                className="grid h-8 w-8 place-items-center rounded-lg bg-surface2" aria-label="Supprimer">🗑️</button>
+            </>
+          ) : (
+            <span className="ml-1 text-[12px] text-dim">Voir →</span>
+          )}
+        </div>
       </div>
       {tagLabels.length > 0 && (
         <div className="mt-2 flex flex-wrap gap-1.5">
