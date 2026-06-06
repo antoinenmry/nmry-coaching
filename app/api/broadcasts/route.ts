@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
 import { createAdminClient } from "@/lib/supabase/admin";
+import { sendPushToCoachClients } from "@/lib/push";
 
 /**
  * POST /api/broadcasts
@@ -46,6 +47,13 @@ export async function POST(req: NextRequest) {
     console.error("[broadcasts] insert error:", error);
     return NextResponse.json({ error: error.message }, { status: 500 });
   }
+
+  // Notification push à tous les sportifs (fire-and-forget)
+  sendPushToCoachClients(user.id, {
+    title: "📢 Message de votre coach",
+    body: message.trim().slice(0, 100),
+    url: "/",
+  }).catch(() => {});
 
   return NextResponse.json(data);
 }

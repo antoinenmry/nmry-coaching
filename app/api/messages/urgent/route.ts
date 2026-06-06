@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
 import { createAdminClient } from "@/lib/supabase/admin";
 import nodemailer from "nodemailer";
+import { sendPushToUser } from "@/lib/push";
 
 /**
  * POST /api/messages/urgent
@@ -120,6 +121,13 @@ export async function POST(req: NextRequest) {
     console.error("[NMRY] Gmail SMTP error:", err);
     return NextResponse.json({ sent: false, reason: String(err) }, { status: 500 });
   }
+
+  // Notification push au coach (fire-and-forget)
+  sendPushToUser(assignment.coach_id, {
+    title: `🚨 Message urgent — ${senderLabel}`,
+    body: messageText ? messageText.slice(0, 100) : "Message vocal urgent",
+    url: "/followup",
+  }).catch(() => {});
 
   return NextResponse.json({ sent: true });
 }
