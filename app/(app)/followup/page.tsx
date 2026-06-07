@@ -196,6 +196,7 @@ function MessagesTab() {
   const messages = isElevated ? (chatState?.messages ?? []) : (state.messages ?? []);
   const [text, setText] = useState("");
   const [isUrgent, setIsUrgent] = useState(false);
+  const [notifyDebug, setNotifyDebug] = useState<string | null>(null);
   const [recording, setRecording] = useState(false);
   const [recTime, setRecTime] = useState(0);
   const mrRef = useRef<MediaRecorder | null>(null);
@@ -249,13 +250,24 @@ function MessagesTab() {
 
     // Notification push au destinataire
     // Coach → notifie le client sélectionné ; Client → notifie son coach (via urgent ou notify)
+    const showResult = async (res: Response) => {
+      try {
+        const data = await res.json();
+        if (data.sent) setNotifyDebug("✅ Notif envoyée");
+        else setNotifyDebug(`⚠️ Non envoyée : ${data.reason ?? JSON.stringify(data)}`);
+      } catch {
+        setNotifyDebug(`⚠️ Réponse illisible (HTTP ${res.status})`);
+      }
+      setTimeout(() => setNotifyDebug(null), 8000);
+    };
+
     if (isElevated && chatClientId) {
       // Coach envoie → notifie le sportif
       fetch("/api/messages/notify", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ recipientId: chatClientId, senderName: me.name || me.email, messageText: msgText }),
-      }).catch(() => {});
+      }).then(showResult).catch((e) => setNotifyDebug("⚠️ Erreur réseau : " + e.message));
     } else if (!isElevated) {
       if (isUrgent) {
         // Message urgent → email + push au coach
@@ -263,14 +275,14 @@ function MessagesTab() {
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({ clientId: me.id, messageText: msgText, clientName: me.name || me.email }),
-        }).catch((err) => console.warn("[NMRY] Urgent email failed:", err));
+        }).then(showResult).catch((e) => setNotifyDebug("⚠️ Erreur réseau : " + e.message));
       } else {
         // Message normal → push au coach
         fetch("/api/messages/notify", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({ clientId: me.id, senderName: me.name || me.email, messageText: msgText }),
-        }).catch(() => {});
+        }).then(showResult).catch((e) => setNotifyDebug("⚠️ Erreur réseau : " + e.message));
       }
     }
   }
@@ -491,6 +503,11 @@ function MessagesTab() {
           Marquer comme urgence 🚨
         </button>
       </div>
+
+      {/* Diagnostic notif (disparaît après 8s) */}
+      {notifyDebug && (
+        <p className="rounded-lg bg-surface2 px-3 py-2 text-[12px] leading-snug text-dim">{notifyDebug}</p>
+      )}
     </div>
   );
 }
