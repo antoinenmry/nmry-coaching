@@ -301,7 +301,11 @@ Page `/library` : 3 onglets — Exercices (tous) | Séances types (coach/admin) 
 - `public/icon-192.png` + `public/icon-512.png` → icônes carrées générées avec Pillow (logo centré + padding)
 - `public/logo-light.png` / `public/logo-dark.png` → logo header (adapté au thème)
 - Service Worker : gère `push` event → `showNotification`, clic → ouvre l'app sur la bonne page
-- **iOS** : notifications push uniquement si installé en PWA (Safari → Partager → Sur l'écran d'accueil)
+- **SW enregistré globalement** via `ServiceWorkerRegistrar` (monté dans `(app)/layout.tsx`) — pas seulement depuis Settings.
+- **`next.config.mjs`** : header `Cache-Control: no-cache` + `Service-Worker-Allowed: /` sur `/sw.js` (scope iOS PWA).
+- **Re-synchro abonnement** : `NotifPrefsPanel` ré-upsert l'abonnement local en base au montage (évite endpoint périmé après réinstall PWA / rotation service push, qui affichait "Activées" sans recevoir de push).
+- **Bouton "🔔 Envoyer une notif de test"** dans Settings → Notifications : `POST /api/push/test` renvoie un diagnostic détaillé (config VAPID, souscription absente, code d'erreur Apple/Google) — pour debug à distance sur mobile.
+- **iOS** : notifications push uniquement si installé en PWA (Safari → Partager → Sur l'écran d'accueil), iOS 16.4+ requis
 - **Android** : fonctionne directement depuis Chrome
 - `lib/push.ts` : `sendPushToUser(userId, payload)` + `sendPushToCoachClients(coachId, payload)`
   — supprime automatiquement les souscriptions expirées (410/404)
@@ -339,6 +343,7 @@ Pour chaque sportif client : rappel séance du jour + rappels J-7/J-1 objectifs 
 | `/api/broadcasts` | POST | Créer broadcast + push | requireCoach |
 | `/api/broadcasts` | GET | Broadcasts actifs pour le client | auth |
 | `/api/push/subscribe` | POST/DELETE | Gérer souscription push | auth |
+| `/api/push/test` | POST | Notif de test à soi-même (diagnostic) | auth |
 | `/api/auth/on-signup` | POST | Push nouvelle inscription → coaches/admins | auth |
 | `/api/me/has-coach` | GET | Vérifie si client a un coach (bypass RLS) | auth |
 | `/api/cron/reminders` | GET | Rappels séance + objectifs (cron 7h) | CRON_SECRET |

@@ -34,6 +34,8 @@ export default function NotifPrefsPanel() {
 
   const [swState, setSwState] = useState<SwState>("loading");
   const [swReg, setSwReg] = useState<ServiceWorkerRegistration | null>(null);
+  const [testMsg, setTestMsg] = useState<string | null>(null);
+  const [testing, setTesting] = useState(false);
 
   const prefs: NotifPrefs = { ...DEFAULTS, ...state.preferences?.notifPrefs };
 
@@ -52,9 +54,42 @@ export default function NotifPrefsPanel() {
       setSwReg(reg);
       if (Notification.permission === "denied") { setSwState("denied"); return; }
       const sub = await reg.pushManager.getSubscription();
+      if (sub) {
+        // Re-synchronise l'abonnement local vers la base : l'UI peut afficher
+        // "Activées" alors que l'endpoint en base est périmé/absent (réinstall PWA,
+        // rotation du service push…). Cet upsert idempotent garde la base à jour.
+        fetch("/api/push/subscribe", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(sub.toJSON()),
+        }).catch(() => {});
+      }
       setSwState(sub ? "subscribed" : "unsubscribed");
     }).catch(() => setSwState("unsupported"));
   }, []);
+
+  async function sendTest() {
+    setTesting(true);
+    setTestMsg(null);
+    try {
+      const res = await fetch("/api/push/test", { method: "POST" });
+      const data = await res.json();
+      if (data.ok) {
+        setTestMsg(`✅ Notif de test envoyée (${data.sent} appareil${data.sent > 1 ? "s" : ""}). Si elle n'apparaît pas, vérifie les réglages iOS de l'app.`);
+      } else if (data.stage === "no_subscription") {
+        setTestMsg("⚠️ Aucun appareil enregistré en base. Désactive puis réactive les notifications, puis réessaie.");
+      } else if (data.stage === "config") {
+        setTestMsg(`❌ Problème serveur : ${data.message}`);
+      } else {
+        const first = data.outcomes?.find((o: { status: string }) => o.status === "failed");
+        setTestMsg(`❌ Échec d'envoi (code ${first?.statusCode ?? "?"}). ${first?.detail ?? ""}`.trim());
+      }
+    } catch {
+      setTestMsg("❌ Erreur réseau lors du test.");
+    } finally {
+      setTesting(false);
+    }
+  }
 
   async function subscribe() {
     if (!swReg) return;
@@ -128,6 +163,22 @@ export default function NotifPrefsPanel() {
           </button>
         )}
       </div>
+
+      {/* Bouton test diagnostic (visible si abonné) */}
+      {swState === "subscribed" && (
+        <div className="space-y-2">
+          <button
+            onClick={sendTest}
+            disabled={testing}
+            className="w-full rounded-xl border border-line bg-surface2 px-3 py-2 text-[12px] font-semibold transition hover:bg-surface disabled:opacity-50"
+          >
+            {testing ? "Envoi…" : "🔔 Envoyer une notif de test"}
+          </button>
+          {testMsg && (
+            <p className="rounded-lg bg-surface2 px-3 py-2 text-[12px] leading-snug text-dim">{testMsg}</p>
+          )}
+        </div>
+      )}
 
       {/* Préférences détaillées (visible seulement si abonné) */}
       {swState === "subscribed" && (
