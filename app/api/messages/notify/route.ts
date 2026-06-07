@@ -46,15 +46,20 @@ export async function POST(req: NextRequest) {
   if (targetId === user.id) return NextResponse.json({ skipped: true });
 
   // Vérifier que l'expéditeur est bien lié au destinataire dans coach_client
-  const { data: link } = await admin
-    .from("coach_client")
-    .select("id")
-    .or(
-      `and(coach_id.eq.${user.id},client_id.eq.${targetId}),and(coach_id.eq.${targetId},client_id.eq.${user.id})`
-    )
-    .maybeSingle();
+  // (deux requêtes simples — évite le .or() imbriqué avec and() qui peut mal
+  //  se comporter selon la version PostgREST du projet Supabase)
+  const [{ data: linkAsCoach }, { data: linkAsClient }] = await Promise.all([
+    // Cas 1 : user = coach, target = client
+    admin.from("coach_client").select("id")
+      .eq("coach_id", user.id).eq("client_id", targetId).maybeSingle(),
+    // Cas 2 : user = client, target = coach
+    admin.from("coach_client").select("id")
+      .eq("coach_id", targetId).eq("client_id", user.id).maybeSingle(),
+  ]);
 
-  if (!link) return NextResponse.json({ skipped: true, reason: "not_linked" });
+  if (!linkAsCoach && !linkAsClient) {
+    return NextResponse.json({ skipped: true, reason: "not_linked" });
+  }
 
   // Vérifier les préférences du destinataire
   const prefs = await getUserNotifPrefs(targetId);
