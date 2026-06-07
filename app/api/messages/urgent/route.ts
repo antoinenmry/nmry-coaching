@@ -39,20 +39,33 @@ export async function POST(req: NextRequest) {
     .eq("client_id", clientId)
     .maybeSingle();
 
-  if (!assignment?.coach_id) {
-    // Pas de coach affecté — pas d'email à envoyer, ce n'est pas une erreur
-    return NextResponse.json({ sent: false, reason: "no_coach_assigned" });
-  }
+  let coachId: string;
+  let coachEmail: string;
 
-  // 3. Récupérer l'email du coach
-  const { data: coach } = await admin
-    .from("profiles")
-    .select("email, name")
-    .eq("id", assignment.coach_id)
-    .maybeSingle();
-
-  if (!coach?.email) {
-    return NextResponse.json({ sent: false, reason: "coach_email_not_found" });
+  if (assignment?.coach_id) {
+    // Cas normal : coach lié via coach_client
+    const { data: coachProfile } = await admin
+      .from("profiles")
+      .select("email, name")
+      .eq("id", assignment.coach_id)
+      .maybeSingle();
+    if (!coachProfile?.email) {
+      return NextResponse.json({ sent: false, reason: "coach_email_not_found" });
+    }
+    coachId = assignment.coach_id;
+    coachEmail = coachProfile.email;
+  } else {
+    // Fallback : pas de coach_client → notifier le premier admin trouvé
+    const { data: admins } = await admin
+      .from("profiles")
+      .select("id, email")
+      .eq("role", "admin")
+      .limit(1);
+    if (!admins?.length || !admins[0].email) {
+      return NextResponse.json({ sent: false, reason: "no_coach_assigned" });
+    }
+    coachId = admins[0].id;
+    coachEmail = admins[0].email;
   }
 
   // 4. Vérifier que Gmail est configuré
@@ -76,7 +89,7 @@ export async function POST(req: NextRequest) {
   try {
     await transporter.sendMail({
       from: `NMRY Coaching <${process.env.GMAIL_USER}>`,
-      to: coach.email,
+      to: coachEmail,
       subject: `🚨 Message urgent de ${senderLabel} — NMRY Coaching`,
       html: `
 <!DOCTYPE html>
@@ -128,10 +141,10 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ sent: false, reason: "email_error" }, { status: 500 });
   }
 
-  // Notification push au coach si pref activée (fire-and-forget)
-  getUserNotifPrefs(assignment.coach_id).then((prefs) => {
+  // Notification push au coach/admin si pref activée (fire-and-forget)
+  getUserNotifPrefs(coachId).then((prefs) => {
     if (!prefs.urgentMessage) return;
-    return sendPushToUser(assignment.coach_id, {
+    return sendPushToUser(coachId, {
       title: `🚨 Message urgent — ${senderLabel}`,
       body: messageText ? messageText.slice(0, 100) : "Message vocal urgent",
       url: "/followup",
