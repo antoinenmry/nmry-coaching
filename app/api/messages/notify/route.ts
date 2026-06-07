@@ -35,49 +35,61 @@ export async function POST(req: NextRequest) {
 
   let targetId: string | null = recipientId ?? null;
 
-  // Si pas de recipientId direct, chercher le destinataire naturel
+  // Si pas de recipientId direct (= un sportif écrit), on notifie son coach lié
+  // ET tous les admins. Garantit la réception côté staff quel que soit l'état
+  // des liens coach_client (cas app gérée par un admin sans lien explicite, ou
+  // sportif rattaché à un coach différent).
   if (!targetId && clientId) {
     // Vérifier que clientId correspond bien à l'utilisateur connecté
     if (clientId !== user.id) {
       return NextResponse.json({ skipped: true, reason: "client_mismatch" });
     }
-    // Client → chercher son coach dans coach_client
+
+    const recipients = new Set<string>();
+
+    // 1. Coach lié dans coach_client (s'il existe)
     const { data: link } = await admin
       .from("coach_client")
       .select("coach_id")
       .eq("client_id", user.id)
       .maybeSingle();
-    targetId = link?.coach_id ?? null;
+    if (link?.coach_id) recipients.add(link.coach_id);
 
-    // Pas de coach lié → fallback : notifier tous les admins
-    // (cas où l'app est gérée par un admin sans lien coach_client explicite)
-    if (!targetId) {
-      const { data: admins } = await admin
-        .from("profiles")
-        .select("id")
-        .eq("role", "admin");
+    // 2. Tous les admins (référents par défaut)
+    const { data: admins } = await admin
+      .from("profiles")
+      .select("id")
+      .eq("role", "admin");
+    admins?.forEach((a) => recipients.add(a.id));
 
-      if (!admins?.length) return NextResponse.json({ skipped: true, reason: "no_recipient" });
+    recipients.delete(user.id); // jamais se notifier soi-même
 
-      const body = isVoice
-        ? "🎤 Message vocal"
-        : messageText?.slice(0, 100) ?? "Nouveau message";
-
-      await Promise.allSettled(
-        admins
-          .filter((a) => a.id !== user.id)
-          .map(async ({ id }) => {
-            const prefs = await getUserNotifPrefs(id);
-            if (!prefs.newMessage) return;
-            return sendPushToUser(id, {
-              title: `💬 ${senderName || "Message"}`,
-              body,
-              url: "/followup",
-            });
-          })
-      );
-      return NextResponse.json({ sent: true });
+    if (recipients.size === 0) {
+      return NextResponse.json({ skipped: true, reason: "no_recipient" });
     }
+
+    const body = isVoice
+      ? "🎤 Message vocal"
+      : messageText?.slice(0, 100) ?? "Nouveau message";
+
+    const results = await Promise.allSettled(
+      [...recipients].map(async (id) => {
+        const prefs = await getUserNotifPrefs(id);
+        if (!prefs.newMessage) return { id, skipped: "pref_disabled" };
+        await sendPushToUser(id, {
+          title: `💬 ${senderName || "Message"}`,
+          body,
+          url: "/followup",
+        });
+        return { id, ok: true };
+      })
+    );
+
+    const notified = results.filter(
+      (r) => r.status === "fulfilled" && (r.value as { ok?: boolean }).ok
+    ).length;
+
+    return NextResponse.json({ sent: true, recipients: recipients.size, notified });
   }
 
   if (!targetId) return NextResponse.json({ skipped: true, reason: "no_recipient" });

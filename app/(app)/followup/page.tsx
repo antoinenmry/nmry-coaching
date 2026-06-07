@@ -253,8 +253,12 @@ function MessagesTab() {
     const showResult = async (res: Response) => {
       try {
         const data = await res.json();
-        if (data.sent) setNotifyDebug("✅ Notif envoyée");
-        else setNotifyDebug(`⚠️ Non envoyée : ${data.reason ?? JSON.stringify(data)}`);
+        if (data.sent) {
+          const extra = data.recipients !== undefined ? ` (${data.recipients} destinataire(s))` : "";
+          setNotifyDebug(`✅ Notif envoyée${extra}`);
+        } else {
+          setNotifyDebug(`⚠️ Non envoyée : ${data.reason ?? JSON.stringify(data)}`);
+        }
       } catch {
         setNotifyDebug(`⚠️ Réponse illisible (HTTP ${res.status})`);
       }
