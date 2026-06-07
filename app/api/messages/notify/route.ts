@@ -45,20 +45,28 @@ export async function POST(req: NextRequest) {
   if (!targetId) return NextResponse.json({ skipped: true, reason: "no_recipient" });
   if (targetId === user.id) return NextResponse.json({ skipped: true });
 
-  // Vérifier que l'expéditeur est bien lié au destinataire dans coach_client
-  // (deux requêtes simples — évite le .or() imbriqué avec and() qui peut mal
-  //  se comporter selon la version PostgREST du projet Supabase)
-  const [{ data: linkAsCoach }, { data: linkAsClient }] = await Promise.all([
-    // Cas 1 : user = coach, target = client
-    admin.from("coach_client").select("id")
-      .eq("coach_id", user.id).eq("client_id", targetId).maybeSingle(),
-    // Cas 2 : user = client, target = coach
-    admin.from("coach_client").select("id")
-      .eq("coach_id", targetId).eq("client_id", user.id).maybeSingle(),
-  ]);
+  // Un admin peut écrire à n'importe qui (il voit tous les sportifs, sans lien
+  // coach_client). On bypass alors la vérif de lien pour lui.
+  const { data: senderProfile } = await admin
+    .from("profiles").select("role").eq("id", user.id).maybeSingle();
+  const isAdmin = senderProfile?.role === "admin";
 
-  if (!linkAsCoach && !linkAsClient) {
-    return NextResponse.json({ skipped: true, reason: "not_linked" });
+  if (!isAdmin) {
+    // Vérifier que l'expéditeur est bien lié au destinataire dans coach_client
+    // (deux requêtes simples — évite le .or() imbriqué avec and() qui peut mal
+    //  se comporter selon la version PostgREST du projet Supabase)
+    const [{ data: linkAsCoach }, { data: linkAsClient }] = await Promise.all([
+      // Cas 1 : user = coach, target = client
+      admin.from("coach_client").select("id")
+        .eq("coach_id", user.id).eq("client_id", targetId).maybeSingle(),
+      // Cas 2 : user = client, target = coach
+      admin.from("coach_client").select("id")
+        .eq("coach_id", targetId).eq("client_id", user.id).maybeSingle(),
+    ]);
+
+    if (!linkAsCoach && !linkAsClient) {
+      return NextResponse.json({ skipped: true, reason: "not_linked" });
+    }
   }
 
   // Vérifier les préférences du destinataire
