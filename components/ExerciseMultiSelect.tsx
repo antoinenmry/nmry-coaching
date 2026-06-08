@@ -76,8 +76,8 @@ export default function ExerciseMultiSelect({
         className="mb-3 w-full"
       />
 
-      {/* Filtres couleur transversaux */}
-      {showFilters && usedColors.length > 0 && (
+      {/* Filtres couleur transversaux — toujours visibles si des couleurs existent */}
+      {usedColors.length > 0 && (
         <div className="mb-2 flex flex-wrap items-center gap-2">
           <span className="text-[12px] text-dim">Couleur :</span>
           {usedColors.map((hex) => {
