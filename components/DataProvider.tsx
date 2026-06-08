@@ -48,6 +48,7 @@ interface DataContextValue {
   update: (recipe: (draft: AppState) => void) => void;
   library: ExerciseLibrary;
   updateLibrary: (recipe: (draft: ExerciseLibrary) => void) => void;
+  flushLibrary: () => Promise<void>;
   templates: TemplateLibrary;
   updateTemplates: (recipe: (draft: TemplateLibrary) => void) => void;
   loading: boolean;
@@ -342,7 +343,7 @@ export function DataProvider({ children }: { children: React.ReactNode }) {
     <DataContext.Provider
       value={{
         me, state, update,
-        library, updateLibrary,
+        library, updateLibrary, flushLibrary: pushLibraryNow,
         templates, updateTemplates,
         loading, saving,
         activeUserId, clients, switchClient, signOut,

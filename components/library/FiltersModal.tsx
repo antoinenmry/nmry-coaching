@@ -24,8 +24,16 @@ export default function FiltersModal({
   categories: FilterCategory[];
   onClose: () => void;
 }) {
-  const { updateLibrary } = useData();
+  const { updateLibrary, flushLibrary } = useData();
   const [openPaletteFor, setOpenPaletteFor] = useState<string | null>(null);
+  const [saving, setSaving] = useState(false);
+
+  async function handleClose() {
+    setSaving(true);
+    await flushLibrary();
+    setSaving(false);
+    onClose();
+  }
 
   const renameCategory = (catId: string, name: string) =>
     updateLibrary((lib) => {
@@ -83,12 +91,18 @@ export default function FiltersModal({
   return (
     <div
       className="fixed inset-0 z-50 flex items-end justify-center bg-black/60 sm:items-center"
-      onClick={(e) => e.target === e.currentTarget && onClose()}
+      onClick={(e) => e.target === e.currentTarget && handleClose()}
     >
       <div className="max-h-[92vh] w-full max-w-2xl overflow-y-auto rounded-t-3xl border-t border-line bg-surface p-5 sm:rounded-3xl sm:border">
         <div className="mb-2 flex items-center justify-between">
           <h2 className="text-lg font-bold">Gérer les filtres</h2>
-          <button onClick={onClose} className="grid h-9 w-9 place-items-center rounded-lg bg-surface2">✕</button>
+          <button
+            onClick={handleClose}
+            disabled={saving}
+            className="flex h-9 min-w-[36px] items-center justify-center gap-1.5 rounded-lg bg-surface2 px-2 text-sm disabled:opacity-60"
+          >
+            {saving ? <span className="text-[12px] text-dim">Sauvegarde…</span> : "✕"}
+          </button>
         </div>
         <p className="mb-4 text-sm text-dim">
           Chaque catégorie devient une ligne de filtres. Modifie les noms, ajoute/supprime options et catégories.

@@ -26,7 +26,7 @@ export async function PUT(req: NextRequest) {
   const adminClient = createAdminClient();
   const { error } = await adminClient
     .from("library_state")
-    .upsert({ id: 1, data: body, updated_at: new Date().toISOString() });
+    .upsert({ id: 1, data: body, updated_at: new Date().toISOString() }, { onConflict: "id" });
 
   if (error) { console.error("[library] upsert error:", error); return NextResponse.json({ error: "Erreur de sauvegarde" }, { status: 500 }); }
   return NextResponse.json({ success: true });
