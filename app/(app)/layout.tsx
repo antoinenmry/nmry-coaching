@@ -5,6 +5,7 @@ import Header from "@/components/Header";
 import BroadcastPopup from "@/components/BroadcastPopup";
 import NoCoachGate from "@/components/NoCoachGate";
 import ServiceWorkerRegistrar from "@/components/ServiceWorkerRegistrar";
+import BgColorSyncer from "@/components/BgColorSyncer";
 import { AUTH_ENABLED } from "@/lib/config";
 
 export default async function AppLayout({ children }: { children: React.ReactNode }) {
@@ -16,6 +17,8 @@ export default async function AppLayout({ children }: { children: React.ReactNod
 
   return (
     <DataProvider>
+      {/* Synchronise la couleur de fond avec le compte connecté (user-specific localStorage) */}
+      <BgColorSyncer />
       {/* Enregistre le SW dès l'ouverture de l'app — pas seulement depuis Settings */}
       <ServiceWorkerRegistrar />
       <NoCoachGate>

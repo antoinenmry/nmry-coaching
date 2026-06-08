@@ -49,6 +49,7 @@ export default function PlanPage() {
   const [editing, setEditing] = useState<string | null>(null); // sessionId
   const [composing, setComposing] = useState(false);
   const [duplicating, setDuplicating] = useState(false);
+  const [transferring, setTransferring] = useState(false);
   const [viewingGoals, setViewingGoals] = useState<Goal[] | null>(null);
   // Objectifs des autres sportifs (coach uniquement)
   const [otherGoals, setOtherGoals] = useState<Goal[]>([]);
@@ -231,6 +232,11 @@ export default function PlanPage() {
               <button onClick={() => setDuplicating(true)} className="rounded-lg px-3 py-1.5 text-[13px] font-semibold text-white" style={{ background: "#a855f7" }}>
                 Dupliquer la semaine
               </button>
+              {clients && clients.filter((c) => c.id !== activeUserId).length > 0 && (
+                <button onClick={() => setTransferring(true)} className="rounded-lg bg-surface2 px-3 py-1.5 text-[13px] font-semibold text-ink hover:bg-surface">
+                  Copier vers →
+                </button>
+              )}
               <button
                 onClick={notifyNewPlan}
                 disabled={notifying}
@@ -364,6 +370,15 @@ export default function PlanPage() {
           cursor={cursor}
           sessionsByDate={sessionsByDate}
           onClose={() => setDuplicating(false)}
+        />
+      )}
+
+      {transferring && (
+        <TransferWeekModal
+          cursor={cursor}
+          sessionsByDate={sessionsByDate}
+          activeUserId={activeUserId}
+          onClose={() => setTransferring(false)}
         />
       )}
     </div>
@@ -898,6 +913,164 @@ function DuplicateWeekModal({
         >
           Dupliquer sur {numWeeks} semaine{numWeeks > 1 ? "s" : ""}
         </button>
+      </div>
+    </div>
+  );
+}
+
+// ─── Modal : copier une semaine vers un autre sportif ───────────────────────
+function TransferWeekModal({
+  cursor,
+  sessionsByDate,
+  activeUserId,
+  onClose,
+}: {
+  cursor: Date;
+  sessionsByDate: Record<string, SessionInstance[]>;
+  activeUserId: string | null;
+  onClose: () => void;
+}) {
+  const { clients } = useData();
+  const [sourceMonday, setSourceMonday] = useState(() => getMonday(cursor));
+  const [targetClientId, setTargetClientId] = useState<string>("");
+  const [withDates, setWithDates] = useState(true);
+  const [loading, setLoading] = useState(false);
+  const [done, setDone] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  // Autres sportifs du coach (excl. celui actuellement affiché)
+  const otherClients = useMemo(
+    () => (clients ?? []).filter((c) => c.id !== activeUserId),
+    [clients, activeUserId],
+  );
+
+  // Séances placées dans la semaine source
+  const sourceSessions = useMemo(() => {
+    const days: string[] = [];
+    for (let i = 0; i < 7; i++) {
+      const d = new Date(sourceMonday);
+      d.setDate(sourceMonday.getDate() + i);
+      days.push(ymd(d));
+    }
+    return days.flatMap((day) => sessionsByDate[day] ?? []);
+  }, [sourceMonday, sessionsByDate]);
+
+  function shiftSource(dir: number) {
+    setSourceMonday((prev) => {
+      const next = new Date(prev);
+      next.setDate(prev.getDate() + dir * 7);
+      return next;
+    });
+  }
+
+  async function transfer() {
+    if (!targetClientId || sourceSessions.length === 0 || loading) return;
+    setLoading(true);
+    setError(null);
+    try {
+      const res = await fetch("/api/coach/copy-sessions", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ sessions: sourceSessions, targetClientId, withDates }),
+      });
+      if (!res.ok) {
+        const body = await res.json().catch(() => ({}));
+        throw new Error(body?.error ?? "Erreur lors de la copie");
+      }
+      setDone(true);
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "Erreur inconnue");
+    } finally {
+      setLoading(false);
+    }
+  }
+
+  const targetName = otherClients.find((c) => c.id === targetClientId)?.name ?? "";
+
+  return (
+    <div
+      className="fixed inset-0 z-50 flex items-end justify-center bg-black/60 sm:items-center"
+      onClick={(e) => e.target === e.currentTarget && onClose()}
+    >
+      <div className="w-full max-w-sm rounded-t-3xl border-t border-line bg-surface p-5 sm:rounded-3xl sm:border">
+        <div className="mb-4 flex items-center justify-between">
+          <h2 className="text-lg font-bold">Copier vers un sportif</h2>
+          <button onClick={onClose} className="grid h-9 w-9 place-items-center rounded-lg bg-surface2">✕</button>
+        </div>
+
+        {done ? (
+          <div className="py-6 text-center">
+            <p className="mb-1 text-2xl">✅</p>
+            <p className="font-semibold">{sourceSessions.length} séance{sourceSessions.length > 1 ? "s" : ""} copiée{sourceSessions.length > 1 ? "s" : ""}</p>
+            <p className="mt-1 text-[13px] text-dim">Vers {targetName}{withDates ? " · mêmes dates" : " · banque (sans date)"}</p>
+            <button onClick={onClose} className="mt-5 w-full rounded-xl bg-surface2 py-3 font-semibold">Fermer</button>
+          </div>
+        ) : (
+          <>
+            {/* Semaine source */}
+            <p className="mb-1.5 text-[13px] text-dim">Semaine à copier</p>
+            <div className="mb-1 flex items-center gap-2">
+              <button onClick={() => shiftSource(-1)} className="grid h-9 w-9 shrink-0 place-items-center rounded-lg bg-surface2 text-lg">‹</button>
+              <span className="flex-1 text-center text-sm font-semibold">{weekLabel(sourceMonday)}</span>
+              <button onClick={() => shiftSource(1)} className="grid h-9 w-9 shrink-0 place-items-center rounded-lg bg-surface2 text-lg">›</button>
+            </div>
+            <p className="mb-4 text-center text-[13px] text-dim">
+              {sourceSessions.length === 0
+                ? "Aucune séance placée cette semaine"
+                : `${sourceSessions.length} séance${sourceSessions.length > 1 ? "s" : ""} à copier`}
+            </p>
+
+            {/* Cible */}
+            <p className="mb-1.5 text-[13px] text-dim">Sportif cible</p>
+            <select
+              value={targetClientId}
+              onChange={(e) => setTargetClientId(e.target.value)}
+              className="mb-4 w-full rounded-xl border border-line bg-surface2 px-3 py-2.5 text-sm outline-none focus:border-accent"
+            >
+              <option value="">— Choisir un sportif —</option>
+              {otherClients.map((c) => (
+                <option key={c.id} value={c.id}>{c.name}</option>
+              ))}
+            </select>
+
+            {/* Mode dates */}
+            <p className="mb-2 text-[13px] text-dim">Placement</p>
+            <div className="mb-5 flex flex-col gap-2">
+              {(
+                [
+                  { value: true, label: "Mêmes dates", desc: "Les séances sont placées aux mêmes jours" },
+                  { value: false, label: "Banque (sans date)", desc: "Les séances sont dans « À placer »" },
+                ] as { value: boolean; label: string; desc: string }[]
+              ).map(({ value, label, desc }) => (
+                <button
+                  key={String(value)}
+                  type="button"
+                  onClick={() => setWithDates(value)}
+                  className={`flex items-start gap-3 rounded-xl border px-3 py-2.5 text-left transition ${withDates === value ? "border-accent bg-accent/10" : "border-line bg-surface2"}`}
+                >
+                  <span className={`mt-0.5 grid h-4 w-4 shrink-0 place-items-center rounded-full border text-[10px] ${withDates === value ? "border-accent bg-accent text-[#1a1500]" : "border-line"}`}>
+                    {withDates === value ? "●" : ""}
+                  </span>
+                  <span>
+                    <span className="block text-[13px] font-semibold">{label}</span>
+                    <span className="block text-[12px] text-dim">{desc}</span>
+                  </span>
+                </button>
+              ))}
+            </div>
+
+            {error && <p className="mb-3 rounded-lg bg-danger/10 px-3 py-2 text-[13px] text-danger">{error}</p>}
+
+            <button
+              onClick={transfer}
+              disabled={!targetClientId || sourceSessions.length === 0 || loading}
+              className="w-full rounded-xl py-3 font-semibold text-white disabled:opacity-40 transition"
+              style={{ background: "#a855f7" }}
+            >
+              {loading ? "Copie en cours…" : `Copier ${sourceSessions.length} séance${sourceSessions.length > 1 ? "s" : ""}`}
+            </button>
+          </>
+        )}
       </div>
     </div>
   );
