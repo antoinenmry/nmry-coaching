@@ -145,23 +145,30 @@ function AthletesManager() {
               key={a.id}
               className={`rounded-2xl border p-4 ${isActive ? "border-line bg-surface" : "border-line bg-surface2 opacity-70"}`}
             >
-              {/* En-tête : nom + badge statut */}
+              {/* En-tête : nom + badges */}
               <div className="mb-3 flex items-start justify-between gap-2">
                 <div className="min-w-0">
                   <p className="truncate font-semibold">{a.name || "—"}</p>
                   <p className="truncate text-[12px] text-dim">{a.email}</p>
                 </div>
-                <button
-                  onClick={() => toggleStatus(a.id, a.status)}
-                  disabled={pendingAction === a.id + "-status"}
-                  className={`shrink-0 rounded-full px-2.5 py-1 text-[12px] font-bold transition ${
-                    isActive
-                      ? "bg-ok/20 text-ok hover:bg-ok/30"
-                      : "bg-surface text-dim hover:bg-surface2"
-                  }`}
-                >
-                  {pendingAction === a.id + "-status" ? "…" : isActive ? "Actif" : "Inactif"}
-                </button>
+                <div className="flex shrink-0 flex-wrap justify-end gap-1.5">
+                  {a.vacation_mode && (
+                    <span className="rounded-full bg-orange-500/20 px-2.5 py-1 text-[12px] font-bold text-orange-400">
+                      🏖️ Vacances
+                    </span>
+                  )}
+                  <button
+                    onClick={() => toggleStatus(a.id, a.status)}
+                    disabled={pendingAction === a.id + "-status"}
+                    className={`rounded-full px-2.5 py-1 text-[12px] font-bold transition ${
+                      isActive
+                        ? "bg-ok/20 text-ok hover:bg-ok/30"
+                        : "bg-surface text-dim hover:bg-surface2"
+                    }`}
+                  >
+                    {pendingAction === a.id + "-status" ? "…" : isActive ? "Actif" : "Inactif"}
+                  </button>
+                </div>
               </div>
 
               {/* Métadonnées */}
@@ -474,6 +481,33 @@ export default function SettingsPage() {
   const [tab, setTab] = useState<"affichage" | "sportifs" | "admin">("affichage");
   const [cardSubTab, setCardSubTab] = useState<"couleurs" | "accueil">("couleurs");
 
+  // Mode vacances — état local optimiste (se synchronise avec la DB via API)
+  const [vacationMode, setVacationMode] = useState<boolean>(false);
+  const [vacationLoaded, setVacationLoaded] = useState(false);
+  const [vacationPending, setVacationPending] = useState(false);
+
+  // Charger l'état initial depuis profiles (via me.id — on passe par l'API)
+  useEffect(() => {
+    if (!me?.id || vacationLoaded) return;
+    fetch("/api/me/vacation-status")
+      .then((r) => r.ok ? r.json() : null)
+      .then((d) => { if (d) { setVacationMode(d.vacationMode ?? false); setVacationLoaded(true); } })
+      .catch(() => { setVacationLoaded(true); });
+  }, [me?.id, vacationLoaded]);
+
+  async function toggleVacation() {
+    if (vacationPending) return;
+    const next = !vacationMode;
+    setVacationMode(next); // optimiste
+    setVacationPending(true);
+    await fetch("/api/me/vacation", {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ vacationMode: next }),
+    }).catch(() => setVacationMode(!next)); // rollback si erreur
+    setVacationPending(false);
+  }
+
   const isElevated = role === "coach" || role === "admin";
 
   function setCardColor(href: string, color: string) {
@@ -500,22 +534,55 @@ export default function SettingsPage() {
       {/* Compte — toujours visible */}
       <section className="rounded-2xl border border-line bg-surface p-4">
         <h2 className="mb-3 font-bold">Compte</h2>
-        <div className="flex items-center justify-between gap-3">
+        <div className="flex items-center justify-between gap-2">
           <div className="min-w-0">
             <p className="truncate font-semibold">{me?.name || me?.email}</p>
             <p className="truncate text-sm text-dim">{me?.email}</p>
           </div>
-          <span className={`shrink-0 rounded-full px-2.5 py-1 text-sm font-bold ${
-            role === "admin"  ? "bg-[#a855f7]/20 text-[#a855f7]" :
-            role === "coach"  ? "bg-accent/20 text-accent" :
-                                "bg-accent2/20 text-accent2"
-          }`}>
-            {role === "admin" ? "Admin" : role === "coach" ? "Coach" : "Sportif"}
-          </span>
+          <div className="flex shrink-0 flex-wrap justify-end gap-1.5">
+            <span className={`rounded-full px-2.5 py-1 text-sm font-bold ${
+              role === "admin"  ? "bg-[#a855f7]/20 text-[#a855f7]" :
+              role === "coach"  ? "bg-accent/20 text-accent" :
+                                  "bg-accent2/20 text-accent2"
+            }`}>
+              {role === "admin" ? "Admin" : role === "coach" ? "Coach" : "Sportif"}
+            </span>
+            {vacationMode && (
+              <span className="rounded-full bg-orange-500/20 px-2.5 py-1 text-sm font-bold text-orange-400">
+                🏖️ En vacances
+              </span>
+            )}
+          </div>
         </div>
+
+        {/* Toggle mode vacances */}
+        <div className="mt-3 flex items-center justify-between rounded-xl bg-surface2 px-3 py-2.5">
+          <div>
+            <p className="text-sm font-medium">Mode vacances 🏖️</p>
+            <p className="text-[12px] text-dim">
+              {vacationMode
+                ? "Ton coach voit que tu es en vacances"
+                : "Indique à ton coach que tu n'es pas disponible"}
+            </p>
+          </div>
+          <button
+            role="switch"
+            aria-checked={vacationMode}
+            onClick={toggleVacation}
+            disabled={vacationPending}
+            className={`relative h-6 w-11 shrink-0 rounded-full transition-colors disabled:opacity-50 ${
+              vacationMode ? "bg-orange-500" : "bg-surface border border-line"
+            }`}
+          >
+            <span className={`absolute top-0.5 h-5 w-5 rounded-full bg-white shadow transition-transform ${
+              vacationMode ? "translate-x-5" : "translate-x-0.5"
+            }`} />
+          </button>
+        </div>
+
         <button
           onClick={signOut}
-          className="mt-4 w-full rounded-xl bg-danger/15 py-2.5 font-semibold text-danger"
+          className="mt-3 w-full rounded-xl bg-danger/15 py-2.5 font-semibold text-danger"
         >
           Déconnexion
         </button>

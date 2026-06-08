@@ -31,7 +31,7 @@ export async function GET() {
   // 1. Profils des sportifs — admin voit tous les clients, coach voit ses affectés
   let profilesQuery = supabase
     .from("profiles")
-    .select("id,name,email,status")
+    .select("id,name,email,status,vacation_mode")
     .eq("role", "client")
     .order("created_at");
 
@@ -45,7 +45,7 @@ export async function GET() {
     if (assignedIds.length === 0) return NextResponse.json([]);
     profilesQuery = supabase
       .from("profiles")
-      .select("id,name,email,status")
+      .select("id,name,email,status,vacation_mode")
       .eq("role", "client")
       .in("id", assignedIds)
       .order("created_at");
@@ -85,6 +85,7 @@ export async function GET() {
       name: p.name,
       email: p.email,
       status: p.status ?? "active",
+      vacation_mode: p.vacation_mode ?? false,
       last_sign_in_at: authMap[p.id] ?? null,
       updated_by_coach_at: s?.updated_by_coach_at ?? null,
       updated_by_client_at: s?.updated_by_client_at ?? null,

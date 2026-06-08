@@ -8,6 +8,7 @@ export interface AthleteAdminData {
   name: string;
   email: string;
   status: AthleteStatus;
+  vacation_mode: boolean;       // mode vacances (ne peut pas s'entraîner)
   last_sign_in_at: string | null;
   updated_by_coach_at: string | null;
   updated_by_client_at: string | null;
