@@ -160,45 +160,48 @@ export default function PlanPage() {
         </div>
       )}
 
-      {/* Barre d'outils */}
-      <div className="mb-3 flex flex-wrap items-center gap-2">
-        <div className="flex rounded-lg bg-surface2 p-1">
+      {/* Barre d'outils — ligne 1 : modes + vacances */}
+      <div className="mb-2 flex items-center gap-2">
+        <div className="flex flex-1 rounded-lg bg-surface2 p-1">
           {(["month", "week", "synthesis"] as const).map((m) => (
             <button
               key={m}
               onClick={() => setMode(m)}
-              className={`rounded-md px-3.5 py-2 text-sm font-semibold ${mode === m ? "bg-accent text-[#1a1500]" : "text-dim"}`}
+              className={`flex-1 rounded-md py-2 text-sm font-semibold ${mode === m ? "bg-accent text-[#1a1500]" : "text-dim"}`}
             >
-              {m === "month" ? "Mois" : m === "week" ? "Semaine" : "Synthèse"}
+              {m === "month" ? "Mois" : m === "week" ? "Sem." : "Synth."}
             </button>
           ))}
+          {/* Bouton vacances intégré — clients uniquement */}
+          {!isCoach && (() => {
+            const onVacation = !!vacationStart && todayKey >= vacationStart && (!vacationEnd || todayKey <= vacationEnd);
+            const hasVacation = !!vacationStart;
+            return (
+              <>
+                <div className="mx-1 w-px self-stretch bg-line" />
+                <button
+                  onClick={() => setVacationOpen(true)}
+                  className={`flex items-center gap-1 rounded-md px-2.5 py-2 text-sm font-semibold transition ${
+                    onVacation
+                      ? "bg-orange-500/25 text-orange-400"
+                      : hasVacation
+                      ? "text-orange-400/60"
+                      : "text-dim"
+                  }`}
+                >
+                  🏖️ <span className="hidden xs:inline">Vacances</span>
+                </button>
+              </>
+            );
+          })()}
         </div>
+      </div>
 
-        {/* Bouton vacances — clients uniquement */}
-        {!isCoach && (() => {
-          const onVacation = !!vacationStart && todayKey >= vacationStart && (!vacationEnd || todayKey <= vacationEnd);
-          const scheduled = !!vacationStart && !onVacation && todayKey < vacationStart;
-          return (
-            <button
-              onClick={() => setVacationOpen(true)}
-              className={`flex items-center gap-1.5 rounded-lg px-3 py-2 text-sm font-semibold transition ${
-                onVacation
-                  ? "bg-orange-500/20 text-orange-400"
-                  : scheduled
-                  ? "bg-orange-500/10 text-orange-400/70"
-                  : "bg-surface2 text-dim"
-              }`}
-            >
-              🏖️ {onVacation ? "En vacances" : "Vacances"}
-            </button>
-          );
-        })()}
-
-        <div className="ml-auto flex items-center gap-2.5">
-          <button onClick={() => shiftPeriod(-1)} className="h-9 w-9 rounded-lg bg-surface2 text-lg">‹</button>
-          <span className="min-w-[130px] text-center text-sm font-bold">{periodLabel(mode, cursor)}</span>
-          <button onClick={() => shiftPeriod(1)} className="h-9 w-9 rounded-lg bg-surface2 text-lg">›</button>
-        </div>
+      {/* Ligne 2 : navigation période */}
+      <div className="mb-3 flex items-center justify-center gap-2.5">
+        <button onClick={() => shiftPeriod(-1)} className="h-9 w-9 rounded-lg bg-surface2 text-lg">‹</button>
+        <span className="min-w-[130px] text-center text-sm font-bold">{periodLabel(mode, cursor)}</span>
+        <button onClick={() => shiftPeriod(1)} className="h-9 w-9 rounded-lg bg-surface2 text-lg">›</button>
       </div>
 
       {/* Zone "À placer" */}
@@ -425,24 +428,24 @@ function VacationModal({
           Ton coach verra ta période de vacances sur le calendrier — les jours seront mis en orange.
         </p>
 
-        <div className="mb-3 space-y-3">
-          <div>
-            <p className="mb-1.5 text-[12px] font-semibold text-dim">Début des vacances</p>
+        <div className="mb-3 flex gap-3">
+          <div className="min-w-0 flex-1">
+            <p className="mb-1.5 text-[12px] font-semibold text-dim">Début</p>
             <input
               type="date"
               value={start}
               onChange={(e) => setStart(e.target.value)}
-              className="w-full rounded-xl border border-line bg-surface2 px-3 py-2.5 text-sm outline-none focus:border-orange-400"
+              className="w-full max-w-full rounded-xl border border-line bg-surface2 px-2.5 py-2.5 text-sm outline-none focus:border-orange-400"
             />
           </div>
-          <div>
-            <p className="mb-1.5 text-[12px] font-semibold text-dim">Fin des vacances (optionnel)</p>
+          <div className="min-w-0 flex-1">
+            <p className="mb-1.5 text-[12px] font-semibold text-dim">Fin (optionnel)</p>
             <input
               type="date"
               value={end}
               min={start}
               onChange={(e) => setEnd(e.target.value)}
-              className="w-full rounded-xl border border-line bg-surface2 px-3 py-2.5 text-sm outline-none focus:border-orange-400"
+              className="w-full max-w-full rounded-xl border border-line bg-surface2 px-2.5 py-2.5 text-sm outline-none focus:border-orange-400"
             />
           </div>
         </div>
