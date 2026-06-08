@@ -26,6 +26,8 @@ export default function PlanPage() {
   const [notifying, setNotifying] = useState(false);
   const [notifSent, setNotifSent] = useState(false);
   const [vacationOpen, setVacationOpen] = useState(false);
+  // Surcharge locale des dates vacances (mise à jour immédiate après sauvegarde sans reload)
+  const [localVacation, setLocalVacation] = useState<{ start: string | null; end: string | null } | null>(null);
 
   async function notifyNewPlan() {
     setNotifying(true);
@@ -95,8 +97,11 @@ export default function PlanPage() {
     [state.followups],
   );
 
-  // Dates de vacances du sportif actif
+  // Dates de vacances du sportif actif (localVacation prend le dessus après une sauvegarde)
   const { vacationStart, vacationEnd } = useMemo(() => {
+    if (localVacation !== null) {
+      return { vacationStart: localVacation.start, vacationEnd: localVacation.end };
+    }
     const activeProfile =
       activeUserId === me?.id
         ? me
@@ -105,7 +110,7 @@ export default function PlanPage() {
       vacationStart: activeProfile?.vacation_start ?? null,
       vacationEnd: activeProfile?.vacation_end ?? null,
     };
-  }, [activeUserId, me, clients]);
+  }, [localVacation, activeUserId, me, clients]);
 
   function shiftPeriod(dir: number) {
     const d = new Date(cursor);
@@ -171,10 +176,8 @@ export default function PlanPage() {
 
         {/* Bouton vacances — clients uniquement */}
         {!isCoach && (() => {
-          const vs = me?.vacation_start;
-          const ve = me?.vacation_end;
-          const onVacation = !!vs && todayKey >= vs && (!ve || todayKey <= ve);
-          const scheduled = !!vs && !onVacation && todayKey < vs;
+          const onVacation = !!vacationStart && todayKey >= vacationStart && (!vacationEnd || todayKey <= vacationEnd);
+          const scheduled = !!vacationStart && !onVacation && todayKey < vacationStart;
           return (
             <button
               onClick={() => setVacationOpen(true)}
@@ -330,9 +333,10 @@ export default function PlanPage() {
 
       {vacationOpen && (
         <VacationModal
-          initialStart={me?.vacation_start ?? null}
-          initialEnd={me?.vacation_end ?? null}
+          initialStart={vacationStart}
+          initialEnd={vacationEnd}
           onClose={() => setVacationOpen(false)}
+          onSaved={(s, e) => { setLocalVacation({ start: s, end: e }); setVacationOpen(false); }}
         />
       )}
 
@@ -361,10 +365,12 @@ function VacationModal({
   initialStart,
   initialEnd,
   onClose,
+  onSaved,
 }: {
   initialStart: string | null;
   initialEnd: string | null;
   onClose: () => void;
+  onSaved: (start: string | null, end: string | null) => void;
 }) {
   const [start, setStart] = useState(initialStart ?? "");
   const [end, setEnd] = useState(initialEnd ?? "");
@@ -382,9 +388,7 @@ function VacationModal({
       body: JSON.stringify({ vacationStart: start, vacationEnd: end || null }),
     }).catch(() => {});
     setSaving(false);
-    onClose();
-    // Reload pour mettre à jour me.vacation_start / me.vacation_end dans le contexte
-    window.location.reload();
+    onSaved(start, end || null);
   }
 
   async function clear() {
@@ -396,8 +400,7 @@ function VacationModal({
       body: JSON.stringify({ vacationStart: null, vacationEnd: null }),
     }).catch(() => {});
     setSaving(false);
-    onClose();
-    window.location.reload();
+    onSaved(null, null);
   }
 
   return (
