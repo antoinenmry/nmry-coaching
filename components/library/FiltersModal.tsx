@@ -1,9 +1,21 @@
 "use client";
 
+import { useState } from "react";
 import { useData } from "@/components/DataProvider";
 import type { FilterCategory } from "@/lib/types";
 
 const uid = () => Math.random().toString(36).slice(2, 9);
+
+const PALETTE = [
+  "#ef4444", // rouge
+  "#f97316", // orange
+  "#eab308", // jaune
+  "#22c55e", // vert
+  "#06b6d4", // cyan
+  "#3b82f6", // bleu
+  "#a855f7", // violet
+  "#ec4899", // rose
+];
 
 export default function FiltersModal({
   categories,
@@ -13,6 +25,7 @@ export default function FiltersModal({
   onClose: () => void;
 }) {
   const { updateLibrary } = useData();
+  const [openPaletteFor, setOpenPaletteFor] = useState<string | null>(null);
 
   const renameCategory = (catId: string, name: string) =>
     updateLibrary((lib) => {
@@ -98,42 +111,66 @@ export default function FiltersModal({
                   Suppr.
                 </button>
               </div>
-              <div className="space-y-2">
+              <div className="space-y-1.5">
                 {cat.options.map((opt) => (
-                  <div key={opt.id} className="flex items-center gap-2">
-                    {/* Couleur */}
-                    <input
-                      type="color"
-                      value={opt.color ?? "#888888"}
-                      onChange={(e) => setOptionColor(cat.id, opt.id, e.target.value)}
-                      title="Couleur de l'option"
-                      className="h-8 w-8 shrink-0 cursor-pointer rounded border border-line bg-surface p-0.5"
-                    />
-                    {/* Label */}
-                    <input
-                      value={opt.label}
-                      onChange={(e) => renameOption(cat.id, opt.id, e.target.value)}
-                      className="flex-1"
-                    />
-                    {/* Toggle allure */}
-                    <button
-                      onClick={() => toggleOptionPace(cat.id, opt.id)}
-                      title={opt.isPace ? "Mode allure actif (min/km)" : "Activer mode allure (course à pied)"}
-                      className={`shrink-0 rounded-lg px-2 py-1.5 text-[13px] font-semibold transition ${
-                        opt.isPace
-                          ? "bg-accent/20 text-accent"
-                          : "bg-surface text-dim hover:text-ink"
-                      }`}
-                    >
-                      ⏱️
-                    </button>
-                    {/* Supprimer */}
-                    <button
-                      onClick={() => deleteOption(cat.id, opt.id)}
-                      className="shrink-0 rounded-lg bg-surface px-2.5 py-2 text-[13px]"
-                    >
-                      ✕
-                    </button>
+                  <div key={opt.id} className="flex flex-col gap-1">
+                    <div className="flex items-center gap-2">
+                      {/* Couleur : rond cliquable → palette */}
+                      <button
+                        onClick={() => setOpenPaletteFor(openPaletteFor === opt.id ? null : opt.id)}
+                        title="Choisir une couleur"
+                        className="h-7 w-7 shrink-0 rounded-full border-2 border-white/20 transition"
+                        style={{ background: opt.color ?? "#4b5563" }}
+                      />
+                      {/* Label */}
+                      <input
+                        value={opt.label}
+                        onChange={(e) => renameOption(cat.id, opt.id, e.target.value)}
+                        className="flex-1"
+                      />
+                      {/* Toggle allure */}
+                      <button
+                        onClick={() => toggleOptionPace(cat.id, opt.id)}
+                        title={opt.isPace ? "Mode allure actif (min/km)" : "Activer mode allure (course à pied)"}
+                        className={`shrink-0 rounded-lg px-2 py-1.5 text-[13px] font-semibold transition ${
+                          opt.isPace
+                            ? "bg-accent/20 text-accent"
+                            : "bg-surface text-dim hover:text-ink"
+                        }`}
+                      >
+                        ⏱️
+                      </button>
+                      {/* Supprimer */}
+                      <button
+                        onClick={() => deleteOption(cat.id, opt.id)}
+                        className="shrink-0 rounded-lg bg-surface px-2.5 py-2 text-[13px]"
+                      >
+                        ✕
+                      </button>
+                    </div>
+                    {/* Palette inline */}
+                    {openPaletteFor === opt.id && (
+                      <div className="ml-9 flex flex-wrap gap-1.5 pb-0.5">
+                        {/* Aucune couleur */}
+                        <button
+                          onClick={() => { setOptionColor(cat.id, opt.id, ""); setOpenPaletteFor(null); }}
+                          title="Aucune couleur"
+                          className="flex h-6 w-6 shrink-0 items-center justify-center rounded-full border border-line bg-surface2 text-[10px] text-dim"
+                        >
+                          ✕
+                        </button>
+                        {PALETTE.map((hex) => (
+                          <button
+                            key={hex}
+                            onClick={() => { setOptionColor(cat.id, opt.id, hex); setOpenPaletteFor(null); }}
+                            className={`h-6 w-6 shrink-0 rounded-full transition ${
+                              opt.color === hex ? "ring-2 ring-white ring-offset-1 ring-offset-surface2 scale-110" : "opacity-80 hover:opacity-100"
+                            }`}
+                            style={{ background: hex }}
+                          />
+                        ))}
+                      </div>
+                    )}
                   </div>
                 ))}
               </div>

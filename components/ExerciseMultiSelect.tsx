@@ -17,20 +17,53 @@ export default function ExerciseMultiSelect({
   const { categories, exercises } = library;
   const [sel, setSel] = useState<Record<string, string[]>>({});
   const [search, setSearch] = useState("");
+  const [colorFilter, setColorFilter] = useState<string[]>([]);
+
+  const toggleColorFilter = (hex: string) =>
+    setColorFilter((prev) =>
+      prev.includes(hex) ? prev.filter((c) => c !== hex) : [...prev, hex]
+    );
+
+  /** Couleurs effectivement utilisées dans les options de filtres */
+  const usedColors = useMemo(() => {
+    const set = new Set<string>();
+    categories.forEach((cat) => cat.options.forEach((o) => { if (o.color) set.add(o.color); }));
+    return Array.from(set);
+  }, [categories]);
 
   const filtered = useMemo(() => {
     const q = search.trim().toLowerCase().normalize("NFD").replace(/[̀-ͯ]/g, "");
+
+    // Option IDs des couleurs sélectionnées (pour filtre transversal)
+    let colorOptionIds: Set<string> | null = null;
+    if (colorFilter.length > 0) {
+      colorOptionIds = new Set<string>();
+      categories.forEach((cat) =>
+        cat.options.forEach((o) => {
+          if (o.color && colorFilter.includes(o.color)) colorOptionIds!.add(o.id);
+        })
+      );
+    }
+
     return exercises.filter((ex) => {
       if (q) {
         const name = ex.name.toLowerCase().normalize("NFD").replace(/[̀-ͯ]/g, "");
         if (!name.includes(q)) return false;
       }
+      // Filtre couleur transversal
+      if (colorOptionIds) {
+        const hasColorTag = categories.some((cat) =>
+          (ex.tags[cat.id] ?? []).some((t) => colorOptionIds!.has(t))
+        );
+        if (!hasColorTag) return false;
+      }
+      // Filtres par catégorie
       return categories.every((c) => {
         const sels = sel[c.id] ?? [];
         return sels.length === 0 || (ex.tags[c.id] ?? []).some((t) => sels.includes(t));
       });
     });
-  }, [exercises, categories, sel, search]);
+  }, [exercises, categories, sel, search, colorFilter]);
 
   return (
     <div>
@@ -43,7 +76,35 @@ export default function ExerciseMultiSelect({
         className="mb-3 w-full"
       />
 
-      {/* Filtres */}
+      {/* Filtres couleur transversaux */}
+      {showFilters && usedColors.length > 0 && (
+        <div className="mb-2 flex flex-wrap items-center gap-2">
+          <span className="text-[12px] text-dim">Couleur :</span>
+          {usedColors.map((hex) => (
+            <button
+              key={hex}
+              onClick={() => toggleColorFilter(hex)}
+              title="Filtrer par couleur"
+              className={`h-6 w-6 shrink-0 rounded-full transition ${
+                colorFilter.includes(hex)
+                  ? "ring-2 ring-white ring-offset-1 ring-offset-surface scale-110"
+                  : "opacity-60 hover:opacity-90"
+              }`}
+              style={{ background: hex }}
+            />
+          ))}
+          {colorFilter.length > 0 && (
+            <button
+              onClick={() => setColorFilter([])}
+              className="rounded-full border border-line px-2 py-0.5 text-[11px] text-dim"
+            >
+              Effacer
+            </button>
+          )}
+        </div>
+      )}
+
+      {/* Filtres par catégorie */}
       {showFilters && <div className="mb-3 space-y-1.5">
         {categories.map((cat) => (
           <div key={cat.id} className="flex flex-wrap gap-1.5">
