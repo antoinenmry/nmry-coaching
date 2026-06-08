@@ -158,9 +158,19 @@ export interface LibraryExercise {
   comment?: string; // notes/description libres (visibles par tous)
 }
 
+/** Un lien partenaire avec code promo — visible par tous, éditable coach/admin. */
+export interface PartnerLink {
+  id: string;
+  name: string;      // Nom de l'entreprise
+  url: string;       // Lien hypertexte
+  code?: string;     // Code promo (optionnel)
+  discount?: string; // Description de la remise, ex: "-10% sur tout achat"
+}
+
 export interface ExerciseLibrary {
   categories: FilterCategory[];
   exercises: LibraryExercise[];
+  partnerLinks?: PartnerLink[]; // partenaires & codes promo coach
 }
 
 // ---- Templates (Séances types & Semaines types) — visibles coach/admin seulement ----

@@ -2,10 +2,12 @@
 
 import Link from "next/link";
 import Image from "next/image";
+import { useState } from "react";
 import { usePathname, useRouter } from "next/navigation";
 import { useData } from "./DataProvider";
 import { useTheme } from "./ThemeProvider";
 import ClientSelector from "./ClientSelector";
+import PartnersModal from "./PartnersModal";
 
 const TITLES: Record<string, string> = {
   "/": "NMRY-coaching",
@@ -22,13 +24,17 @@ const TITLES: Record<string, string> = {
 export default function Header() {
   const pathname = usePathname();
   const router = useRouter();
-  const { saving, role, me, activeUserId, previewAsClient, setPreviewAsClient } = useData();
+  const { saving, role, me, activeUserId, previewAsClient, setPreviewAsClient, library } = useData();
   const { theme } = useTheme();
   const isHome = pathname === "/";
   const realRole = me?.role;
   const isElevated = realRole === "coach" || realRole === "admin";
   // Affiche le toggle aperçu uniquement si coach/admin consulte le profil d'un autre
   const showPreview = isElevated && activeUserId !== me?.id;
+  const [partnersOpen, setPartnersOpen] = useState(false);
+  // Bouton 🎁 : toujours visible coach/admin, visible client seulement s'il y a des partenaires
+  const hasPartners = (library.partnerLinks?.length ?? 0) > 0;
+  const showPartners = isElevated || hasPartners;
 
   return (
     <header className="sticky top-0 z-10 border-b border-line bg-bg/90 backdrop-blur">
@@ -80,6 +86,16 @@ export default function Header() {
               {previewAsClient ? "👁 Aperçu actif" : "👁 Aperçu"}
             </button>
           )}
+          {showPartners && (
+            <button
+              onClick={() => setPartnersOpen(true)}
+              aria-label="Partenaires & codes promo"
+              title="Partenaires & codes promo"
+              className="grid h-10 w-10 shrink-0 place-items-center rounded-lg bg-surface2 text-base"
+            >
+              🎁
+            </button>
+          )}
           <Link
             href="/settings"
             aria-label="Réglages"
@@ -89,6 +105,8 @@ export default function Header() {
           </Link>
         </div>
       </div>
+
+      {partnersOpen && <PartnersModal onClose={() => setPartnersOpen(false)} />}
     </header>
   );
 }
