@@ -2,12 +2,10 @@
 
 import Link from "next/link";
 import Image from "next/image";
-import { useState } from "react";
 import { usePathname, useRouter } from "next/navigation";
 import { useData } from "./DataProvider";
 import { useTheme } from "./ThemeProvider";
 import ClientSelector from "./ClientSelector";
-import PartnersModal from "./PartnersModal";
 
 const TITLES: Record<string, string> = {
   "/": "NMRY-coaching",
@@ -19,6 +17,7 @@ const TITLES: Record<string, string> = {
   "/library": "Ma Bibliothèque",
   "/settings": "Réglages",
   "/overview": "Vue d'ensemble",
+  "/shop": "Shop & Avantages",
 };
 
 export default function Header() {
@@ -31,10 +30,12 @@ export default function Header() {
   const isElevated = realRole === "coach" || realRole === "admin";
   // Affiche le toggle aperçu uniquement si coach/admin consulte le profil d'un autre
   const showPreview = isElevated && activeUserId !== me?.id;
-  const [partnersOpen, setPartnersOpen] = useState(false);
-  // Bouton 🎁 : toujours visible coach/admin, visible client seulement s'il y a des partenaires
-  const hasPartners = (library.partnerLinks?.length ?? 0) > 0;
-  const showPartners = isElevated || hasPartners;
+  // Bouton 🎁 : toujours visible coach/admin, visible client seulement si contenu existe
+  const hasShopContent =
+    (library.partnerLinks?.length ?? 0) > 0 ||
+    ((library.merchandiseItems?.length ?? 0) > 0 && library.shopTabsVisible?.merch) ||
+    ((library.shopItems?.length ?? 0) > 0 && library.shopTabsVisible?.shop);
+  const showPartners = isElevated || hasShopContent;
 
   return (
     <header className="sticky top-0 z-10 border-b border-line bg-bg/90 backdrop-blur">
@@ -87,14 +88,14 @@ export default function Header() {
             </button>
           )}
           {showPartners && (
-            <button
-              onClick={() => setPartnersOpen(true)}
-              aria-label="Partenaires & codes promo"
-              title="Partenaires & codes promo"
+            <Link
+              href="/shop"
+              aria-label="Shop & Avantages"
+              title="Shop & Avantages"
               className="grid h-10 w-10 shrink-0 place-items-center rounded-lg bg-surface2 text-base"
             >
               🎁
-            </button>
+            </Link>
           )}
           <Link
             href="/settings"
@@ -106,7 +107,6 @@ export default function Header() {
         </div>
       </div>
 
-      {partnersOpen && <PartnersModal onClose={() => setPartnersOpen(false)} />}
     </header>
   );
 }

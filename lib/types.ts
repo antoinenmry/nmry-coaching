@@ -161,16 +161,43 @@ export interface LibraryExercise {
 /** Un lien partenaire avec code promo — visible par tous, éditable coach/admin. */
 export interface PartnerLink {
   id: string;
-  name: string;      // Nom de l'entreprise
-  url: string;       // Lien hypertexte
-  code?: string;     // Code promo (optionnel)
-  discount?: string; // Description de la remise, ex: "-10% sur tout achat"
+  name: string;
+  url: string;
+  code?: string;
+  discount?: string;
+  comment?: string;  // note libre du coach (infos partenariat, conditions…)
+}
+
+/** Produit de la boutique merch (ex: NMRY Hoodie). */
+export interface MerchItem {
+  id: string;
+  image: string;   // URL image externe
+  name: string;
+  price: string;   // texte libre "59 €"
+  url: string;     // lien d'achat
+  comment?: string;
+}
+
+/** Recommandation produit dans l'onglet Shop. */
+export interface ShopItem {
+  id: string;
+  image: string;
+  name: string;
+  brand: string;
+  url: string;
+  code?: string;
+  discount?: string;
+  comment?: string;
+  category: string; // texte libre, ex: "Compléments"
 }
 
 export interface ExerciseLibrary {
   categories: FilterCategory[];
   exercises: LibraryExercise[];
-  partnerLinks?: PartnerLink[]; // partenaires & codes promo coach
+  partnerLinks?: PartnerLink[];
+  merchandiseItems?: MerchItem[];
+  shopItems?: ShopItem[];
+  shopTabsVisible?: { merch: boolean; shop: boolean };
 }
 
 // ---- Templates (Séances types & Semaines types) — visibles coach/admin seulement ----
