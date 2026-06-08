@@ -66,7 +66,9 @@ function getActiveHyrox(r: RecordsData): HyroxCategory[] {
 
 // ─── Page principale ──────────────────────────────────────────────────────────
 export default function RecordsPage() {
-  const { state, update } = useData();
+  // Fix 1 : utiliser `library` (bibliothèque partagée library_state)
+  // et non `state.library` (blob JSON per-user, ignoré en mode auth)
+  const { state, update, library } = useData();
   const [tab, setTab] = useState<"records" | "tendances">("records");
 
   const records: RecordsData = state.records ?? emptyRecords();
@@ -90,9 +92,9 @@ export default function RecordsPage() {
       </div>
 
       {tab === "records" ? (
-        <RecordsTab records={records} patch={patch} library={state.library} />
+        <RecordsTab records={records} patch={patch} library={library} />
       ) : (
-        <TendancesTab records={records} library={state.library} />
+        <TendancesTab records={records} library={library} />
       )}
     </div>
   );
@@ -232,6 +234,11 @@ function StrengthSection({
   const [exPickerOpen, setExPickerOpen] = useState(false);
   const [adding, setAdding] = useState<string | null>(null);
   const [confirmRemove, setConfirmRemove] = useState(false);
+  // Fix 3 : renommer un exercice (exId en cours de renommage)
+  const [renaming, setRenaming] = useState<string | null>(null);
+  const [renameValue, setRenameValue] = useState("");
+  // Fix 2 : éditer une entrée (exId + entryId)
+  const [editingEntry, setEditingEntry] = useState<{ exId: string; entryId: string } | null>(null);
 
   const visibleExercises = records.strength.filter((r) => r.visible);
 
@@ -248,10 +255,30 @@ function StrengthSection({
       if (ex) ex.visible = false;
     });
 
+  // Fix 3 : sauvegarder le nom personnalisé dans rec.name
+  const renameExercise = (exId: string, newName: string) => {
+    const trimmed = newName.trim();
+    if (!trimmed) return;
+    patch((r) => {
+      const ex = r.strength.find((x) => x.exId === exId);
+      if (ex) ex.name = trimmed;
+    });
+    setRenaming(null);
+  };
+
   const addEntry = (exId: string, entry: Omit<StrengthRecord, "id">) =>
     patch((r) => {
       const ex = r.strength.find((x) => x.exId === exId);
       if (ex && ex.entries.length < MAX) ex.entries.push({ ...entry, id: uid() });
+    });
+
+  // Fix 2 : éditer une entrée existante
+  const editEntry = (exId: string, entryId: string, updated: Omit<StrengthRecord, "id">) =>
+    patch((r) => {
+      const ex = r.strength.find((x) => x.exId === exId);
+      if (!ex) return;
+      const idx = ex.entries.findIndex((e) => e.id === entryId);
+      if (idx !== -1) ex.entries[idx] = { ...updated, id: entryId };
     });
 
   const removeEntry = (exId: string, entryId: string) =>
@@ -260,8 +287,10 @@ function StrengthSection({
       if (ex) ex.entries = ex.entries.filter((e) => e.id !== entryId);
     });
 
+  // Fix 3 : priorité au nom sauvegardé (rec.name) pour permettre le renommage ;
+  // fallback sur la bibliothèque pour les anciens records sans nom stocké
   const getExName = (exId: string, saved?: string) =>
-    library.exercises.find((e) => e.id === exId)?.name ?? saved ?? exId;
+    saved || library.exercises.find((e) => e.id === exId)?.name || exId;
 
   return (
     <section className="rounded-2xl border border-line bg-surface p-4">
@@ -290,28 +319,91 @@ function StrengthSection({
           {visibleExercises.map((rec) => {
             const name = getExName(rec.exId, rec.name);
             const entries = rec.entries ?? [];
+            const isRenaming = renaming === rec.exId;
             return (
               <div key={rec.exId} className="rounded-xl border border-line bg-surface2 p-3">
-                <div className="mb-2 flex items-center justify-between">
-                  <span className="text-sm font-semibold">{name}</span>
-                  <button
-                    onClick={() => { removeExercise(rec.exId); if (adding === rec.exId) setAdding(null); }}
-                    className="text-[12px] text-dim hover:text-danger"
-                  >
-                    ✕
-                  </button>
+                {/* En-tête exercice : nom + boutons */}
+                <div className="mb-2 flex items-center justify-between gap-2">
+                  {isRenaming ? (
+                    // Fix 3 : input inline de renommage
+                    <div className="flex flex-1 items-center gap-1.5">
+                      <input
+                        autoFocus
+                        value={renameValue}
+                        onChange={(e) => setRenameValue(e.target.value)}
+                        onKeyDown={(e) => {
+                          if (e.key === "Enter") renameExercise(rec.exId, renameValue);
+                          if (e.key === "Escape") setRenaming(null);
+                        }}
+                        className="flex-1 rounded-lg border border-accent bg-surface px-2.5 py-1 text-sm font-semibold outline-none"
+                      />
+                      <button
+                        onClick={() => renameExercise(rec.exId, renameValue)}
+                        className="rounded-lg bg-ok/15 px-2 py-1 text-[12px] font-semibold text-ok"
+                      >✓</button>
+                      <button
+                        onClick={() => setRenaming(null)}
+                        className="rounded-lg bg-surface px-2 py-1 text-[12px] text-dim"
+                      >✕</button>
+                    </div>
+                  ) : (
+                    <div className="flex flex-1 items-center gap-1.5 min-w-0">
+                      <span className="truncate text-sm font-semibold">{name}</span>
+                      {/* Fix 3 : bouton renommage ✏️ */}
+                      <button
+                        onClick={() => { setRenaming(rec.exId); setRenameValue(name); }}
+                        className="shrink-0 text-[11px] text-dim hover:text-ink"
+                        title="Renommer"
+                      >✏️</button>
+                    </div>
+                  )}
+                  {!isRenaming && (
+                    <button
+                      onClick={() => { removeExercise(rec.exId); if (adding === rec.exId) setAdding(null); }}
+                      className="shrink-0 text-[12px] text-dim hover:text-danger"
+                    >
+                      ✕
+                    </button>
+                  )}
                 </div>
+
+                {/* Entrées */}
                 {entries.length > 0 && (
                   <div className="mb-2 space-y-1.5">
-                    {[...entries].sort((a, b) => b.date.localeCompare(a.date)).map((e) => (
-                      <div key={e.id} className="flex items-center justify-between rounded-lg bg-surface px-2.5 py-2 text-sm">
-                        <span className="text-dim">{shortDate(e.date)}</span>
-                        <span className="font-bold">{e.weight} kg × {e.reps} rép.</span>
-                        <button onClick={() => removeEntry(rec.exId, e.id)} className="text-dim">✕</button>
-                      </div>
-                    ))}
+                    {[...entries].sort((a, b) => b.date.localeCompare(a.date)).map((e) => {
+                      const isEditing = editingEntry?.exId === rec.exId && editingEntry?.entryId === e.id;
+                      if (isEditing) {
+                        return (
+                          <EditStrengthForm
+                            key={e.id}
+                            initial={e}
+                            onSave={(updated) => {
+                              editEntry(rec.exId, e.id, updated);
+                              setEditingEntry(null);
+                            }}
+                            onCancel={() => setEditingEntry(null)}
+                          />
+                        );
+                      }
+                      return (
+                        <div key={e.id} className="flex items-center justify-between rounded-lg bg-surface px-2.5 py-2 text-sm">
+                          <span className="text-dim">{shortDate(e.date)}</span>
+                          <span className="font-bold">{e.weight} kg × {e.reps} rép.</span>
+                          <div className="flex items-center gap-1.5">
+                            {/* Fix 2 : bouton édition ✏️ */}
+                            <button
+                              onClick={() => setEditingEntry({ exId: rec.exId, entryId: e.id })}
+                              className="text-[11px] text-dim hover:text-ink"
+                              title="Modifier"
+                            >✏️</button>
+                            <button onClick={() => removeEntry(rec.exId, e.id)} className="text-dim">✕</button>
+                          </div>
+                        </div>
+                      );
+                    })}
                   </div>
                 )}
+
                 {entries.length < MAX && adding !== rec.exId && (
                   <button
                     onClick={() => setAdding(rec.exId)}
@@ -351,7 +443,8 @@ function StrengthSection({
   );
 }
 
-// ─── Modale : choisir exercice ────────────────────────────────────────────────
+// ─── Modale : choisir exercice ─────────────────────────────────────────────────
+// Fix 1 : affiche library.exercises (bibliothèque partagée, pas state.library)
 function ExercisePickerModal({
   library,
   addedIds,
@@ -441,6 +534,8 @@ function CapSection({
   const [distPickerOpen, setDistPickerOpen] = useState(false);
   const [adding, setAdding] = useState<CapDistance | null>(null);
   const [confirmRemove, setConfirmRemove] = useState(false);
+  // Fix 2 : éditer une entrée CAP
+  const [editingEntry, setEditingEntry] = useState<{ dist: CapDistance; entryId: string } | null>(null);
 
   const activeCap = getActiveCap(records);
 
@@ -454,6 +549,13 @@ function CapSection({
     patch((r) => {
       r.cap[dist] ??= [];
       if (r.cap[dist].length < MAX) r.cap[dist].push({ ...entry, id: uid() });
+    });
+
+  // Fix 2 : éditer une entrée existante
+  const editEntry = (dist: CapDistance, entryId: string, updated: Omit<CardioRecord, "id">) =>
+    patch((r) => {
+      const idx = (r.cap[dist] ?? []).findIndex((e) => e.id === entryId);
+      if (idx !== -1) r.cap[dist][idx] = { ...updated, id: entryId };
     });
 
   const removeEntry = (dist: CapDistance, id: string) =>
@@ -499,13 +601,37 @@ function CapSection({
                 </div>
                 {entries.length > 0 && (
                   <div className="mb-2 space-y-1.5">
-                    {[...entries].sort((a, b) => a.timeSeconds - b.timeSeconds).map((e) => (
-                      <div key={e.id} className="flex items-center justify-between rounded-lg bg-surface px-2.5 py-2 text-sm">
-                        <span className="text-dim">{shortDate(e.date)}</span>
-                        <span className="font-bold">{formatTime(e.timeSeconds)}</span>
-                        <button onClick={() => removeEntry(dist, e.id)} className="text-dim">✕</button>
-                      </div>
-                    ))}
+                    {[...entries].sort((a, b) => a.timeSeconds - b.timeSeconds).map((e) => {
+                      const isEditing = editingEntry?.dist === dist && editingEntry?.entryId === e.id;
+                      if (isEditing) {
+                        return (
+                          <EditCardioForm
+                            key={e.id}
+                            initial={e}
+                            showHours={dist === "21km" || dist === "42km"}
+                            onSave={(updated) => {
+                              editEntry(dist, e.id, updated);
+                              setEditingEntry(null);
+                            }}
+                            onCancel={() => setEditingEntry(null)}
+                          />
+                        );
+                      }
+                      return (
+                        <div key={e.id} className="flex items-center justify-between rounded-lg bg-surface px-2.5 py-2 text-sm">
+                          <span className="text-dim">{shortDate(e.date)}</span>
+                          <span className="font-bold">{formatTime(e.timeSeconds)}</span>
+                          <div className="flex items-center gap-1.5">
+                            <button
+                              onClick={() => setEditingEntry({ dist, entryId: e.id })}
+                              className="text-[11px] text-dim hover:text-ink"
+                              title="Modifier"
+                            >✏️</button>
+                            <button onClick={() => removeEntry(dist, e.id)} className="text-dim">✕</button>
+                          </div>
+                        </div>
+                      );
+                    })}
                   </div>
                 )}
                 {entries.length < MAX && adding !== dist && (
@@ -604,6 +730,8 @@ function HyroxSection({
   const [catPickerOpen, setCatPickerOpen] = useState(false);
   const [adding, setAdding] = useState<HyroxCategory | null>(null);
   const [confirmRemove, setConfirmRemove] = useState(false);
+  // Fix 2 : éditer une entrée Hyrox
+  const [editingEntry, setEditingEntry] = useState<{ cat: HyroxCategory; entryId: string } | null>(null);
 
   const activeHyrox = getActiveHyrox(records);
 
@@ -617,6 +745,13 @@ function HyroxSection({
     patch((r) => {
       r.hyrox[cat] ??= [];
       if (r.hyrox[cat].length < MAX) r.hyrox[cat].push({ ...entry, id: uid() });
+    });
+
+  // Fix 2 : éditer une entrée existante
+  const editEntry = (cat: HyroxCategory, entryId: string, updated: Omit<CardioRecord, "id">) =>
+    patch((r) => {
+      const idx = (r.hyrox[cat] ?? []).findIndex((e) => e.id === entryId);
+      if (idx !== -1) r.hyrox[cat][idx] = { ...updated, id: entryId };
     });
 
   const removeEntry = (cat: HyroxCategory, id: string) =>
@@ -663,15 +798,39 @@ function HyroxSection({
                 </div>
                 {entries.length > 0 && (
                   <div className="mb-2 space-y-1.5">
-                    {[...entries].sort((a, b) => a.timeSeconds - b.timeSeconds).map((e) => (
-                      <div key={e.id} className="rounded-lg bg-surface px-2.5 py-2 text-sm">
-                        <div className="flex items-center justify-between">
-                          <span className="text-[11px] text-dim">{shortDate(e.date)}</span>
-                          <button onClick={() => removeEntry(cat, e.id)} className="text-[11px] text-dim">✕</button>
+                    {[...entries].sort((a, b) => a.timeSeconds - b.timeSeconds).map((e) => {
+                      const isEditing = editingEntry?.cat === cat && editingEntry?.entryId === e.id;
+                      if (isEditing) {
+                        return (
+                          <EditCardioForm
+                            key={e.id}
+                            initial={e}
+                            showHours
+                            onSave={(updated) => {
+                              editEntry(cat, e.id, updated);
+                              setEditingEntry(null);
+                            }}
+                            onCancel={() => setEditingEntry(null)}
+                          />
+                        );
+                      }
+                      return (
+                        <div key={e.id} className="rounded-lg bg-surface px-2.5 py-2 text-sm">
+                          <div className="flex items-center justify-between">
+                            <span className="text-[11px] text-dim">{shortDate(e.date)}</span>
+                            <div className="flex items-center gap-1.5">
+                              <button
+                                onClick={() => setEditingEntry({ cat, entryId: e.id })}
+                                className="text-[11px] text-dim hover:text-ink"
+                                title="Modifier"
+                              >✏️</button>
+                              <button onClick={() => removeEntry(cat, e.id)} className="text-[11px] text-dim">✕</button>
+                            </div>
+                          </div>
+                          <div className="font-bold">{formatTime(e.timeSeconds)}</div>
                         </div>
-                        <div className="font-bold">{formatTime(e.timeSeconds)}</div>
-                      </div>
-                    ))}
+                      );
+                    })}
                   </div>
                 )}
                 {entries.length < MAX && adding !== cat && (
@@ -790,7 +949,7 @@ function ConfirmRemoveModal({
   );
 }
 
-// ─── Formulaire musculation ───────────────────────────────────────────────────
+// ─── Formulaire musculation — ajout ───────────────────────────────────────────
 function AddStrengthForm({
   onAdd,
   onCancel,
@@ -834,7 +993,53 @@ function AddStrengthForm({
   );
 }
 
-// ─── Formulaire cardio ────────────────────────────────────────────────────────
+// ─── Fix 2 : Formulaire musculation — édition ─────────────────────────────────
+function EditStrengthForm({
+  initial,
+  onSave,
+  onCancel,
+}: {
+  initial: StrengthRecord;
+  onSave: (e: Omit<StrengthRecord, "id">) => void;
+  onCancel: () => void;
+}) {
+  const [date, setDate] = useState(initial.date);
+  const [weight, setWeight] = useState(String(initial.weight));
+  const [reps, setReps] = useState(String(initial.reps));
+
+  return (
+    <div className="space-y-2 rounded-lg border border-accent/30 bg-surface p-3">
+      <label className="block">
+        <span className="mb-1 block text-[12px] text-dim">Date</span>
+        <input type="date" value={date} onChange={(e) => setDate(e.target.value)} />
+      </label>
+      <div className="grid grid-cols-2 gap-2">
+        <label className="block">
+          <span className="mb-1 block text-[12px] text-dim">Poids (kg)</span>
+          <input type="number" min={0} step={0.5} value={weight} onChange={(e) => setWeight(e.target.value)} />
+        </label>
+        <label className="block">
+          <span className="mb-1 block text-[12px] text-dim">Répétitions</span>
+          <input type="number" min={1} value={reps} onChange={(e) => setReps(e.target.value)} />
+        </label>
+      </div>
+      <div className="flex gap-2">
+        <button
+          onClick={() => onSave({ date, weight: parseFloat(weight) || 0, reps: parseInt(reps) || 1 })}
+          disabled={!weight || parseFloat(weight) <= 0}
+          className="flex-1 rounded-lg bg-ok/90 py-2 text-sm font-semibold text-[#06210a] disabled:opacity-40"
+        >
+          Enregistrer
+        </button>
+        <button onClick={onCancel} className="rounded-lg bg-surface2 px-3 py-2 text-sm text-dim">
+          Annuler
+        </button>
+      </div>
+    </div>
+  );
+}
+
+// ─── Formulaire cardio — ajout ────────────────────────────────────────────────
 function AddCardioForm({
   showHours,
   onAdd,
@@ -895,6 +1100,72 @@ function AddCardioForm({
   );
 }
 
+// ─── Fix 2 : Formulaire cardio — édition ──────────────────────────────────────
+function EditCardioForm({
+  initial,
+  showHours,
+  onSave,
+  onCancel,
+}: {
+  initial: CardioRecord;
+  showHours: boolean;
+  onSave: (e: Omit<CardioRecord, "id">) => void;
+  onCancel: () => void;
+}) {
+  const h0 = Math.floor(initial.timeSeconds / 3600);
+  const m0 = Math.floor((initial.timeSeconds % 3600) / 60);
+  const s0 = initial.timeSeconds % 60;
+  const [date, setDate] = useState(initial.date);
+  const [hours, setHours] = useState(String(h0));
+  const [minutes, setMinutes] = useState(String(m0));
+  const [seconds, setSeconds] = useState(String(s0));
+
+  const total =
+    (parseInt(hours) || 0) * 3600 +
+    (parseInt(minutes) || 0) * 60 +
+    (parseInt(seconds) || 0);
+
+  return (
+    <div className="space-y-2 rounded-lg border border-accent/30 bg-surface p-3">
+      <label className="block">
+        <span className="mb-1 block text-[12px] text-dim">Date</span>
+        <input type="date" value={date} onChange={(e) => setDate(e.target.value)} />
+      </label>
+      <div className={`grid gap-2 ${showHours ? "grid-cols-3" : "grid-cols-2"}`}>
+        {showHours && (
+          <label className="block">
+            <span className="mb-1 block text-[12px] text-dim">Heures</span>
+            <input type="number" min={0} value={hours} onChange={(e) => setHours(e.target.value)} />
+          </label>
+        )}
+        <label className="block">
+          <span className="mb-1 block text-[12px] text-dim">Min</span>
+          <input type="number" min={0} max={59} value={minutes} onChange={(e) => setMinutes(e.target.value)} />
+        </label>
+        <label className="block">
+          <span className="mb-1 block text-[12px] text-dim">Sec</span>
+          <input type="number" min={0} max={59} value={seconds} onChange={(e) => setSeconds(e.target.value)} />
+        </label>
+      </div>
+      {total > 0 && (
+        <p className="text-center text-sm font-bold text-accent">{formatTime(total)}</p>
+      )}
+      <div className="flex gap-2">
+        <button
+          onClick={() => onSave({ date, timeSeconds: total })}
+          disabled={total === 0}
+          className="flex-1 rounded-lg bg-ok/90 py-2 text-sm font-semibold text-[#06210a] disabled:opacity-40"
+        >
+          Enregistrer
+        </button>
+        <button onClick={onCancel} className="rounded-lg bg-surface2 px-3 py-2 text-sm text-dim">
+          Annuler
+        </button>
+      </div>
+    </div>
+  );
+}
+
 // ─── Onglet Tendances ─────────────────────────────────────────────────────────
 type ChartSeries = {
   label: string;
@@ -921,7 +1192,8 @@ function TendancesTab({
     records.strength
       .filter((r) => r.visible && r.entries.length > 0)
       .forEach((r) => {
-        const name = library.exercises.find((e) => e.id === r.exId)?.name ?? r.name ?? r.exId;
+        // Fix 1 + 3 : priorité au nom sauvegardé (inclut les renommages)
+        const name = r.name || library.exercises.find((e) => e.id === r.exId)?.name || r.exId;
         series.push({
           label: name,
           data: r.entries.map((e) => ({ date: e.date, value: e.weight, label2: `×${e.reps}` })),
