@@ -80,25 +80,28 @@ export default function ExerciseMultiSelect({
       {showFilters && usedColors.length > 0 && (
         <div className="mb-2 flex flex-wrap items-center gap-2">
           <span className="text-[12px] text-dim">Couleur :</span>
-          {usedColors.map((hex) => (
-            <button
-              key={hex}
-              onClick={() => toggleColorFilter(hex)}
-              title="Filtrer par couleur"
-              className={`h-6 w-6 shrink-0 rounded-full transition ${
-                colorFilter.includes(hex)
-                  ? "ring-2 ring-white ring-offset-1 ring-offset-surface scale-110"
-                  : "opacity-60 hover:opacity-90"
-              }`}
-              style={{ background: hex }}
-            />
-          ))}
+          {usedColors.map((hex) => {
+            const active = colorFilter.includes(hex);
+            return (
+              <button
+                key={hex}
+                onClick={() => toggleColorFilter(hex)}
+                title="Filtrer par couleur"
+                className={`h-8 w-8 shrink-0 rounded-full transition-all ${
+                  active
+                    ? "border-[3px] border-white scale-110 shadow-[0_0_0_1px_rgba(255,255,255,0.3)]"
+                    : "border-[3px] border-transparent opacity-50 hover:opacity-80"
+                }`}
+                style={{ background: hex }}
+              />
+            );
+          })}
           {colorFilter.length > 0 && (
             <button
               onClick={() => setColorFilter([])}
-              className="rounded-full border border-line px-2 py-0.5 text-[11px] text-dim"
+              className="rounded-full border border-line px-2.5 py-1 text-[12px] text-dim"
             >
-              Effacer
+              ✕ Effacer
             </button>
           )}
         </div>
