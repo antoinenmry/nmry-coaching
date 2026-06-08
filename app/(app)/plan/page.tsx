@@ -167,12 +167,12 @@ export default function PlanPage() {
             <button
               key={m}
               onClick={() => setMode(m)}
-              className={`flex-1 rounded-md py-2 text-sm font-semibold ${mode === m ? "bg-accent text-[#1a1500]" : "text-dim"}`}
+              className={`flex-1 rounded-md px-1 py-2 text-[13px] font-semibold ${mode === m ? "bg-accent text-[#1a1500]" : "text-dim"}`}
             >
-              {m === "month" ? "Mois" : m === "week" ? "Sem." : "Synth."}
+              {m === "month" ? "Mois" : m === "week" ? "Semaine" : "Synthèse"}
             </button>
           ))}
-          {/* Bouton vacances intégré — clients uniquement */}
+          {/* Bouton vacances — clients uniquement, emoji seul pour ne pas dépasser */}
           {!isCoach && (() => {
             const onVacation = !!vacationStart && todayKey >= vacationStart && (!vacationEnd || todayKey <= vacationEnd);
             const hasVacation = !!vacationStart;
@@ -181,15 +181,16 @@ export default function PlanPage() {
                 <div className="mx-1 w-px self-stretch bg-line" />
                 <button
                   onClick={() => setVacationOpen(true)}
-                  className={`flex items-center gap-1 rounded-md px-2.5 py-2 text-sm font-semibold transition ${
+                  title="Mode vacances"
+                  className={`rounded-md px-2.5 py-2 text-base transition ${
                     onVacation
-                      ? "bg-orange-500/25 text-orange-400"
+                      ? "bg-orange-500/25"
                       : hasVacation
-                      ? "text-orange-400/60"
-                      : "text-dim"
+                      ? "opacity-60"
+                      : "opacity-40 hover:opacity-70"
                   }`}
                 >
-                  🏖️ <span className="hidden xs:inline">Vacances</span>
+                  🏖️
                 </button>
               </>
             );
@@ -428,26 +429,24 @@ function VacationModal({
           Ton coach verra ta période de vacances sur le calendrier — les jours seront mis en orange.
         </p>
 
-        <div className="mb-3 flex gap-2 overflow-hidden">
-          <div className="min-w-0 flex-1 overflow-hidden">
-            <p className="mb-1.5 text-[12px] font-semibold text-dim">Début</p>
+        <div className="mb-3 space-y-2.5">
+          <div>
+            <p className="mb-1.5 text-[12px] font-semibold text-dim">Début des vacances</p>
             <input
               type="date"
               value={start}
               onChange={(e) => setStart(e.target.value)}
-              style={{ maxWidth: "100%", boxSizing: "border-box" }}
-              className="block w-full min-w-0 rounded-xl border border-line bg-surface2 px-2 py-2.5 text-sm outline-none focus:border-orange-400"
+              className="w-full rounded-xl border border-line bg-surface2 px-3 py-2.5 text-sm outline-none focus:border-orange-400"
             />
           </div>
-          <div className="min-w-0 flex-1 overflow-hidden">
-            <p className="mb-1.5 text-[12px] font-semibold text-dim">Fin (optionnel)</p>
+          <div>
+            <p className="mb-1.5 text-[12px] font-semibold text-dim">Fin des vacances <span className="font-normal text-dim">(optionnel)</span></p>
             <input
               type="date"
               value={end}
               min={start}
               onChange={(e) => setEnd(e.target.value)}
-              style={{ maxWidth: "100%", boxSizing: "border-box" }}
-              className="block w-full min-w-0 rounded-xl border border-line bg-surface2 px-2 py-2.5 text-sm outline-none focus:border-orange-400"
+              className="w-full rounded-xl border border-line bg-surface2 px-3 py-2.5 text-sm outline-none focus:border-orange-400"
             />
           </div>
         </div>
