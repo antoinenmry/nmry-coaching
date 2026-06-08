@@ -6,8 +6,11 @@ import { getUserNotifPrefs } from "@/lib/notifPrefs";
 
 /**
  * POST /api/plan/notify
- * Coach notifie tous ses sportifs qu'un nouveau programme est disponible.
- * Vérifie les préférences de chaque sportif avant d'envoyer.
+ * Corps optionnel : { targetUserId: string }
+ *
+ * - Si targetUserId fourni → notifie uniquement ce sportif (vérifie qu'il est bien
+ *   un client du coach connecté).
+ * - Sinon → notifie tous les sportifs du coach (comportement legacy).
  */
 export async function POST(req: NextRequest) {
   const supabase = await createClient();
@@ -27,7 +30,38 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: "Forbidden" }, { status: 403 });
   }
 
-  // Récupérer tous les sportifs du coach
+  const coachName = profile.name || "Votre coach";
+  const body = await req.json().catch(() => ({}));
+  const targetUserId: string | undefined = body?.targetUserId;
+
+  const NOTIF_PAYLOAD = {
+    title: "🗓️ Nouveau programme disponible",
+    body: `${coachName} a mis à jour votre programmation`,
+    url: "/plan",
+  };
+
+  // ── Cas 1 : un sportif spécifique ──────────────────────────────────────────
+  if (targetUserId) {
+    // Vérifier que ce sportif appartient bien à ce coach
+    const { data: link } = await admin
+      .from("coach_client")
+      .select("client_id")
+      .eq("coach_id", user.id)
+      .eq("client_id", targetUserId)
+      .maybeSingle();
+
+    if (!link) {
+      return NextResponse.json({ error: "Ce sportif n'est pas dans votre liste" }, { status: 403 });
+    }
+
+    const prefs = await getUserNotifPrefs(targetUserId);
+    if (!prefs.newPlan) return NextResponse.json({ sent: 0 });
+
+    await sendPushToUser(targetUserId, NOTIF_PAYLOAD);
+    return NextResponse.json({ sent: 1 });
+  }
+
+  // ── Cas 2 : tous les sportifs du coach (legacy / vue propre profil) ─────────
   const { data: links } = await admin
     .from("coach_client")
     .select("client_id")
@@ -35,18 +69,12 @@ export async function POST(req: NextRequest) {
 
   if (!links?.length) return NextResponse.json({ sent: 0 });
 
-  const coachName = profile.name || "Votre coach";
   let sent = 0;
-
   await Promise.allSettled(
     links.map(async ({ client_id }) => {
       const prefs = await getUserNotifPrefs(client_id);
       if (!prefs.newPlan) return;
-      await sendPushToUser(client_id, {
-        title: "🗓️ Nouveau programme disponible",
-        body: `${coachName} a mis à jour votre programmation`,
-        url: "/plan",
-      });
+      await sendPushToUser(client_id, NOTIF_PAYLOAD);
       sent++;
     })
   );

@@ -31,7 +31,13 @@ export default function PlanPage() {
 
   async function notifyNewPlan() {
     setNotifying(true);
-    await fetch("/api/plan/notify", { method: "POST" }).catch(() => {});
+    // Si on consulte le profil d'un sportif spécifique, ne notifier que lui
+    const targetUserId = activeUserId && activeUserId !== me?.id ? activeUserId : undefined;
+    await fetch("/api/plan/notify", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(targetUserId ? { targetUserId } : {}),
+    }).catch(() => {});
     setNotifying(false);
     setNotifSent(true);
     setTimeout(() => setNotifSent(false), 3000);
