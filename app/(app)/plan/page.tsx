@@ -25,6 +25,7 @@ export default function PlanPage() {
   const isCoach = role === "coach" || role === "admin";
   const [notifying, setNotifying] = useState(false);
   const [notifSent, setNotifSent] = useState(false);
+  const [vacationOpen, setVacationOpen] = useState(false);
 
   async function notifyNewPlan() {
     setNotifying(true);
@@ -167,6 +168,29 @@ export default function PlanPage() {
             </button>
           ))}
         </div>
+
+        {/* Bouton vacances — clients uniquement */}
+        {!isCoach && (() => {
+          const vs = me?.vacation_start;
+          const ve = me?.vacation_end;
+          const onVacation = !!vs && todayKey >= vs && (!ve || todayKey <= ve);
+          const scheduled = !!vs && !onVacation && todayKey < vs;
+          return (
+            <button
+              onClick={() => setVacationOpen(true)}
+              className={`flex items-center gap-1.5 rounded-lg px-3 py-2 text-sm font-semibold transition ${
+                onVacation
+                  ? "bg-orange-500/20 text-orange-400"
+                  : scheduled
+                  ? "bg-orange-500/10 text-orange-400/70"
+                  : "bg-surface2 text-dim"
+              }`}
+            >
+              🏖️ {onVacation ? "En vacances" : "Vacances"}
+            </button>
+          );
+        })()}
+
         <div className="ml-auto flex items-center gap-2.5">
           <button onClick={() => shiftPeriod(-1)} className="h-9 w-9 rounded-lg bg-surface2 text-lg">‹</button>
           <span className="min-w-[130px] text-center text-sm font-bold">{periodLabel(mode, cursor)}</span>
@@ -304,6 +328,14 @@ export default function PlanPage() {
 
       {editing && <SessionEditor sessionId={editing} role={role} onClose={() => setEditing(null)} />}
 
+      {vacationOpen && (
+        <VacationModal
+          initialStart={me?.vacation_start ?? null}
+          initialEnd={me?.vacation_end ?? null}
+          onClose={() => setVacationOpen(false)}
+        />
+      )}
+
       {viewingGoals && <GoalInfoModal goals={viewingGoals} onClose={() => setViewingGoals(null)} />}
 
       {composing && (
@@ -320,6 +352,116 @@ export default function PlanPage() {
           onClose={() => setDuplicating(false)}
         />
       )}
+    </div>
+  );
+}
+
+// ─── Modale vacances (sportif) ───────────────────────────────────────────────
+function VacationModal({
+  initialStart,
+  initialEnd,
+  onClose,
+}: {
+  initialStart: string | null;
+  initialEnd: string | null;
+  onClose: () => void;
+}) {
+  const [start, setStart] = useState(initialStart ?? "");
+  const [end, setEnd] = useState(initialEnd ?? "");
+  const [saving, setSaving] = useState(false);
+
+  const todayStr = new Date().toISOString().slice(0, 10);
+  const isActive = !!start && todayStr >= start && (!end || todayStr <= end);
+
+  async function save() {
+    if (!start || saving) return;
+    setSaving(true);
+    await fetch("/api/me/vacation", {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ vacationStart: start, vacationEnd: end || null }),
+    }).catch(() => {});
+    setSaving(false);
+    onClose();
+    // Reload pour mettre à jour me.vacation_start / me.vacation_end dans le contexte
+    window.location.reload();
+  }
+
+  async function clear() {
+    if (saving) return;
+    setSaving(true);
+    await fetch("/api/me/vacation", {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ vacationStart: null, vacationEnd: null }),
+    }).catch(() => {});
+    setSaving(false);
+    onClose();
+    window.location.reload();
+  }
+
+  return (
+    <div
+      className="fixed inset-0 z-50 flex items-end justify-center bg-black/60 sm:items-center"
+      onClick={(e) => e.target === e.currentTarget && onClose()}
+    >
+      <div className="w-full max-w-sm rounded-t-3xl border-t border-line bg-surface p-5 sm:rounded-3xl sm:border">
+        <div className="mb-4 flex items-center justify-between">
+          <h2 className="text-lg font-bold">🏖️ Mode vacances</h2>
+          <button onClick={onClose} className="text-dim hover:text-ink">✕</button>
+        </div>
+
+        {isActive && (
+          <div className="mb-4 rounded-xl bg-orange-500/10 px-3 py-2.5 text-sm font-semibold text-orange-400">
+            🏖️ Tu es actuellement en vacances
+            {end ? ` jusqu'au ${new Date(end + "T00:00:00").toLocaleDateString("fr-FR", { day: "numeric", month: "long" })}` : ""}
+          </div>
+        )}
+
+        <p className="mb-4 text-[13px] text-dim">
+          Ton coach verra ta période de vacances sur le calendrier — les jours seront mis en orange.
+        </p>
+
+        <div className="mb-3 space-y-3">
+          <div>
+            <p className="mb-1.5 text-[12px] font-semibold text-dim">Début des vacances</p>
+            <input
+              type="date"
+              value={start}
+              onChange={(e) => setStart(e.target.value)}
+              className="w-full rounded-xl border border-line bg-surface2 px-3 py-2.5 text-sm outline-none focus:border-orange-400"
+            />
+          </div>
+          <div>
+            <p className="mb-1.5 text-[12px] font-semibold text-dim">Fin des vacances (optionnel)</p>
+            <input
+              type="date"
+              value={end}
+              min={start}
+              onChange={(e) => setEnd(e.target.value)}
+              className="w-full rounded-xl border border-line bg-surface2 px-3 py-2.5 text-sm outline-none focus:border-orange-400"
+            />
+          </div>
+        </div>
+
+        <button
+          onClick={save}
+          disabled={!start || saving}
+          className="mb-2 w-full rounded-xl bg-orange-500 py-3 font-semibold text-white disabled:opacity-40 transition"
+        >
+          {saving ? "Enregistrement…" : "Enregistrer"}
+        </button>
+
+        {(initialStart) && (
+          <button
+            onClick={clear}
+            disabled={saving}
+            className="w-full rounded-xl bg-surface2 py-2.5 text-sm font-semibold text-dim hover:text-danger disabled:opacity-40"
+          >
+            Effacer les vacances
+          </button>
+        )}
+      </div>
     </div>
   );
 }
