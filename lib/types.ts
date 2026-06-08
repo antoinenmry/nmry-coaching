@@ -48,8 +48,8 @@ export interface ExerciseInstance {
   sets: number;
   reps: number;
   weight: number;
-  rpeCoach: number; // RPE prescrit par le coach (1-10)
-  rpeClient: number; // RPE ressenti par le client (0 = non renseigné)
+  rpeCoach: string | number; // RPE prescrit par le coach — texte libre "7", "7/8", "~8" (0 ou "" = non prescrit)
+  rpeClient: number;         // RPE ressenti par le client (0 = non renseigné)
   coachComment: string; // consigne/note du coach pour cet exercice
   clientComment: string; // retour libre du client
   failed?: boolean; // true si le sportif a marqué l'exercice comme raté
@@ -174,7 +174,7 @@ export interface TemplateExercise {
   reps: number;
   repsLabel?: string;    // ex: "8-12"
   weight: number;        // 0 = non prescrit
-  rpeCoach: number;      // 0 = non prescrit
+  rpeCoach: string | number; // "" ou 0 = non prescrit
   coachComment: string;
 }
 

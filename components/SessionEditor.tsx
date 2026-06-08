@@ -8,6 +8,53 @@ import type { ExerciseInstance, Role } from "@/lib/types";
 
 const EMOJIS = ["😫", "😕", "😐", "🙂", "🤩"]; // ressenti 1 → 5
 
+// ---- RPE helpers ----
+
+/** Parse "7", "7.5", "7/8", "7-8", "~7" → { lo, hi } ou null si non parseable */
+function parseRpe(val: string | number | undefined): { lo: number; hi: number } | null {
+  if (val === undefined || val === null || val === "" || val === 0) return null;
+  const s = String(val).trim();
+  if (!s || s === "0") return null;
+  const rangeMatch = s.match(/^(\d+(?:\.\d+)?)\s*[\/\-]\s*(\d+(?:\.\d+)?)$/);
+  if (rangeMatch) {
+    const a = parseFloat(rangeMatch[1]);
+    const b = parseFloat(rangeMatch[2]);
+    if (!isNaN(a) && !isNaN(b)) return { lo: Math.min(a, b), hi: Math.max(a, b) };
+  }
+  const num = parseFloat(s.replace(/[^0-9.]/g, ""));
+  if (!isNaN(num) && num >= 0 && num <= 10) return { lo: num, hi: num };
+  return null;
+}
+
+/** Barre dégradée vert→jaune→orange→rouge→noir avec curseur ou plage */
+function RpeGauge({ value }: { value: string | number | undefined }) {
+  const parsed = parseRpe(value);
+  return (
+    <div className="mt-1.5">
+      <div
+        className="relative h-2.5 w-full overflow-hidden rounded-full"
+        style={{ background: "linear-gradient(to right,#22c55e 0%,#eab308 40%,#f97316 65%,#ef4444 84%,#111 100%)" }}
+      >
+        {parsed && (
+          parsed.lo === parsed.hi ? (
+            // Curseur simple : fine barre blanche
+            <div
+              className="absolute top-0 h-full w-1 -translate-x-1/2 rounded-full bg-white shadow"
+              style={{ left: `${(parsed.lo / 10) * 100}%` }}
+            />
+          ) : (
+            // Plage : segment blanc semi-transparent
+            <div
+              className="absolute top-0 h-full bg-white/80"
+              style={{ left: `${(parsed.lo / 10) * 100}%`, width: `${((parsed.hi - parsed.lo) / 10) * 100}%`, minWidth: 4 }}
+            />
+          )
+        )}
+      </div>
+    </div>
+  );
+}
+
 function frenchDate(key: string) {
   const months = ["janvier","février","mars","avril","mai","juin","juillet","août","septembre","octobre","novembre","décembre"];
   const [y, m, d] = key.split("-").map(Number);
@@ -349,12 +396,24 @@ function ExerciseBlock({
               onChange={(e) => onPatch({ weight: +e.target.value || 0 })}
             />
           </div>
-          <div className="mt-2.5 flex items-center gap-2">
-            <span className="w-24 shrink-0 text-[13px] text-dim">RPE coach</span>
-            <span className={`rounded-lg px-2.5 py-1 text-sm font-bold ${ex.rpeCoach ? "bg-accent text-[#1a1500]" : "bg-surface text-dim"}`}>
-              {ex.rpeCoach ? `${ex.rpeCoach}/10` : "—"}
-            </span>
-            <input type="range" min={0} max={10} step={1} value={ex.rpeCoach} onChange={(e) => onPatch({ rpeCoach: +e.target.value })} className="flex-1" />
+          <div className="mt-2.5">
+            <span className="mb-1 block text-[13px] text-dim">RPE coach (0 – 10)</span>
+            <div className="flex items-center gap-2">
+              <input
+                type="text"
+                inputMode="decimal"
+                placeholder="ex : 7, 7/8, ~8"
+                value={ex.rpeCoach ?? ""}
+                onChange={(e) => onPatch({ rpeCoach: e.target.value })}
+                className="flex-1"
+              />
+              {ex.rpeCoach ? (
+                <span className="shrink-0 rounded-lg bg-accent/15 px-2.5 py-1 text-sm font-bold text-accent">
+                  {ex.rpeCoach}
+                </span>
+              ) : null}
+            </div>
+            <RpeGauge value={ex.rpeCoach} />
           </div>
           <label className="mt-2.5 block">
             <span className="mb-1 block text-[13px] text-dim">Commentaire coach</span>
@@ -371,37 +430,52 @@ function ExerciseBlock({
           <div className="flex flex-wrap gap-x-4 gap-y-1 text-sm">
             <span><strong>{ex.setsLabel ?? ex.sets}</strong> × <strong>{ex.repsLabel ?? ex.reps}</strong> reps</span>
             {ex.weight > 0 && <span className="text-dim">{isPace ? `${ex.weight} min/km` : `${ex.weight} kg`}</span>}
-            {ex.rpeCoach > 0 && <span className="text-dim">RPE coach {ex.rpeCoach}/10</span>}
           </div>
           {(ex.coachComment ?? "") && (
             <p className="mt-1.5 rounded-lg bg-surface p-2 text-[13px]"><span className="text-dim">Coach : </span>{ex.coachComment}</p>
+          )}
+          {/* RPE prescrit par le coach — affiché au client */}
+          {!!ex.rpeCoach && ex.rpeCoach !== 0 && (
+            <div className="mt-2.5 rounded-xl border border-line bg-surface p-3">
+              <div className="mb-1.5 flex items-center gap-2">
+                <span className="text-[13px] text-dim">RPE prescrit</span>
+                <span className="rounded-lg bg-accent/15 px-2.5 py-1 text-sm font-bold text-accent">
+                  {ex.rpeCoach}
+                </span>
+              </div>
+              <RpeGauge value={ex.rpeCoach} />
+            </div>
           )}
         </>
       )}
 
       {/* RPE client + échec — éditable client / lecture seule coach */}
-      <div className="mt-2.5 flex items-center gap-2">
-        <span className="w-24 shrink-0 text-[13px] text-dim">RPE sportif</span>
-        {ex.failed ? (
-          <span className="rounded-lg bg-danger/20 px-2.5 py-1 text-sm font-bold text-danger">❌ Raté</span>
-        ) : (
-          <span className={`rounded-lg px-2.5 py-1 text-sm font-bold ${ex.rpeClient ? "bg-accent2 text-[#06121f]" : "bg-surface text-dim"}`}>
-            {ex.rpeClient ? `${ex.rpeClient}/10` : "—"}
-          </span>
-        )}
-        {!isCoach && !ex.failed && (
-          <input type="range" min={0} max={10} step={1} value={ex.rpeClient} onChange={(e) => onPatch({ rpeClient: +e.target.value })} className="flex-1" />
-        )}
-        {!isCoach && (
-          <button
-            type="button"
-            onClick={() => onPatch({ failed: !ex.failed, ...(ex.failed ? {} : { rpeClient: 0 }) })}
-            title={ex.failed ? "Retirer l'échec" : "Marquer comme raté"}
-            className={`shrink-0 rounded-lg px-2 py-1 text-[13px] transition ${ex.failed ? "bg-danger text-white" : "bg-surface2 text-dim hover:text-danger"}`}
-          >
-            ❌
-          </button>
-        )}
+      <div className="mt-2.5">
+        <div className="flex items-center gap-2">
+          <span className="w-24 shrink-0 text-[13px] text-dim">RPE sportif</span>
+          {ex.failed ? (
+            <span className="rounded-lg bg-danger/20 px-2.5 py-1 text-sm font-bold text-danger">❌ Raté</span>
+          ) : (
+            <span className={`rounded-lg px-2.5 py-1 text-sm font-bold ${ex.rpeClient ? "bg-accent2 text-[#06121f]" : "bg-surface text-dim"}`}>
+              {ex.rpeClient ? `${ex.rpeClient}/10` : "—"}
+            </span>
+          )}
+          {!isCoach && !ex.failed && (
+            <input type="range" min={0} max={10} step={1} value={ex.rpeClient} onChange={(e) => onPatch({ rpeClient: +e.target.value })} className="flex-1" />
+          )}
+          {!isCoach && (
+            <button
+              type="button"
+              onClick={() => onPatch({ failed: !ex.failed, ...(ex.failed ? {} : { rpeClient: 0 }) })}
+              title={ex.failed ? "Retirer l'échec" : "Marquer comme raté"}
+              className={`shrink-0 rounded-lg px-2 py-1 text-[13px] transition ${ex.failed ? "bg-danger text-white" : "bg-surface2 text-dim hover:text-danger"}`}
+            >
+              ❌
+            </button>
+          )}
+        </div>
+        {/* Jauge RPE client */}
+        {ex.rpeClient > 0 && !ex.failed && <RpeGauge value={ex.rpeClient} />}
       </div>
 
       {/* Commentaire client */}
