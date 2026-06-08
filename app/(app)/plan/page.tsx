@@ -411,7 +411,7 @@ function VacationModal({
       className="fixed inset-0 z-50 flex items-end justify-center bg-black/60 sm:items-center"
       onClick={(e) => e.target === e.currentTarget && onClose()}
     >
-      <div className="w-full max-w-sm rounded-t-3xl border-t border-line bg-surface p-5 sm:rounded-3xl sm:border">
+      <div className="w-full max-w-sm overflow-hidden rounded-t-3xl border-t border-line bg-surface p-5 sm:rounded-3xl sm:border">
         <div className="mb-4 flex items-center justify-between">
           <h2 className="text-lg font-bold">🏖️ Mode vacances</h2>
           <button onClick={onClose} className="text-dim hover:text-ink">✕</button>
@@ -428,24 +428,26 @@ function VacationModal({
           Ton coach verra ta période de vacances sur le calendrier — les jours seront mis en orange.
         </p>
 
-        <div className="mb-3 flex gap-3">
-          <div className="min-w-0 flex-1">
+        <div className="mb-3 flex gap-2 overflow-hidden">
+          <div className="min-w-0 flex-1 overflow-hidden">
             <p className="mb-1.5 text-[12px] font-semibold text-dim">Début</p>
             <input
               type="date"
               value={start}
               onChange={(e) => setStart(e.target.value)}
-              className="w-full max-w-full rounded-xl border border-line bg-surface2 px-2.5 py-2.5 text-sm outline-none focus:border-orange-400"
+              style={{ maxWidth: "100%", boxSizing: "border-box" }}
+              className="block w-full min-w-0 rounded-xl border border-line bg-surface2 px-2 py-2.5 text-sm outline-none focus:border-orange-400"
             />
           </div>
-          <div className="min-w-0 flex-1">
+          <div className="min-w-0 flex-1 overflow-hidden">
             <p className="mb-1.5 text-[12px] font-semibold text-dim">Fin (optionnel)</p>
             <input
               type="date"
               value={end}
               min={start}
               onChange={(e) => setEnd(e.target.value)}
-              className="w-full max-w-full rounded-xl border border-line bg-surface2 px-2.5 py-2.5 text-sm outline-none focus:border-orange-400"
+              style={{ maxWidth: "100%", boxSizing: "border-box" }}
+              className="block w-full min-w-0 rounded-xl border border-line bg-surface2 px-2 py-2.5 text-sm outline-none focus:border-orange-400"
             />
           </div>
         </div>
