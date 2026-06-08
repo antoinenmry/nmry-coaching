@@ -53,6 +53,7 @@ export default function ExerciseMultiSelect({
                 key={o.id}
                 active={(sel[cat.id] ?? []).includes(o.id)}
                 label={o.label}
+                color={o.color}
                 onClick={() =>
                   setSel((s) => {
                     const cur = s[cat.id] ?? [];
@@ -105,14 +106,20 @@ export default function ExerciseMultiSelect({
   );
 }
 
-function Chip({ active, label, onClick }: { active: boolean; label: string; onClick: () => void }) {
+function Chip({ active, label, color, onClick }: { active: boolean; label: string; color?: string; onClick: () => void }) {
   return (
     <button
       onClick={onClick}
-      className={`rounded-full border px-2.5 py-1 text-[13px] ${
+      className={`flex items-center gap-1.5 rounded-full border px-2.5 py-1 text-[13px] ${
         active ? "border-accent bg-accent/15 text-accent" : "border-line bg-surface2 text-ink"
       }`}
     >
+      {color && (
+        <span
+          className="h-2.5 w-2.5 shrink-0 rounded-full"
+          style={{ background: color }}
+        />
+      )}
       {label}
     </button>
   );

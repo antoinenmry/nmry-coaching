@@ -1,6 +1,6 @@
 "use client";
 
-import { useRef, useState } from "react";
+import { useMemo, useRef, useState } from "react";
 import { useData } from "./DataProvider";
 import ExercisePicker, { type InlineExercise } from "./ExercisePicker";
 import { exerciseInstanceFromLibrary, SESSION_COLORS } from "@/lib/data";
@@ -23,11 +23,28 @@ export default function SessionEditor({
   role: Role;
   onClose: () => void;
 }) {
-  const { update, state } = useData();
+  const { update, state, library } = useData();
   const session = state.sessions.find((s) => s.id === sessionId);
   const [picking, setPicking] = useState(false);
 
-  const videoById = Object.fromEntries(state.library.exercises.map((e) => [e.id, e.video]));
+  const videoById = Object.fromEntries(library.exercises.map((e) => [e.id, e.video]));
+
+  // IDs des options marquées "allure" (isPace) dans les catégories de filtre
+  const paceOptionIds = useMemo(() => {
+    const ids = new Set<string>();
+    library.categories.forEach((c) => c.options.forEach((o) => { if (o.isPace) ids.add(o.id); }));
+    return ids;
+  }, [library]);
+
+  // IDs des exercices qui utilisent l'allure (min/km) plutôt que le poids (kg)
+  const paceExIds = useMemo(() => {
+    const ids = new Set<string>();
+    library.exercises.forEach((ex) => {
+      const hasPace = Object.values(ex.tags).flat().some((t) => paceOptionIds.has(t));
+      if (hasPace) ids.add(ex.id);
+    });
+    return ids;
+  }, [library, paceOptionIds]);
   const isCoach = role === "coach" || role === "admin";
   const backdropRef = useRef(false);
 
@@ -195,6 +212,7 @@ export default function SessionEditor({
               total={session.exercises.length}
               video={videoById[ex.exId]}
               isCoach={isCoach}
+              isPace={paceExIds.has(ex.exId)}
               onPatch={(patch) => patchEx(ex.uid, patch)}
               onRemove={() => removeExercise(ex.uid)}
               onMove={(dir) => moveExercise(ex.uid, dir)}
@@ -239,6 +257,7 @@ function ExerciseBlock({
   total,
   video,
   isCoach,
+  isPace,
   onPatch,
   onRemove,
   onMove,
@@ -247,6 +266,7 @@ function ExerciseBlock({
   index: number;
   total: number;
   video?: string;
+  isPace?: boolean;
   isCoach: boolean;
   onPatch: (patch: Partial<ExerciseInstance>) => void;
   onRemove: () => void;
@@ -319,8 +339,15 @@ function ExerciseBlock({
             </label>
           </div>
           <div className="mt-2.5">
-            <span className="mb-1 block text-[13px] text-dim">Poids (kg)</span>
-            <input type="number" min={0} value={ex.weight} onChange={(e) => onPatch({ weight: +e.target.value || 0 })} />
+            <span className="mb-1 block text-[13px] text-dim">{isPace ? "Allure (min/km)" : "Poids (kg)"}</span>
+            <input
+              type="number"
+              min={0}
+              step={isPace ? 0.05 : 1}
+              placeholder={isPace ? "ex : 4.5 → 4 min 30 s/km" : "0"}
+              value={ex.weight || ""}
+              onChange={(e) => onPatch({ weight: +e.target.value || 0 })}
+            />
           </div>
           <div className="mt-2.5 flex items-center gap-2">
             <span className="w-24 shrink-0 text-[13px] text-dim">RPE coach</span>
@@ -343,7 +370,7 @@ function ExerciseBlock({
         <>
           <div className="flex flex-wrap gap-x-4 gap-y-1 text-sm">
             <span><strong>{ex.setsLabel ?? ex.sets}</strong> × <strong>{ex.repsLabel ?? ex.reps}</strong> reps</span>
-            {ex.weight > 0 && <span className="text-dim">{ex.weight} kg</span>}
+            {ex.weight > 0 && <span className="text-dim">{isPace ? `${ex.weight} min/km` : `${ex.weight} kg`}</span>}
             {ex.rpeCoach > 0 && <span className="text-dim">RPE coach {ex.rpeCoach}/10</span>}
           </div>
           {(ex.coachComment ?? "") && (

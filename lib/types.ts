@@ -137,6 +137,8 @@ export interface BlockNote {
 export interface FilterOption {
   id: string;
   label: string;
+  color?: string;   // couleur associée (hex) — affichée sur les chips de filtre
+  isPace?: boolean; // si true, remplace "Poids (kg)" par "Allure (min/km)" dans l'éditeur
 }
 
 /** Une catégorie de filtre = une ligne de chips, ex. « Zone du corps ». */

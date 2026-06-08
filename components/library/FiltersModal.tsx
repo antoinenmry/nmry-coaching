@@ -42,6 +42,18 @@ export default function FiltersModal({
       if (o) o.label = label;
     });
 
+  const setOptionColor = (catId: string, optId: string, color: string) =>
+    updateLibrary((lib) => {
+      const o = lib.categories.find((c) => c.id === catId)?.options.find((o) => o.id === optId);
+      if (o) o.color = color || undefined;
+    });
+
+  const toggleOptionPace = (catId: string, optId: string) =>
+    updateLibrary((lib) => {
+      const o = lib.categories.find((c) => c.id === catId)?.options.find((o) => o.id === optId);
+      if (o) o.isPace = !o.isPace;
+    });
+
   const deleteOption = (catId: string, optId: string) =>
     updateLibrary((lib) => {
       const c = lib.categories.find((c) => c.id === catId);
@@ -67,6 +79,7 @@ export default function FiltersModal({
         </div>
         <p className="mb-4 text-sm text-dim">
           Chaque catégorie devient une ligne de filtres. Modifie les noms, ajoute/supprime options et catégories.
+          La <strong>couleur</strong> s&apos;affiche sur les chips de filtre. Le toggle <strong>⏱️</strong> remplace &laquo;&nbsp;Poids&nbsp;&raquo; par &laquo;&nbsp;Allure&nbsp;&raquo; dans l&apos;éditeur de séance.
         </p>
 
         <div className="space-y-3">
@@ -88,7 +101,33 @@ export default function FiltersModal({
               <div className="space-y-2">
                 {cat.options.map((opt) => (
                   <div key={opt.id} className="flex items-center gap-2">
-                    <input value={opt.label} onChange={(e) => renameOption(cat.id, opt.id, e.target.value)} />
+                    {/* Couleur */}
+                    <input
+                      type="color"
+                      value={opt.color ?? "#888888"}
+                      onChange={(e) => setOptionColor(cat.id, opt.id, e.target.value)}
+                      title="Couleur de l'option"
+                      className="h-8 w-8 shrink-0 cursor-pointer rounded border border-line bg-surface p-0.5"
+                    />
+                    {/* Label */}
+                    <input
+                      value={opt.label}
+                      onChange={(e) => renameOption(cat.id, opt.id, e.target.value)}
+                      className="flex-1"
+                    />
+                    {/* Toggle allure */}
+                    <button
+                      onClick={() => toggleOptionPace(cat.id, opt.id)}
+                      title={opt.isPace ? "Mode allure actif (min/km)" : "Activer mode allure (course à pied)"}
+                      className={`shrink-0 rounded-lg px-2 py-1.5 text-[13px] font-semibold transition ${
+                        opt.isPace
+                          ? "bg-accent/20 text-accent"
+                          : "bg-surface text-dim hover:text-ink"
+                      }`}
+                    >
+                      ⏱️
+                    </button>
+                    {/* Supprimer */}
                     <button
                       onClick={() => deleteOption(cat.id, opt.id)}
                       className="shrink-0 rounded-lg bg-surface px-2.5 py-2 text-[13px]"
