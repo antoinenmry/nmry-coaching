@@ -273,6 +273,7 @@ export interface UserPreferences {
   chosenRecordExerciseId?: string;                 // exercice choisi pour "chosenRecord"
   favoriteExerciseId?: string;                     // exercice favori ⭐ bibliothèque
   notifPrefs?: NotifPrefs;                         // préférences notifications
+  planNotifSentAt?: Record<string, string>;        // coach : dernière notif programme par clientId (ISO timestamp)
 }
 
 /** Document complet d'un client (stocké en JSON dans app_state.data). */

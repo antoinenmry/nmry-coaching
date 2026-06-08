@@ -24,6 +24,8 @@ interface ThemeContextValue {
   resetBgColor: () => void;
   /** Appelé dès que l'userId est connu (par BgColorSyncer). Charge la couleur propre à ce compte. */
   syncForUser: (userId: string) => void;
+  /** Applique le fond par défaut du thème SANS toucher au localStorage. */
+  applyDefault: () => void;
 }
 
 const ThemeContext = createContext<ThemeContextValue>({
@@ -33,6 +35,7 @@ const ThemeContext = createContext<ThemeContextValue>({
   setBgColor: () => {},
   resetBgColor: () => {},
   syncForUser: () => {},
+  applyDefault: () => {},
 });
 
 export function useTheme() {
@@ -108,8 +111,13 @@ export function ThemeProvider({ children }: { children: React.ReactNode }) {
     clearBgColor();
   }
 
+  /** Applique le fond par défaut du thème SANS toucher au localStorage ni au state. */
+  function applyDefault() {
+    clearBgColor();
+  }
+
   return (
-    <ThemeContext.Provider value={{ theme, toggleTheme, bgColor, setBgColor, resetBgColor, syncForUser }}>
+    <ThemeContext.Provider value={{ theme, toggleTheme, bgColor, setBgColor, resetBgColor, syncForUser, applyDefault }}>
       {children}
     </ThemeContext.Provider>
   );

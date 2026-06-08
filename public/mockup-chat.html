@@ -1,0 +1,174 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Mockup Chat</title>
+<style>
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body { background: #0f0f11; font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; display: flex; justify-content: center; padding: 24px 16px; }
+  .phone { width: 390px; background: #18181b; border-radius: 24px; overflow: hidden; border: 1px solid #2a2a2e; }
+
+  /* Header */
+  .header { background: #18181b; border-bottom: 1px solid #2a2a2e; padding: 16px; display: flex; align-items: center; gap: 10px; }
+  .back { color: #a0a0b0; font-size: 18px; }
+  .avatar { width: 36px; height: 36px; border-radius: 50%; background: #3b82f6; display: grid; place-items: center; font-weight: 700; font-size: 14px; color: white; }
+  .header-info { flex: 1; }
+  .header-name { font-weight: 600; color: #f0f0f5; font-size: 15px; }
+  .header-sub { font-size: 12px; color: #6b6b80; }
+
+  /* Messages */
+  .feed { padding: 16px; display: flex; flex-direction: column; gap: 4px; max-height: 680px; overflow-y: auto; }
+
+  /* Séparateur de date */
+  .date-sep { display: flex; align-items: center; gap: 8px; margin: 12px 0 8px; }
+  .date-sep::before, .date-sep::after { content: ''; flex: 1; height: 1px; background: #2a2a2e; }
+  .date-sep span { font-size: 11px; color: #6b6b80; white-space: nowrap; }
+
+  /* Message classique */
+  .msg { display: flex; flex-direction: column; margin-bottom: 4px; }
+  .msg.coach { align-items: flex-start; }
+  .msg.athlete { align-items: flex-end; }
+  .bubble { max-width: 78%; padding: 9px 13px; border-radius: 16px; font-size: 14px; line-height: 1.45; }
+  .msg.coach .bubble { background: #27272a; color: #e8e8f0; border-bottom-left-radius: 4px; }
+  .msg.athlete .bubble { background: #ca8a04; color: #1a1000; border-bottom-right-radius: 4px; }
+  .meta { font-size: 11px; color: #6b6b80; margin-top: 3px; padding: 0 3px; }
+
+  /* ── Message système : ANNONCE (broadcast) ── */
+  .sys-broadcast {
+    margin: 8px 0;
+    border-radius: 14px;
+    border: 1px solid #a855f7/30;
+    background: #1e1826;
+    overflow: hidden;
+  }
+  .sys-broadcast-header {
+    padding: 8px 12px 6px;
+    display: flex; align-items: center; gap-7px; gap: 7px;
+    border-bottom: 1px solid #2d1f3d;
+  }
+  .sys-broadcast-header .icon { font-size: 14px; }
+  .sys-broadcast-header .label { font-size: 12px; font-weight: 600; color: #c084fc; flex: 1; }
+  .sys-broadcast-header .badge {
+    font-size: 10px; padding: 2px 7px; border-radius: 99px;
+    background: #a855f7/20; color: #c084fc; border: 1px solid #a855f7/30;
+    background-color: rgba(168,85,247,.18);
+    border-color: rgba(168,85,247,.3);
+  }
+  .sys-broadcast-body { padding: 8px 12px 10px; font-size: 13.5px; color: #d0d0e0; line-height: 1.45; }
+  .sys-broadcast-footer { padding: 0 12px 9px; font-size: 11px; color: #6b6b80; }
+
+  /* ── Message système : PLAN mis à jour ── */
+  .sys-plan {
+    margin: 8px 0;
+    border-radius: 14px;
+    border: 1px solid rgba(99,102,241,.3);
+    background: #1a1a2e;
+    overflow: hidden;
+  }
+  .sys-plan-header {
+    padding: 8px 12px 6px;
+    display: flex; align-items: center; gap: 7px;
+    border-bottom: 1px solid rgba(99,102,241,.2);
+  }
+  .sys-plan-header .icon { font-size: 14px; }
+  .sys-plan-header .label { font-size: 12px; font-weight: 600; color: #818cf8; flex: 1; }
+  .sys-plan-body { padding: 8px 12px; font-size: 13.5px; color: #d0d0e0; line-height: 1.45; }
+  .sys-plan-link {
+    display: flex; align-items: center; gap: 6px;
+    margin: 6px 12px 10px;
+    padding: 7px 11px; border-radius: 10px;
+    background: rgba(99,102,241,.12); border: 1px solid rgba(99,102,241,.25);
+    font-size: 12px; font-weight: 600; color: #818cf8; cursor: pointer;
+  }
+  .sys-plan-footer { padding: 0 12px 9px; font-size: 11px; color: #6b6b80; }
+
+  /* Input bar */
+  .input-bar { padding: 12px 14px; border-top: 1px solid #2a2a2e; display: flex; gap: 8px; align-items: center; background: #18181b; }
+  .input-bar input { flex: 1; background: #27272a; border: 1px solid #3a3a3e; border-radius: 22px; padding: 9px 14px; font-size: 14px; color: #e8e8f0; outline: none; }
+  .input-bar input::placeholder { color: #5a5a70; }
+  .send-btn { width: 36px; height: 36px; border-radius: 50%; background: #ca8a04; display: grid; place-items: center; cursor: pointer; font-size: 15px; }
+</style>
+</head>
+<body>
+<div class="phone">
+
+  <!-- Header -->
+  <div class="header">
+    <div class="back">←</div>
+    <div class="avatar">LB</div>
+    <div class="header-info">
+      <div class="header-name">Leelou Bourlon</div>
+      <div class="header-sub">Dernière activité il y a 2h</div>
+    </div>
+  </div>
+
+  <!-- Feed -->
+  <div class="feed">
+
+    <!-- DATE -->
+    <div class="date-sep"><span>3 juin 2026</span></div>
+
+    <!-- Message coach classique -->
+    <div class="msg coach">
+      <div class="bubble">Salut Leelou ! N'oublie pas d'hydrater avant ta sortie de demain 💧</div>
+      <div class="meta">Antoine · 09:14</div>
+    </div>
+
+    <!-- Réponse sportif -->
+    <div class="msg athlete">
+      <div class="bubble">Oui c'est noté merci 🙏</div>
+      <div class="meta">09:31</div>
+    </div>
+
+    <!-- DATE -->
+    <div class="date-sep"><span>7 juin 2026</span></div>
+
+    <!-- ── ANNONCE BROADCAST ── -->
+    <div class="sys-broadcast">
+      <div class="sys-broadcast-header">
+        <span class="icon">📢</span>
+        <span class="label">Annonce de l'équipe</span>
+        <span class="badge">Pour tous</span>
+      </div>
+      <div class="sys-broadcast-body">
+        Rappel : stage de préparation le 15 juin à 8h. Prévoir tenue, nutrition et chaussures de trail.
+      </div>
+      <div class="sys-broadcast-footer">Antoine · 11:20</div>
+    </div>
+
+    <!-- DATE -->
+    <div class="date-sep"><span>8 juin 2026</span></div>
+
+    <!-- ── NOTIF PLAN ── -->
+    <div class="sys-plan">
+      <div class="sys-plan-header">
+        <span class="icon">🗓️</span>
+        <span class="label">Programme mis à jour</span>
+      </div>
+      <div class="sys-plan-body">
+        Antoine a publié ta programmation pour juin. Tu as 8 séances planifiées cette semaine.
+      </div>
+      <div class="sys-plan-link">
+        ▶ Voir ma programmation
+      </div>
+      <div class="sys-plan-footer">Aujourd'hui · 08:52</div>
+    </div>
+
+    <!-- Message coach classique -->
+    <div class="msg coach">
+      <div class="bubble">J'ai ajusté ton bloc de qualité, dis-moi si les charges te conviennent 👌</div>
+      <div class="meta">Antoine · 09:05</div>
+    </div>
+
+  </div>
+
+  <!-- Input -->
+  <div class="input-bar">
+    <input type="text" placeholder="Message…" />
+    <div class="send-btn">↑</div>
+  </div>
+
+</div>
+</body>
+</html>

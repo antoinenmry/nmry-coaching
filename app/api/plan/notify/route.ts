@@ -60,6 +60,7 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: "Forbidden" }, { status: 403 });
   }
 
+  const coachId = user.id; // capturé avant les fonctions imbriquées (TS narrowing)
   const coachName = profile.name || "Votre coach";
   const body = await req.json().catch(() => ({}));
   const targetUserId: string | undefined = body?.targetUserId;
@@ -69,6 +70,22 @@ export async function POST(req: NextRequest) {
     body: `${coachName} a mis à jour votre programmation`,
     url: "/plan",
   };
+
+  /** Met à jour planNotifSentAt dans l'app_state du coach pour les clientIds donnés. */
+  async function updateCoachPlanNotif(clientIds: string[]) {
+    const { data: coachRow } = await admin
+      .from("app_state").select("data").eq("user_id", coachId).maybeSingle();
+    const coachData = (coachRow?.data ?? {}) as Record<string, unknown>;
+    const coachPrefs = ((coachData.preferences as Record<string, unknown>) ?? {});
+    const sentAt: Record<string, string> = { ...((coachPrefs.planNotifSentAt as Record<string, string>) ?? {}) };
+    const now = new Date().toISOString();
+    clientIds.forEach((id) => { sentAt[id] = now; });
+    await admin.from("app_state").upsert({
+      user_id: coachId,
+      data: { ...coachData, preferences: { ...coachPrefs, planNotifSentAt: sentAt } },
+      updated_at: now,
+    });
+  }
 
   // ── Cas 1 : un sportif spécifique ──────────────────────────────────────────
   if (targetUserId) {
@@ -86,7 +103,10 @@ export async function POST(req: NextRequest) {
 
     const prefs = await getUserNotifPrefs(targetUserId);
     if (prefs.newPlan) await sendPushToUser(targetUserId, NOTIF_PAYLOAD);
-    await appendPlanUpdateToChat(admin, targetUserId, user.id, coachName);
+    await Promise.all([
+      appendPlanUpdateToChat(admin, targetUserId, user.id, coachName),
+      updateCoachPlanNotif([targetUserId]),
+    ]);
     return NextResponse.json({ sent: 1 });
   }
 
@@ -106,6 +126,7 @@ export async function POST(req: NextRequest) {
       await appendPlanUpdateToChat(admin, client_id, user.id, coachName);
     })
   );
+  await updateCoachPlanNotif(links.map((l) => l.client_id));
 
   return NextResponse.json({ sent });
 }

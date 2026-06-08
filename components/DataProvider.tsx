@@ -62,6 +62,10 @@ interface DataContextValue {
   previewAsClient: boolean;
   setPreviewAsClient: (v: boolean) => void;
   hasCoach: boolean; // false = client sans coach affecté (accès bloqué)
+  /** Coach : { [clientId]: ISOstring } — dernière notif programme par sportif */
+  planNotifSentAt: Record<string, string>;
+  /** Enregistre localement qu'une notif vient d'être envoyée (le serveur gère la persistence) */
+  recordPlanNotif: (clientId: string) => void;
 }
 
 const DataContext = createContext<DataContextValue | null>(null);
@@ -88,6 +92,7 @@ export function DataProvider({ children }: { children: React.ReactNode }) {
   const [role, setRoleState] = useState<Role>("client");
   const [previewAsClient, setPreviewAsClient] = useState(false);
   const [hasCoach, setHasCoach] = useState(true); // optimiste par défaut
+  const [planNotifSentAt, setPlanNotifSentAt] = useState<Record<string, string>>({});
 
   const setRole = useCallback((r: Role) => {
     setRoleState(r);
@@ -174,6 +179,17 @@ export function DataProvider({ children }: { children: React.ReactNode }) {
         if (res.ok) setTemplates((await res.json()) as TemplateLibrary);
       }
 
+      // Helper : charger planNotifSentAt depuis les préférences propres au coach
+      const coachUserId = user.id;
+      async function loadCoachPlanNotif() {
+        const { data: ownRow } = await supabase
+          .from("app_state").select("data").eq("user_id", coachUserId).maybeSingle();
+        const ownPrefs = (ownRow?.data as Record<string,unknown> | null)?.preferences as Record<string,unknown> | undefined;
+        if (ownPrefs?.planNotifSentAt) {
+          setPlanNotifSentAt(ownPrefs.planNotifSentAt as Record<string, string>);
+        }
+      }
+
       if (myProfile.role === "admin") {
         // Admin : voit tous les profils (clients + coaches)
         const { data: all } = await supabase
@@ -184,7 +200,10 @@ export function DataProvider({ children }: { children: React.ReactNode }) {
         setClients(list);
         const savedId = typeof window !== "undefined" ? localStorage.getItem(COACH_CLIENT_KEY) : null;
         const savedClient = savedId ? list.find((c) => c.id === savedId) : null;
-        await loadStateFor(savedClient ? savedClient.id : user.id);
+        await Promise.all([
+          loadStateFor(savedClient ? savedClient.id : user.id),
+          loadCoachPlanNotif(),
+        ]);
       } else if (myProfile.role === "coach") {
         // Coach : uniquement ses clients affectés
         const { data: assignments } = await supabase
@@ -204,7 +223,10 @@ export function DataProvider({ children }: { children: React.ReactNode }) {
         setClients(list);
         const savedId = typeof window !== "undefined" ? localStorage.getItem(COACH_CLIENT_KEY) : null;
         const savedClient = savedId ? list.find((c) => c.id === savedId) : null;
-        await loadStateFor(savedClient ? savedClient.id : user.id);
+        await Promise.all([
+          loadStateFor(savedClient ? savedClient.id : user.id),
+          loadCoachPlanNotif(),
+        ]);
       } else {
         // Client : vérifier qu'il a un coach affecté via l'API (bypass RLS coach_client)
         // En cas d'erreur réseau on laisse passer (fail-open) pour ne pas bloquer les clients existants
@@ -339,6 +361,10 @@ export function DataProvider({ children }: { children: React.ReactNode }) {
     router.replace("/login");
   }, [supabase, router]);
 
+  const recordPlanNotif = useCallback((clientId: string) => {
+    setPlanNotifSentAt((prev) => ({ ...prev, [clientId]: new Date().toISOString() }));
+  }, []);
+
   return (
     <DataContext.Provider
       value={{
@@ -350,6 +376,7 @@ export function DataProvider({ children }: { children: React.ReactNode }) {
         role: previewAsClient ? "client" : role,
         setRole, previewAsClient, setPreviewAsClient,
         hasCoach,
+        planNotifSentAt, recordPlanNotif,
       }}
     >
       {children}

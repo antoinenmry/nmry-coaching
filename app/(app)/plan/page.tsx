@@ -21,7 +21,7 @@ const EMOJIS = ["😫", "😕", "😐", "🙂", "🤩"];
 const emojiOf = (n: number) => (n >= 1 && n <= 5 ? EMOJIS[n - 1] + " " : "");
 
 export default function PlanPage() {
-  const { state, update, role, setRole, loading, clients, activeUserId, me } = useData();
+  const { state, update, role, setRole, loading, clients, activeUserId, me, recordPlanNotif } = useData();
   const isCoach = role === "coach" || role === "admin";
   const [notifying, setNotifying] = useState(false);
   const [notifSent, setNotifSent] = useState(false);
@@ -33,11 +33,12 @@ export default function PlanPage() {
     setNotifying(true);
     // Si on consulte le profil d'un sportif spécifique, ne notifier que lui
     const targetUserId = activeUserId && activeUserId !== me?.id ? activeUserId : undefined;
-    await fetch("/api/plan/notify", {
+    const res = await fetch("/api/plan/notify", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify(targetUserId ? { targetUserId } : {}),
-    }).catch(() => {});
+    }).catch(() => null);
+    if (res?.ok && targetUserId) recordPlanNotif(targetUserId);
     setNotifying(false);
     setNotifSent(true);
     setTimeout(() => setNotifSent(false), 3000);
