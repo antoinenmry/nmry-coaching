@@ -402,6 +402,40 @@ function MessagesTab() {
           <p className="py-10 text-center text-sm text-dim">Aucun message. Dis bonjour 👋</p>
         )}
         {messages.map(msg => {
+          // ── Messages système ──────────────────────────────────────────
+          if (msg.type === "broadcast") {
+            return (
+              <div key={msg.id} className="rounded-xl border border-violet-500/30 bg-violet-500/5 overflow-hidden">
+                <div className="flex items-center gap-2 border-b border-violet-500/20 px-3 py-2">
+                  <span className="text-sm">📢</span>
+                  <span className="flex-1 text-[12px] font-semibold text-violet-400">Annonce de l&apos;équipe</span>
+                  <span className="rounded-full border border-violet-500/30 bg-violet-500/15 px-2 py-0.5 text-[10px] font-semibold text-violet-400">Pour tous</span>
+                </div>
+                <div className="px-3 py-2 text-[13.5px] text-ink">{msg.text}</div>
+                <div className="px-3 pb-2 text-[11px] text-dim">{msg.senderName} · {fmtHour(msg.createdAt)}</div>
+              </div>
+            );
+          }
+          if (msg.type === "plan_update") {
+            return (
+              <div key={msg.id} className="rounded-xl border border-indigo-500/30 bg-indigo-500/5 overflow-hidden">
+                <div className="flex items-center gap-2 border-b border-indigo-500/20 px-3 py-2">
+                  <span className="text-sm">🗓️</span>
+                  <span className="text-[12px] font-semibold text-indigo-400">Programme mis à jour</span>
+                </div>
+                <div className="px-3 py-2 text-[13.5px] text-ink">{msg.text}</div>
+                <a
+                  href="/plan"
+                  className="mx-3 mb-3 flex items-center gap-1.5 rounded-lg border border-indigo-500/25 bg-indigo-500/10 px-3 py-2 text-[12px] font-semibold text-indigo-400"
+                >
+                  ▶ Voir ma programmation
+                </a>
+                <div className="px-3 pb-2 text-[11px] text-dim">{fmtHour(msg.createdAt)}</div>
+              </div>
+            );
+          }
+
+          // ── Message normal ────────────────────────────────────────────
           const isMe = msg.senderId === me?.id;
           const isEditing = editingMsgId === msg.id;
           return (

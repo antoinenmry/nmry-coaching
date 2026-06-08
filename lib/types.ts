@@ -118,6 +118,7 @@ export interface ChatMessage {
   senderId: string;     // user id de l'expéditeur
   senderName?: string;  // dénormalisé pour affichage
   isRead: boolean;
+  type?: "broadcast" | "plan_update"; // undefined = message normal
 }
 
 /** Une note du bloc-notes partagé sportif ↔ coach (stocké dans app_state du sportif). */
