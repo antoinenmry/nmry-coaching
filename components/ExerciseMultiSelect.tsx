@@ -8,15 +8,19 @@ export default function ExerciseMultiSelect({
   picked,
   onToggle,
   showFilters = true,
+  activeColorFilter,
 }: {
   picked: string[];
   onToggle: (id: string) => void;
   showFilters?: boolean;
+  /** Si fourni par le parent, ce filtre couleur est utilisé à la place de l'UI interne */
+  activeColorFilter?: string[];
 }) {
   const { library } = useData();
   const { categories, exercises } = library;
   const [sel, setSel] = useState<Record<string, string[]>>({});
   const [search, setSearch] = useState("");
+  // Filtre couleur interne (utilisé seulement si activeColorFilter n'est pas fourni)
   const [colorFilter, setColorFilter] = useState<string[]>([]);
 
   const toggleColorFilter = (hex: string) =>
@@ -24,23 +28,27 @@ export default function ExerciseMultiSelect({
       prev.includes(hex) ? prev.filter((c) => c !== hex) : [...prev, hex]
     );
 
-  /** Couleurs effectivement utilisées dans les options de filtres */
+  // Filtre effectif : externe si fourni, interne sinon
+  const effectiveColorFilter = activeColorFilter !== undefined ? activeColorFilter : colorFilter;
+
+  /** Couleurs effectivement utilisées — pour l'UI interne uniquement */
   const usedColors = useMemo(() => {
+    if (activeColorFilter !== undefined) return []; // pas d'UI interne
     const set = new Set<string>();
     categories.forEach((cat) => cat.options.forEach((o) => { if (o.color) set.add(o.color); }));
     return Array.from(set);
-  }, [categories]);
+  }, [categories, activeColorFilter]);
 
   const filtered = useMemo(() => {
     const q = search.trim().toLowerCase().normalize("NFD").replace(/[̀-ͯ]/g, "");
 
     // Option IDs des couleurs sélectionnées (pour filtre transversal)
     let colorOptionIds: Set<string> | null = null;
-    if (colorFilter.length > 0) {
+    if (effectiveColorFilter.length > 0) {
       colorOptionIds = new Set<string>();
       categories.forEach((cat) =>
         cat.options.forEach((o) => {
-          if (o.color && colorFilter.includes(o.color)) colorOptionIds!.add(o.id);
+          if (o.color && effectiveColorFilter.includes(o.color)) colorOptionIds!.add(o.id);
         })
       );
     }
@@ -63,7 +71,7 @@ export default function ExerciseMultiSelect({
         return sels.length === 0 || (ex.tags[c.id] ?? []).some((t) => sels.includes(t));
       });
     });
-  }, [exercises, categories, sel, search, colorFilter]);
+  }, [exercises, categories, sel, search, effectiveColorFilter]);
 
   return (
     <div>

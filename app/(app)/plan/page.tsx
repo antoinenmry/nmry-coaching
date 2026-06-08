@@ -487,9 +487,28 @@ function ComposeModal({ onClose, onCreated }: { onClose: () => void; onCreated: 
   const { update, updateLibrary, library } = useData();
   const { categories } = library;
 
+  // Couleurs sport définies dans la bibliothèque
+  const usedColors = useMemo(() => {
+    const set = new Set<string>();
+    library.categories.forEach((cat) => cat.options.forEach((o) => { if (o.color) set.add(o.color); }));
+    return Array.from(set);
+  }, [library]);
+
   // --- état principal ---
   const [name, setName] = useState("");
   const [color, setColor] = useState(SESSION_COLORS[0]);
+  // Couleur sport sélectionnée (filtre exercices + couleur séance si sport couleur)
+  const [activeColor, setActiveColor] = useState<string | null>(null);
+
+  function toggleSportColor(hex: string) {
+    if (activeColor === hex) {
+      setActiveColor(null);
+      setColor(SESSION_COLORS[0]);
+    } else {
+      setActiveColor(hex);
+      setColor(hex);
+    }
+  }
   // Liste unifiée et ordonnée (biblio + custom)
   const [exercises, setExercises] = useState<SelectedEx[]>([]);
   const [saveToLib, setSaveToLib] = useState(true);
@@ -588,14 +607,40 @@ function ComposeModal({ onClose, onCreated }: { onClose: () => void; onCreated: 
           <input value={name} onChange={(e) => setName(e.target.value)} placeholder="Ex : Haut du corps A" autoFocus />
         </label>
 
-        {/* Couleur */}
+        {/* Couleur — sport colors si dispo, sinon palette session classique */}
         <div className="mb-3">
           <span className="mb-1.5 block text-[13px] text-dim">Couleur</span>
-          <div className="flex gap-2">
-            {SESSION_COLORS.map((c) => (
-              <button key={c} onClick={() => setColor(c)} className={`h-8 w-8 rounded-full border-2 ${color === c ? "border-ink" : "border-transparent"}`} style={{ background: c }} aria-label={`Couleur ${c}`} />
-            ))}
-          </div>
+          {usedColors.length > 0 ? (
+            <div className="flex flex-wrap gap-2">
+              {/* Cercle "Tous" (pas de filtre) */}
+              <button
+                onClick={() => { setActiveColor(null); setColor(SESSION_COLORS[0]); }}
+                title="Tous les sports"
+                className={`h-8 w-8 rounded-full border-[3px] bg-surface2 transition-all ${
+                  !activeColor ? "border-white" : "border-transparent opacity-40 hover:opacity-70"
+                }`}
+              />
+              {usedColors.map((c) => (
+                <button
+                  key={c}
+                  onClick={() => toggleSportColor(c)}
+                  title="Filtrer par sport"
+                  className={`h-8 w-8 rounded-full border-[3px] transition-all ${
+                    activeColor === c
+                      ? "border-white scale-110 shadow-[0_0_0_1px_rgba(255,255,255,0.25)]"
+                      : "border-transparent opacity-50 hover:opacity-80"
+                  }`}
+                  style={{ background: c }}
+                />
+              ))}
+            </div>
+          ) : (
+            <div className="flex gap-2">
+              {SESSION_COLORS.map((c) => (
+                <button key={c} onClick={() => setColor(c)} className={`h-8 w-8 rounded-full border-2 ${color === c ? "border-ink" : "border-transparent"}`} style={{ background: c }} aria-label={`Couleur ${c}`} />
+              ))}
+            </div>
+          )}
         </div>
 
         {/* Bibliothèque : en-tête + toggle filtres */}
@@ -611,7 +656,12 @@ function ComposeModal({ onClose, onCreated }: { onClose: () => void; onCreated: 
             {filtersOpen ? "▲ Masquer les filtres" : "▼ Filtres"}
           </button>
         </div>
-        <ExerciseMultiSelect picked={pickedIds} onToggle={toggleLibEx} showFilters={filtersOpen} />
+        <ExerciseMultiSelect
+          picked={pickedIds}
+          onToggle={toggleLibEx}
+          showFilters={filtersOpen}
+          activeColorFilter={usedColors.length > 0 ? (activeColor ? [activeColor] : []) : undefined}
+        />
 
         {/* Exercice personnalisé */}
         <div className="mt-4 rounded-xl border border-dashed border-line bg-surface2 p-3">
