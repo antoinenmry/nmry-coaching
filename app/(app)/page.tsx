@@ -219,6 +219,28 @@ export default function Dashboard() {
         </Link>
       )}
 
+      {/* Bannière vacances (client uniquement, quand la période est active) */}
+      {!isCoach && (() => {
+        const vs = me?.vacation_start;
+        const ve = me?.vacation_end;
+        const onVacation = !!vs && today >= vs && (!ve || today <= ve);
+        if (!onVacation) return null;
+        const endDate = ve
+          ? new Date(ve + "T00:00:00").toLocaleDateString("fr-FR", { day: "numeric", month: "long" })
+          : null;
+        return (
+          <div className="mb-3.5 flex items-center gap-3 rounded-2xl border border-orange-500/40 bg-orange-500/5 px-4 py-3">
+            <span className="text-2xl">🏖️</span>
+            <div>
+              <p className="font-semibold text-orange-400">Tu es en vacances</p>
+              <p className="text-[12px] text-dim">
+                {endDate ? `Jusqu'au ${endDate} · Bon repos !` : "Profite bien !"}
+              </p>
+            </div>
+          </div>
+        );
+      })()}
+
       {/* Grille de cartes */}
       <div className="grid grid-cols-2 gap-3.5">
         {CARDS.map((c) => (

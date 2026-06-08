@@ -151,7 +151,7 @@ export function DataProvider({ children }: { children: React.ReactNode }) {
       setMode("auth");
       const { data: profile } = await supabase
         .from("profiles")
-        .select("id,email,name,role,status")
+        .select("id,email,name,role,status,vacation_start,vacation_end")
         .eq("id", user.id)
         .maybeSingle();
       const myProfile: Profile =
@@ -177,7 +177,7 @@ export function DataProvider({ children }: { children: React.ReactNode }) {
         // Admin : voit tous les profils (clients + coaches)
         const { data: all } = await supabase
           .from("profiles")
-          .select("id,email,name,role,status")
+          .select("id,email,name,role,status,vacation_start,vacation_end")
           .order("created_at");
         const list = (all ?? []) as Profile[];
         setClients(list);
@@ -195,7 +195,7 @@ export function DataProvider({ children }: { children: React.ReactNode }) {
         if (assignedIds.length > 0) {
           const { data: assigned } = await supabase
             .from("profiles")
-            .select("id,email,name,role,status")
+            .select("id,email,name,role,status,vacation_start,vacation_end")
             .in("id", assignedIds)
             .order("created_at");
           list = (assigned ?? []) as Profile[];

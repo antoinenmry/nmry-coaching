@@ -19,7 +19,8 @@ async function requireElevated() {
 /**
  * GET /api/coach/athletes
  * Retourne pour chaque sportif (role=client) :
- *   id, name, email, status, last_sign_in_at, updated_by_coach_at, updated_by_client_at
+ *   id, name, email, status, vacation_start, vacation_end,
+ *   last_sign_in_at, updated_by_coach_at, updated_by_client_at
  */
 export async function GET() {
   const caller = await requireElevated();
@@ -31,7 +32,7 @@ export async function GET() {
   // 1. Profils des sportifs — admin voit tous les clients, coach voit ses affectés
   let profilesQuery = supabase
     .from("profiles")
-    .select("id,name,email,status,vacation_mode")
+    .select("id,name,email,status,vacation_start,vacation_end")
     .eq("role", "client")
     .order("created_at");
 
@@ -45,7 +46,7 @@ export async function GET() {
     if (assignedIds.length === 0) return NextResponse.json([]);
     profilesQuery = supabase
       .from("profiles")
-      .select("id,name,email,status,vacation_mode")
+      .select("id,name,email,status,vacation_start,vacation_end")
       .eq("role", "client")
       .in("id", assignedIds)
       .order("created_at");
@@ -85,7 +86,8 @@ export async function GET() {
       name: p.name,
       email: p.email,
       status: p.status ?? "active",
-      vacation_mode: p.vacation_mode ?? false,
+      vacation_start: p.vacation_start ?? null,
+      vacation_end: p.vacation_end ?? null,
       last_sign_in_at: authMap[p.id] ?? null,
       updated_by_coach_at: s?.updated_by_coach_at ?? null,
       updated_by_client_at: s?.updated_by_client_at ?? null,

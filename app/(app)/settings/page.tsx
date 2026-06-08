@@ -152,11 +152,15 @@ function AthletesManager() {
                   <p className="truncate text-[12px] text-dim">{a.email}</p>
                 </div>
                 <div className="flex shrink-0 flex-wrap justify-end gap-1.5">
-                  {a.vacation_mode && (
-                    <span className="rounded-full bg-orange-500/20 px-2.5 py-1 text-[12px] font-bold text-orange-400">
-                      🏖️ Vacances
-                    </span>
-                  )}
+                  {(() => {
+                    const today = new Date().toISOString().slice(0, 10);
+                    const onVacation = !!a.vacation_start && today >= a.vacation_start && (!a.vacation_end || today <= a.vacation_end);
+                    return onVacation ? (
+                      <span className="rounded-full bg-orange-500/20 px-2.5 py-1 text-[12px] font-bold text-orange-400">
+                        🏖️ Vacances
+                      </span>
+                    ) : null;
+                  })()}
                   <button
                     onClick={() => toggleStatus(a.id, a.status)}
                     disabled={pendingAction === a.id + "-status"}
@@ -481,30 +485,57 @@ export default function SettingsPage() {
   const [tab, setTab] = useState<"affichage" | "sportifs" | "admin">("affichage");
   const [cardSubTab, setCardSubTab] = useState<"couleurs" | "accueil">("couleurs");
 
-  // Mode vacances — état local optimiste (se synchronise avec la DB via API)
-  const [vacationMode, setVacationMode] = useState<boolean>(false);
+  // Mode vacances — dates de début/fin (null = pas en vacances)
+  const [vacationStart, setVacationStart] = useState<string>("");
+  const [vacationEnd, setVacationEnd] = useState<string>("");
   const [vacationLoaded, setVacationLoaded] = useState(false);
   const [vacationPending, setVacationPending] = useState(false);
 
-  // Charger l'état initial depuis profiles (via me.id — on passe par l'API)
+  // Charger l'état initial depuis profiles (via API)
   useEffect(() => {
     if (!me?.id || vacationLoaded) return;
     fetch("/api/me/vacation-status")
       .then((r) => r.ok ? r.json() : null)
-      .then((d) => { if (d) { setVacationMode(d.vacationMode ?? false); setVacationLoaded(true); } })
+      .then((d) => {
+        if (d) {
+          setVacationStart(d.vacationStart ?? "");
+          setVacationEnd(d.vacationEnd ?? "");
+          setVacationLoaded(true);
+        }
+      })
       .catch(() => { setVacationLoaded(true); });
   }, [me?.id, vacationLoaded]);
 
-  async function toggleVacation() {
-    if (vacationPending) return;
-    const next = !vacationMode;
-    setVacationMode(next); // optimiste
+  // Calcul : est-on actuellement en vacances ?
+  const todayStr = new Date().toISOString().slice(0, 10);
+  const isCurrentlyOnVacation = !!vacationStart && todayStr >= vacationStart && (!vacationEnd || todayStr <= vacationEnd);
+
+  async function saveVacation() {
+    if (vacationPending || !vacationStart) return;
     setVacationPending(true);
     await fetch("/api/me/vacation", {
       method: "PATCH",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ vacationMode: next }),
-    }).catch(() => setVacationMode(!next)); // rollback si erreur
+      body: JSON.stringify({ vacationStart, vacationEnd: vacationEnd || null }),
+    }).catch(() => {});
+    setVacationPending(false);
+  }
+
+  async function clearVacation() {
+    if (vacationPending) return;
+    setVacationPending(true);
+    const prevStart = vacationStart;
+    const prevEnd = vacationEnd;
+    setVacationStart("");
+    setVacationEnd("");
+    await fetch("/api/me/vacation", {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ vacationStart: null, vacationEnd: null }),
+    }).catch(() => {
+      setVacationStart(prevStart);
+      setVacationEnd(prevEnd);
+    });
     setVacationPending(false);
   }
 
@@ -547,7 +578,7 @@ export default function SettingsPage() {
             }`}>
               {role === "admin" ? "Admin" : role === "coach" ? "Coach" : "Sportif"}
             </span>
-            {vacationMode && (
+            {isCurrentlyOnVacation && (
               <span className="rounded-full bg-orange-500/20 px-2.5 py-1 text-sm font-bold text-orange-400">
                 🏖️ En vacances
               </span>
@@ -555,28 +586,54 @@ export default function SettingsPage() {
           </div>
         </div>
 
-        {/* Toggle mode vacances */}
-        <div className="mt-3 flex items-center justify-between rounded-xl bg-surface2 px-3 py-2.5">
-          <div>
+        {/* Mode vacances — sélecteur de dates */}
+        <div className="mt-3 rounded-xl bg-surface2 px-3 py-3 space-y-2.5">
+          <div className="flex items-center justify-between">
             <p className="text-sm font-medium">Mode vacances 🏖️</p>
-            <p className="text-[12px] text-dim">
-              {vacationMode
-                ? "Ton coach voit que tu es en vacances"
-                : "Indique à ton coach que tu n'es pas disponible"}
-            </p>
+            {vacationStart && (
+              <button
+                onClick={clearVacation}
+                disabled={vacationPending}
+                className="text-[12px] text-dim hover:text-danger disabled:opacity-50"
+              >
+                Effacer
+              </button>
+            )}
+          </div>
+          <p className="text-[12px] text-dim -mt-1">
+            {isCurrentlyOnVacation
+              ? `🏖️ En vacances${vacationEnd ? ` jusqu'au ${new Date(vacationEnd + "T00:00:00").toLocaleDateString("fr-FR", { day: "numeric", month: "long" })}` : ""}`
+              : vacationStart && !isCurrentlyOnVacation
+              ? `Programmé du ${new Date(vacationStart + "T00:00:00").toLocaleDateString("fr-FR", { day: "numeric", month: "long" })}${vacationEnd ? ` au ${new Date(vacationEnd + "T00:00:00").toLocaleDateString("fr-FR", { day: "numeric", month: "long" })}` : ""}`
+              : "Indique à ton coach que tu ne seras pas disponible"}
+          </p>
+          <div className="flex gap-2">
+            <div className="flex-1">
+              <p className="mb-1 text-[11px] font-semibold text-dim">Début</p>
+              <input
+                type="date"
+                value={vacationStart}
+                onChange={(e) => setVacationStart(e.target.value)}
+                className="w-full rounded-xl border border-line bg-surface px-3 py-2 text-sm outline-none focus:border-orange-400"
+              />
+            </div>
+            <div className="flex-1">
+              <p className="mb-1 text-[11px] font-semibold text-dim">Fin (optionnel)</p>
+              <input
+                type="date"
+                value={vacationEnd}
+                min={vacationStart}
+                onChange={(e) => setVacationEnd(e.target.value)}
+                className="w-full rounded-xl border border-line bg-surface px-3 py-2 text-sm outline-none focus:border-orange-400"
+              />
+            </div>
           </div>
           <button
-            role="switch"
-            aria-checked={vacationMode}
-            onClick={toggleVacation}
-            disabled={vacationPending}
-            className={`relative h-6 w-11 shrink-0 rounded-full transition-colors disabled:opacity-50 ${
-              vacationMode ? "bg-orange-500" : "bg-surface border border-line"
-            }`}
+            onClick={saveVacation}
+            disabled={vacationPending || !vacationStart}
+            className="w-full rounded-xl bg-orange-500/20 py-2 text-sm font-semibold text-orange-400 hover:bg-orange-500/30 disabled:opacity-40 transition"
           >
-            <span className={`absolute top-0.5 h-5 w-5 rounded-full bg-white shadow transition-transform ${
-              vacationMode ? "translate-x-5" : "translate-x-0.5"
-            }`} />
+            {vacationPending ? "Enregistrement…" : "Enregistrer les vacances"}
           </button>
         </div>
 

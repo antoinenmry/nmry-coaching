@@ -8,7 +8,8 @@ export interface AthleteAdminData {
   name: string;
   email: string;
   status: AthleteStatus;
-  vacation_mode: boolean;       // mode vacances (ne peut pas s'entraîner)
+  vacation_start: string | null; // début de la période de vacances (YYYY-MM-DD)
+  vacation_end: string | null;   // fin de la période de vacances (null = indéfinie)
   last_sign_in_at: string | null;
   updated_by_coach_at: string | null;
   updated_by_client_at: string | null;
@@ -19,7 +20,9 @@ export interface Profile {
   email: string;
   name: string;
   role: Role;
-  status?: AthleteStatus; // "active" par défaut (champ optionnel pour rétrocompat)
+  status?: AthleteStatus;         // "active" par défaut (champ optionnel pour rétrocompat)
+  vacation_start?: string | null; // période vacances (YYYY-MM-DD ou null)
+  vacation_end?: string | null;
 }
 
 /** Vue admin : un coach avec ses clients affectés */

@@ -94,6 +94,18 @@ export default function PlanPage() {
     [state.followups],
   );
 
+  // Dates de vacances du sportif actif
+  const { vacationStart, vacationEnd } = useMemo(() => {
+    const activeProfile =
+      activeUserId === me?.id
+        ? me
+        : clients.find((c) => c.id === activeUserId);
+    return {
+      vacationStart: activeProfile?.vacation_start ?? null,
+      vacationEnd: activeProfile?.vacation_end ?? null,
+    };
+  }, [activeUserId, me, clients]);
+
   function shiftPeriod(dir: number) {
     const d = new Date(cursor);
     if (mode === "month") d.setMonth(d.getMonth() + dir);
@@ -237,6 +249,8 @@ export default function PlanPage() {
           sessionsByDate={sessionsByDate}
           goalsByDate={goalsByDate}
           injuries={injuries}
+          vacationStart={vacationStart}
+          vacationEnd={vacationEnd}
           pending={pending}
           onPlace={place}
           onOpen={setEditing}
@@ -249,6 +263,8 @@ export default function PlanPage() {
           sessionsByDate={sessionsByDate}
           goalsByDate={goalsByDate}
           injuries={injuries}
+          vacationStart={vacationStart}
+          vacationEnd={vacationEnd}
           pending={pending}
           onPlace={place}
           onOpen={setEditing}
@@ -261,6 +277,8 @@ export default function PlanPage() {
           sessionsByDate={sessionsByDate}
           goalsByDate={goalsByDate}
           injuries={injuries}
+          vacationStart={vacationStart}
+          vacationEnd={vacationEnd}
           onOpen={setEditing}
           onOpenGoal={setViewingGoals}
         />
@@ -275,6 +293,11 @@ export default function PlanPage() {
         {injuries.length > 0 && (
           <p className="flex items-center gap-1.5 text-xs text-dim">
             <span className="inline-block h-3 w-3 rounded border border-danger bg-danger/20" /> 🩹 Blessure active
+          </p>
+        )}
+        {vacationStart && (
+          <p className="flex items-center gap-1.5 text-xs text-dim">
+            <span className="inline-block h-3 w-3 rounded border border-orange-500/40 bg-orange-500/10" /> 🏖️ Vacances
           </p>
         )}
       </div>
@@ -690,6 +713,8 @@ interface ViewProps {
   sessionsByDate: Record<string, SessionInstance[]>;
   goalsByDate: Record<string, Goal[]>;
   injuries: Followup[];
+  vacationStart: string | null;
+  vacationEnd: string | null;
   pending: string | null;
   onPlace: (sessionId: string, date: string | null) => void;
   onOpen: (sessionId: string) => void;
@@ -705,6 +730,14 @@ function injuriesForDate(key: string, injuries: Followup[]): Followup[] {
     const end = f.dateEnd ?? TODAY;
     return end >= key;
   });
+}
+
+/** Retourne true si `key` (YYYY-MM-DD) est dans la période de vacances. */
+function isVacationDay(key: string, start: string | null, end: string | null): boolean {
+  if (!start) return false;
+  if (key < start) return false;
+  if (end && key > end) return false;
+  return true;
 }
 
 function dayDrop(key: string, pending: string | null, onPlace: ViewProps["onPlace"]) {
@@ -748,7 +781,7 @@ function SessionPill({ s, onOpen, big, todayKey }: { s: SessionInstance; onOpen:
   );
 }
 
-function MonthView({ cursor, todayKey, sessionsByDate, goalsByDate, injuries, pending, onPlace, onOpen, onOpenGoal }: ViewProps) {
+function MonthView({ cursor, todayKey, sessionsByDate, goalsByDate, injuries, vacationStart, vacationEnd, pending, onPlace, onOpen, onOpenGoal }: ViewProps) {
   const first = new Date(cursor.getFullYear(), cursor.getMonth(), 1);
   const startOffset = (first.getDay() + 6) % 7;
   const daysInMonth = new Date(cursor.getFullYear(), cursor.getMonth() + 1, 0).getDate();
@@ -766,6 +799,7 @@ function MonthView({ cursor, todayKey, sessionsByDate, goalsByDate, injuries, pe
     const dayInjuries = injuriesForDate(key, injuries);
     const isGoal = goals.length > 0;
     const isInjury = dayInjuries.length > 0;
+    const isVacation = isVacationDay(key, vacationStart, vacationEnd);
     cells.push(
       <div
         key={key}
@@ -775,12 +809,15 @@ function MonthView({ cursor, todayKey, sessionsByDate, goalsByDate, injuries, pe
             ? "border-ok bg-ok/10 ring-1 ring-ok/50"
             : isInjury
             ? "border-danger/40 bg-danger/5"
+            : isVacation
+            ? "border-orange-500/40 bg-orange-500/5"
             : `bg-surface ${key === todayKey ? "border-accent" : "border-line"}`
         } ${pending ? "cursor-pointer" : ""}`}
       >
         <span className="flex items-center justify-between text-[11px] text-dim">
           {day}
           <span className="flex gap-0.5">
+            {isVacation && !isInjury && !isGoal && <span title="Vacances">🏖️</span>}
             {isInjury && <span title={dayInjuries.map((f) => f.text).join(", ")}>🩹</span>}
             {isGoal && <span title={goals.map((g) => g.competition).join(", ")}>🎯</span>}
           </span>
@@ -809,11 +846,13 @@ interface SynthesisViewProps {
   sessionsByDate: Record<string, SessionInstance[]>;
   goalsByDate: Record<string, Goal[]>;
   injuries: Followup[];
+  vacationStart: string | null;
+  vacationEnd: string | null;
   onOpen: (sessionId: string) => void;
   onOpenGoal: (goals: Goal[]) => void;
 }
 
-function SynthesisView({ cursor, todayKey, sessionsByDate, goalsByDate, injuries, onOpen, onOpenGoal }: SynthesisViewProps) {
+function SynthesisView({ cursor, todayKey, sessionsByDate, goalsByDate, injuries, vacationStart, vacationEnd, onOpen, onOpenGoal }: SynthesisViewProps) {
   const monday = new Date(cursor);
   monday.setDate(cursor.getDate() - ((cursor.getDay() + 6) % 7));
 
@@ -828,6 +867,7 @@ function SynthesisView({ cursor, todayKey, sessionsByDate, goalsByDate, injuries
         const dayInjuries = injuriesForDate(key, injuries);
         const isGoal = goals.length > 0;
         const isInjury = dayInjuries.length > 0;
+        const isVacation = isVacationDay(key, vacationStart, vacationEnd);
         const isToday = key === todayKey;
 
         return (
@@ -838,13 +878,24 @@ function SynthesisView({ cursor, todayKey, sessionsByDate, goalsByDate, injuries
                 ? "border-ok bg-ok/10"
                 : isInjury
                 ? "border-danger/40 bg-danger/5"
+                : isVacation
+                ? "border-orange-500/40 bg-orange-500/5"
                 : `bg-surface ${isToday ? "border-accent" : "border-line"}`
             }`}
           >
             <h3 className="mb-2 flex justify-between text-sm font-semibold">
-              {DOW[i]}
+              <span className="flex items-center gap-1.5">
+                {isVacation && !isInjury && !isGoal && <span className="text-base">🏖️</span>}
+                {DOW[i]}
+              </span>
               <span className="font-normal text-dim">{date.getDate()} {MONTHS[date.getMonth()].slice(0, 3)}</span>
             </h3>
+
+            {isVacation && !isInjury && !isGoal && (
+              <div className="mb-2 flex items-center gap-1.5 rounded-md bg-orange-500/15 px-2 py-1 text-[13px] font-semibold text-orange-400">
+                🏖️ Vacances
+              </div>
+            )}
 
             {goals.map((g) => (
               <button
@@ -947,7 +998,7 @@ function SynthesisView({ cursor, todayKey, sessionsByDate, goalsByDate, injuries
   );
 }
 
-function WeekView({ cursor, todayKey, sessionsByDate, goalsByDate, injuries, pending, onPlace, onOpen, onOpenGoal }: ViewProps) {
+function WeekView({ cursor, todayKey, sessionsByDate, goalsByDate, injuries, vacationStart, vacationEnd, pending, onPlace, onOpen, onOpenGoal }: ViewProps) {
   const monday = new Date(cursor);
   monday.setDate(cursor.getDate() - ((cursor.getDay() + 6) % 7));
 
@@ -962,6 +1013,7 @@ function WeekView({ cursor, todayKey, sessionsByDate, goalsByDate, injuries, pen
         const dayInjuries = injuriesForDate(key, injuries);
         const isGoal = goals.length > 0;
         const isInjury = dayInjuries.length > 0;
+        const isVacation = isVacationDay(key, vacationStart, vacationEnd);
         return (
           <div
             key={key}
@@ -971,11 +1023,16 @@ function WeekView({ cursor, todayKey, sessionsByDate, goalsByDate, injuries, pen
                 ? "border-ok bg-ok/10"
                 : isInjury
                 ? "border-danger/40 bg-danger/5"
+                : isVacation
+                ? "border-orange-500/40 bg-orange-500/5"
                 : `bg-surface ${key === todayKey ? "border-accent" : "border-line"}`
             } ${pending ? "cursor-pointer" : ""}`}
           >
             <h3 className="mb-2 flex justify-between text-sm font-semibold">
-              {DOW[i]}
+              <span className="flex items-center gap-1.5">
+                {isVacation && !isInjury && !isGoal && <span>🏖️</span>}
+                {DOW[i]}
+              </span>
               <span className="font-normal text-dim">{date.getDate()} {MONTHS[date.getMonth()].slice(0, 3)}</span>
             </h3>
             {goals.map((g) => (

@@ -3,7 +3,7 @@ import { createClient } from "@/lib/supabase/server";
 
 /**
  * GET /api/me/vacation-status
- * Retourne le mode vacances de l'utilisateur connecté.
+ * Retourne les dates de vacances de l'utilisateur connecté.
  */
 export async function GET() {
   const supabase = await createClient();
@@ -12,9 +12,12 @@ export async function GET() {
 
   const { data } = await supabase
     .from("profiles")
-    .select("vacation_mode")
+    .select("vacation_start,vacation_end")
     .eq("id", user.id)
     .maybeSingle();
 
-  return NextResponse.json({ vacationMode: data?.vacation_mode ?? false });
+  return NextResponse.json({
+    vacationStart: data?.vacation_start ?? null,
+    vacationEnd: data?.vacation_end ?? null,
+  });
 }
