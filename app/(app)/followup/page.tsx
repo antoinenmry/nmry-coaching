@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useRef, useEffect, useCallback } from "react";
+import { useState, useRef, useEffect, useCallback, memo } from "react";
 import { useData } from "@/components/DataProvider";
 import { createClient } from "@/lib/supabase/client";
 import { emptyState, type AppState, type BlockNote, type ChatMessage, type Followup } from "@/lib/types";
@@ -38,7 +38,7 @@ function avatarBg(name: string) {
 function initials(name: string) {
   return name.split(/\s+/).slice(0, 2).map(w => w[0]?.toUpperCase() ?? "").join("");
 }
-function Avatar({ name, photo, size = 26 }: { name?: string; photo?: string; size?: number }) {
+const Avatar = memo(function Avatar({ name, photo, size = 26 }: { name?: string; photo?: string; size?: number }) {
   const n = name ?? "?";
   if (photo) {
     return (
@@ -54,7 +54,7 @@ function Avatar({ name, photo, size = 26 }: { name?: string; photo?: string; siz
       {initials(n)}
     </div>
   );
-}
+});
 
 // ─── VoicePlayer ──────────────────────────────────────────────────────────────
 const SPEEDS = [0.5, 1, 1.5, 2] as const;
