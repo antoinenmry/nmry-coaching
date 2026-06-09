@@ -130,7 +130,7 @@ export default function PlanPage() {
   function place(sessionId: string, date: string | null) {
     update((d) => {
       const s = d.sessions.find((x) => x.id === sessionId);
-      if (s) s.date = date;
+      if (s && !s.done) s.date = date;
     });
     setPending(null);
   }
@@ -1146,10 +1146,14 @@ function SessionPill({ s, onOpen, big, todayKey }: { s: SessionInstance; onOpen:
 
   return (
     <button
-      draggable
-      onDragStart={(e) => { e.stopPropagation(); e.dataTransfer.setData("text/session", s.id); }}
+      draggable={!s.done}
+      onDragStart={(e) => {
+        if (s.done) { e.preventDefault(); return; }
+        e.stopPropagation();
+        e.dataTransfer.setData("text/session", s.id);
+      }}
       onClick={(e) => { e.stopPropagation(); onOpen(s.id); }}
-      className={`w-full rounded-md px-1.5 text-left font-semibold text-[#06121f] ${big ? "py-1.5 text-[13px]" : "py-1 text-[11px]"}`}
+      className={`w-full rounded-md px-1.5 text-left font-semibold text-[#06121f] ${big ? "py-1.5 text-[13px]" : "py-1 text-[11px]"} ${s.done ? "cursor-pointer" : ""}`}
       style={{ background: s.color }}
     >
       <span className="flex items-center justify-between gap-1">

@@ -186,11 +186,16 @@ export default function SessionEditor({
 
         {/* Reprogrammer */}
         <label className="mt-3 block">
-          <span className="mb-1 block text-[13px] text-dim">Date (placement)</span>
+          <span className="mb-1 flex items-center gap-1.5 text-[13px] text-dim">
+            Date (placement)
+            {session.done && <span className="text-[12px]">🔒 figée</span>}
+          </span>
           <input
             type="date"
             value={session.date ?? ""}
             onChange={(e) => patchSession({ date: e.target.value || null })}
+            disabled={session.done && !isCoach}
+            className={session.done && !isCoach ? "opacity-60 cursor-not-allowed" : ""}
           />
         </label>
 
@@ -386,7 +391,7 @@ function ExerciseBlock({
             </label>
           </div>
           <div className="mt-2.5">
-            <span className="mb-1 block text-[13px] text-dim">{isPace ? "Allure (min/km)" : "Poids (kg)"}</span>
+            <span className="mb-1 block text-[13px] text-dim">{isPace ? "Allure prescrite (min/km)" : "Poids prescrit (kg)"}</span>
             <input
               type="number"
               min={0}
@@ -396,6 +401,12 @@ function ExerciseBlock({
               onChange={(e) => onPatch({ weight: +e.target.value || 0 })}
             />
           </div>
+          {(ex.weightClient ?? 0) > 0 && (
+            <div className="mt-1.5 flex items-center gap-2 rounded-lg bg-ok/10 px-3 py-1.5">
+              <span className="text-[12px] text-dim">Réalisé par le sportif :</span>
+              <span className="text-sm font-bold text-ok">{ex.weightClient} {isPace ? "min/km" : "kg"}</span>
+            </div>
+          )}
           <div className="mt-2.5">
             <span className="mb-1 block text-[13px] text-dim">RPE coach (0 – 10)</span>
             <div className="flex items-center gap-2">
@@ -429,11 +440,36 @@ function ExerciseBlock({
         <>
           <div className="flex flex-wrap gap-x-4 gap-y-1 text-sm">
             <span><strong>{ex.setsLabel ?? ex.sets}</strong> × <strong>{ex.repsLabel ?? ex.reps}</strong> reps</span>
-            {ex.weight > 0 && <span className="text-dim">{isPace ? `${ex.weight} min/km` : `${ex.weight} kg`}</span>}
+            {ex.weight > 0 && (
+              <span className="rounded-md bg-surface px-2 py-0.5 text-[12px] font-semibold text-dim">
+                Prescrit : {isPace ? `${ex.weight} min/km` : `${ex.weight} kg`}
+              </span>
+            )}
           </div>
           {(ex.coachComment ?? "") && (
             <p className="mt-1.5 rounded-lg bg-surface p-2 text-[13px]"><span className="text-dim">Coach : </span>{ex.coachComment}</p>
           )}
+          {/* Poids sportif — toujours disponible, indépendant de la prescription */}
+          <div className="mt-2.5">
+            <span className="mb-1 block text-[13px] text-dim">
+              {ex.weight > 0 ? "Mon poids réalisé" : "Poids utilisé"}
+            </span>
+            <div className="flex items-center gap-2">
+              <input
+                type="number"
+                inputMode="decimal"
+                min={0}
+                step={0.5}
+                placeholder={isPace ? "ex : 4.5" : "ex : 80"}
+                value={ex.weightClient ?? ""}
+                onChange={(e) => onPatch({ weightClient: e.target.value !== "" ? +e.target.value : undefined })}
+                className="flex-1"
+              />
+              <span className="shrink-0 rounded-lg bg-surface px-2.5 py-1.5 text-[13px] font-semibold text-dim">
+                {isPace ? "min/km" : "kg"}
+              </span>
+            </div>
+          </div>
           {/* RPE prescrit par le coach — affiché au client */}
           {!!ex.rpeCoach && ex.rpeCoach !== 0 && (
             <div className="mt-2.5 rounded-xl border border-line bg-surface p-3">

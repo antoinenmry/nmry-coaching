@@ -52,6 +52,7 @@ export interface ExerciseInstance {
   rpeClient: number;         // RPE ressenti par le client (0 = non renseigné)
   coachComment: string; // consigne/note du coach pour cet exercice
   clientComment: string; // retour libre du client
+  weightClient?: number; // poids réellement utilisé par le sportif (indépendant de la prescription)
   failed?: boolean; // true si le sportif a marqué l'exercice comme raté
   setsLabel?: string; // surcharge d'affichage pour sets (ex: "3-4")
   repsLabel?: string; // surcharge d'affichage pour reps (ex: "8-12")
