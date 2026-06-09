@@ -155,15 +155,24 @@ Exposés par `useData()` : `role`, `me`, `clients`, `activeUserId`, `switchClien
 Document unique par sportif (JSON dans `app_state.data` Supabase) :
 
 - `profile: UserProfileData` :
-  `name`, `photo` (base64), `birthDate`, `gender`, `height`, `weight`, `sports[]`, `diet`.
+  `name`, `photo` (base64), `birthDate`, `gender`, `height`, `weight`, `sports[]`, `diet`,
+  `instagram?` (`@handle`), `location?` (`{ label, lat, lng }` via API Nominatim/OpenStreetMap).
   ⚠️ `diet` est affiché/édité dans `/followup` (pas `/profile`).
+  ⚠️ `height`/`weight` ne sont plus éditables dans `/profile` (remplacés par insta + localisation) :
+  ils servent de valeurs initiales migrées vers les **métriques** (voir `metrics`). `/profile` propose
+  désormais : photo, nom, naissance, genre, **Instagram**, **localisation**, sports.
 
 - `sessions: SessionInstance[]` — **liste à plat** :
   - `date = null` → banque « À placer » ; `date = "YYYY-MM-DD"` → placée.
   - `ExerciseInstance` : `uid`, `exId`, `name`, `sets`, `reps`, `weight`, `rpeCoach`, `rpeClient`,
-    `coachComment`, `clientComment`, `failed?`, `setsLabel?`, `repsLabel?`.
+    `coachComment`, `clientComment`, `weightClient?`, `failed?`, `setsLabel?`, `repsLabel?`.
     `weight/rpeCoach = 0` → non renseigné. `setsLabel`/`repsLabel` = surcharge texte (ex: "3-4").
     `failed = true` → exercice raté par le sportif (affiché à la place du RPE).
+    `weightClient?` = poids **réellement réalisé** par le sportif (indépendant de la prescription
+    `weight` du coach ; saisissable même si le coach ne prescrit rien, ex. « travaille ton max »).
+    Affiché en vert dans la synthèse `/plan` + vue coach (« Réalisé »).
+  - **Verrou date** : quand `session.done === true`, la date est figée (input désactivé côté sportif,
+    drag bloqué dans `/plan`, garde dans `place()`). Indicateur 🔒.
 
 - `goals: Goal[]` : `competition`, `date`, `place`, `expected` (commentaires libres),
   `events?: GoalEvent[]` (épreuves structurées `{ id, name, planned, achieved }`),
@@ -174,17 +183,23 @@ Document unique par sportif (JSON dans `app_state.data` Supabase) :
   Les blessures actives apparaissent dans le calendrier (`/plan`) et la vue d'ensemble (`/overview`).
   Déclarer une blessure (`type="injury"`) → push au coach si `notifPrefs.newInjury`.
 
-- `messages: ChatMessage[]` : chat coach ↔ sportif stocké côté sportif.
-  `isUrgent` → bandeau rouge + email Gmail + push au coach. `isVoice` → message vocal (base64 audio).
-  `audioUrl` = data URL avec MIME natif du navigateur (mp4 iOS, webm Chrome).
-  `editedAt?` → timestamp si modifié après envoi. Modifier/supprimer : auteur seulement, à tout moment.
+- ⚠️ **`messages` NE SONT PLUS dans `app_state`** : le chat vit dans la table dédiée
+  `chat_messages` (voir section **Chat**). Le champ `AppState.messages` est conservé en type pour
+  rétrocompat/migration mais l'app n'y lit/écrit plus.
 
 - `notes: BlockNote[]` : bloc-notes partagé sportif ↔ coach.
   `{ id, text, createdAt, updatedAt?, authorId, authorName, authorRole }`.
   Les deux peuvent ajouter des notes. Modifier/supprimer : auteur seulement.
 
+- `metrics?: Metric[]` : métriques corporelles personnalisables (Poids, Taille, Tour de taille…).
+  `Metric { id, name, unit, emoji?, entries: MetricEntry[], visible }`,
+  `MetricEntry { id, date, value }`. Affiché dans **`/followup` → Santé → sous-onglet Métriques**
+  (sous-onglets **Données** : cartes + tendance ↗/↘ +% vert/rouge + historique + ajout d'entrée ;
+  **Tendances** : graphique SVG multi-courbes, toggles de sélection, périodes 1/3/6 mois/tout).
+  Migration auto au 1er chargement : `profile.height`/`profile.weight` → 1ère entrée des métriques.
+
 - `records: RecordsData` : force (max 3 par exercice), CAP, Hyrox.
-- `preferences: UserPreferences` : `cardColors` (href→hex), `cardColorMode` (`"arc"|"full"`), `notifPrefs?: NotifPrefs`.
+- `preferences: UserPreferences` : `cardColors` (href→hex), `cardColorMode` (`"arc"|"full"`), `notifPrefs?: NotifPrefs`, `planNotifSentAt?` (coach : dernière notif programme par clientId).
 - `library` : **ignoré en mode auth** — la bibliothèque vient de `library_state` (table dédiée, singleton).
 
 ### NotifPrefs (dans UserPreferences)
@@ -248,6 +263,7 @@ WeekTemplateDay { dayIndex: 0-6, sessions: { tplId }[] }
 | `coach_client` | `coach_id, client_id, assigned_at` — affectations |
 | `broadcasts` | `id, coach_id, message, created_at, expires_at` — popups broadcast |
 | `push_subscriptions` | `id, user_id, endpoint, p256dh, auth, updated_at` — souscriptions push |
+| `chat_messages` | `id, coach_id, client_id, sender_id, sender_name, body, audio_url, is_voice, is_urgent, type, is_read, created_at, edited_at` — chat isolé par conversation |
 
 ### ⚠️ SQL à exécuter dans Supabase si pas encore fait
 ```sql
@@ -296,6 +312,13 @@ Table Supabase singleton (id=1), lisible par tous, éditable coach/admin seuleme
 `comment?: string` — description libre de l'exercice.
 Page `/library` : 3 onglets — Exercices (tous) | Séances types (coach/admin) | Semaines types (coach/admin).
 
+**Contenu Shop & Avantages** (aussi dans `library_state`, donc **global** à tous, pas par coach) :
+- `partnerLinks?: PartnerLink[]` — `{ id, name, url, code?, discount?, comment? }` (onglet Parrainage)
+- `merchandiseItems?: MerchItem[]` — `{ id, image, name, price, url, comment? }` (onglet Merch)
+- `shopItems?: ShopItem[]` — `{ id, image, name, brand, url, code?, discount?, comment?, category }` (onglet Shop)
+- `shopTabsVisible?: { merch, shop }` — onglets Merch/Shop masqués par défaut, activés par le coach.
+Page `/shop` (bouton 🎁 dans le header). Visible client seulement si du contenu existe + onglet visible.
+
 ## PWA & Push notifications
 - `public/manifest.json` + `public/sw.js` → site installable (PWA)
 - `public/icon-192.png` + `public/icon-512.png` → icônes carrées générées avec Pillow (logo centré + padding)
@@ -318,6 +341,33 @@ Page `/library` : 3 onglets — Exercices (tous) | Séances types (coach/admin) 
 - IDs vus stockés en `localStorage` (`nmry_seen_broadcasts`, max 200) → ne réapparaît jamais
 - Expire après 24h (`expires_at`)
 
+## Chat coach ↔ sportif (table dédiée `chat_messages`)
+**Refonte (2026-06)** : les messages étaient entassés dans `app_state.data.messages` de chaque
+sportif → re-upsert du blob entier à chaque envoi → **contamination croisée** entre conversations
+(le coach voyait les échanges d'autres sportifs). Désormais une **table dédiée** garantit l'isolation.
+
+- **Conversation = couple `(coach_id, client_id)`**. Chaque message est une ligne ; lire une
+  conversation = `WHERE client_id = X`. Plus aucun mélange possible.
+- Colonnes : `id, coach_id, client_id, sender_id, sender_name, body, audio_url, is_voice,
+  is_urgent, type, is_read, created_at, edited_at`. `type` = `null` (normal) | `broadcast` | `plan_update`.
+- **RLS** : `chat_self` (sportif → sa conv), `chat_coach` (coach → conv de SES sportifs via
+  `coach_client`), `chat_admin` (admin → tout).
+- **Accès via API uniquement** (admin client server-side, autorisation en code) :
+  - `GET /api/chat?clientId=…` → messages + `participants {client, coach}` (id/nom/photo résolus
+    serveur pour les avatars) ; marque comme lus les messages reçus.
+  - `POST /api/chat` `{ clientId?, text?, audioUrl?, isVoice?, isUrgent? }` → insert + push.
+    Coach→sportif : push si pref `newMessage`. Sportif→coach : push (sauf si urgent → géré par
+    `/api/messages/urgent` qui fait email + push, pour éviter le **double push**).
+  - `PATCH /api/chat/:id` `{ text }` / `DELETE /api/chat/:id` → auteur (ou admin) seulement.
+  - `GET /api/chat/unread` → compteur non-lus pour l'appelant (coach = total tous sportifs).
+- **Helpers** : `lib/chat.ts` → `insertChatMessage`, `rowToMessage`, `getCoachOf`.
+  Utilisés aussi par `/api/broadcasts` (`type:'broadcast'`) et `/api/plan/notify` (`type:'plan_update'`).
+- **Front** (`MessagesTab` dans `/followup`) : fetch via API, avatars résolus serveur (photo réelle
+  ou initiales colorées), groupement des messages consécutifs (avatar/nom en tête de série seulement).
+  Vocaux (base64, MIME natif), urgent (bandeau rouge + email), édition/suppression : inchangés.
+- **Migration** : backfill idempotent dans `schema.sql` (depuis `app_state.data.messages`).
+  ⚠️ Relancer `schema.sql` dans Supabase pour créer la table + migrer l'historique.
+
 ## Cron Vercel
 `vercel.json` : `GET /api/cron/reminders` tous les jours à 7h (`0 7 * * *`).
 Sécurisé par `Authorization: Bearer <CRON_SECRET>`. Si `CRON_SECRET` absent → 503.
@@ -336,8 +386,12 @@ Pour chaque sportif client : rappel séance du jour + rappels J-7/J-1 objectifs 
 | `/api/admin/assignments/[id]` | DELETE | Désaffecter | requireAdmin |
 | `/api/library` | PUT | Sauvegarde bibliothèque | requireElevated (coach/admin) |
 | `/api/templates` | GET/PUT | Templates coach/admin | requireCoach |
+| `/api/chat` | GET | Messages d'une conversation + participants (marque lus) | auth + ownership/coach |
+| `/api/chat` | POST | Envoyer message (texte/vocal) + push | auth + ownership/coach |
+| `/api/chat/[id]` | PATCH/DELETE | Éditer/supprimer un message | auth + auteur (ou admin) |
+| `/api/chat/unread` | GET | Compteur messages non lus de l'appelant | auth |
 | `/api/messages/urgent` | POST | Email + push urgent au coach | auth + clientId===user.id |
-| `/api/messages/notify` | POST | Push nouveau message | auth + vérif lien coach_client |
+| `/api/messages/notify` | POST | Push nouveau message (legacy, plus utilisé par le chat) | auth + vérif lien coach_client |
 | `/api/followup/notify-injury` | POST | Push blessure → coach | auth + clientId===user.id |
 | `/api/plan/notify` | POST | Push nouveau programme → sportifs | requireCoach |
 | `/api/broadcasts` | POST | Créer broadcast + push | requireCoach |
@@ -360,8 +414,10 @@ Pour chaque sportif client : rappel séance du jour + rappels J-7/J-1 objectifs 
 | `app/(app)/plan/` | Planning mois/sem/synthèse, banque, glisser-déposer, duplication, bouton 🔔 Notifier |
 | `app/(app)/settings/` | Réglages : compte, notifications (NotifPrefsPanel), apparence, couleurs, Sportifs (BroadcastComposer + AthletesManager), Admin |
 | `app/(app)/goals/` | Objectifs + épreuves prévu/réalisé |
-| `app/(app)/profile/` | Profil : photo, nom, date naissance, genre, taille, poids, sports |
-| `app/(app)/followup/` | Suivi : messages chat, bloc-notes, blessures, notes |
+| `app/(app)/profile/` | Profil : photo, nom, naissance, genre, **Instagram**, **localisation** (Nominatim), sports |
+| `app/(app)/followup/` | Suivi : 3 onglets Messages (chat API) / Santé (Suivi + **Métriques**) / Bloc-notes |
+| `app/(app)/followup/MetricsTab.tsx` | Onglet Métriques : Données (cartes + tendance) + Tendances (graphique SVG) |
+| `app/(app)/shop/` | Page Shop & Avantages : onglets Parrainage / Merch / Shop (stockés dans `library_state`, global) |
 | `app/(app)/overview/` | Vue d'ensemble coach : messages urgents + blessures actives + objectifs |
 | `app/(app)/library/` | Bibliothèque : 3 onglets Exercices / Séances types / Semaines types |
 | `app/(app)/records/` | Records force + CAP + Hyrox + courbes SVG |
@@ -386,6 +442,8 @@ Pour chaque sportif client : rappel séance du jour + rappels J-7/J-1 objectifs 
 | `lib/types.ts` | Tous les types TypeScript + `emptyState()` + `emptyRecords()` |
 | `lib/push.ts` | Utilitaire web-push : `sendPushToUser` / `sendPushToCoachClients` |
 | `lib/notifPrefs.ts` | `getUserNotifPrefs(userId)` — lit prefs depuis app_state (admin client) |
+| `lib/chat.ts` | Helpers chat : `insertChatMessage` / `rowToMessage` / `getCoachOf` |
+| `app/api/chat/` | Routes chat : `route.ts` (GET/POST), `[id]/route.ts` (PATCH/DELETE), `unread/route.ts` |
 | `lib/supabase/client.ts` | Client browser |
 | `lib/supabase/server.ts` | Client serveur (Server Components, route handlers) |
 | `lib/supabase/admin.ts` | Client service role — **server-side uniquement** |
