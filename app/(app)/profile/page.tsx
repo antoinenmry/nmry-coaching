@@ -122,12 +122,34 @@ export default function ProfilePage() {
         : [...sports, sport];
     });
 
+  // Compresse la photo à l'upload : redimensionne (max 512px) + JPEG qualité 0.72.
+  // Une photo passe ainsi de ~1-3 Mo à ~20-40 Ko → app_state léger + chat rapide.
+  const MAX_DIM = 512;
   const handlePhoto = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file) return;
     const reader = new FileReader();
-    reader.onload = () =>
-      update((d) => { d.profile.photo = reader.result as string; });
+    reader.onload = () => {
+      const dataUrl = reader.result as string;
+      const img = new Image();
+      img.onload = () => {
+        const scale = Math.min(1, MAX_DIM / Math.max(img.width, img.height));
+        const w = Math.round(img.width * scale);
+        const h = Math.round(img.height * scale);
+        const canvas = document.createElement("canvas");
+        canvas.width = w;
+        canvas.height = h;
+        const ctx = canvas.getContext("2d");
+        if (!ctx) { update((d) => { d.profile.photo = dataUrl; }); return; }
+        ctx.drawImage(img, 0, 0, w, h);
+        const compressed = canvas.toDataURL("image/jpeg", 0.72);
+        // Garde le plus petit des deux (sécurité si la compression n'aide pas).
+        const best = compressed.length < dataUrl.length ? compressed : dataUrl;
+        update((d) => { d.profile.photo = best; });
+      };
+      img.onerror = () => { update((d) => { d.profile.photo = dataUrl; }); };
+      img.src = dataUrl;
+    };
     reader.readAsDataURL(file);
   };
 

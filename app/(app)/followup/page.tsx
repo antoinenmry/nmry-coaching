@@ -59,31 +59,55 @@ const Avatar = memo(function Avatar({ name, photo, size = 26 }: { name?: string;
 const SPEEDS = [0.5, 1, 1.5, 2] as const;
 type Speed = (typeof SPEEDS)[number];
 
-function VoicePlayer({ audioUrl, isMe }: { audioUrl?: string; isMe: boolean }) {
+function VoicePlayer({ audioUrl, messageId, isMe }: { audioUrl?: string; messageId?: string; isMe: boolean }) {
   const audioRef = useRef<HTMLAudioElement>(null);
   const [playing, setPlaying] = useState(false);
   const [duration, setDuration] = useState(0);
   const [current, setCurrent] = useState(0);
   const [speed, setSpeed] = useState<Speed>(1);
   const [error, setError] = useState(false);
+  // L'audio n'est pas dans le payload de la liste : on le charge à la demande au play.
+  const [src, setSrc] = useState<string | null>(audioUrl ?? null);
+  const [loadingAudio, setLoadingAudio] = useState(false);
+  const wantPlayRef = useRef(false);
 
-  if (!audioUrl) return <span className="text-sm text-dim">🎤 Vocal</span>;
+  // Quand la source arrive (après chargement paresseux), on lance la lecture.
+  useEffect(() => {
+    if (!src || !wantPlayRef.current) return;
+    wantPlayRef.current = false;
+    const a = audioRef.current;
+    if (!a) return;
+    a.playbackRate = speed;
+    a.play().catch(() => { setError(true); setPlaying(false); });
+  }, [src, speed]);
+
+  // Ni audio inline, ni identifiant pour le charger → placeholder.
+  if (!audioUrl && !messageId) return <span className="text-sm text-dim">🎤 Vocal</span>;
+
+  async function fetchAudio() {
+    if (src || !messageId) return;
+    setLoadingAudio(true);
+    try {
+      const res = await fetch(`/api/chat/audio?id=${encodeURIComponent(messageId)}`);
+      if (res.ok) { const d = await res.json(); if (d.audioUrl) setSrc(d.audioUrl); else setError(true); }
+      else setError(true);
+    } catch { setError(true); }
+    finally { setLoadingAudio(false); }
+  }
 
   // ▶/⏸ — piloté par les events onPlay/onPause (plus fiable que setState direct)
   function toggle() {
     const a = audioRef.current;
+    if (playing) { a?.pause(); return; }
+    setError(false);
+    if (!src) { wantPlayRef.current = true; fetchAudio(); return; } // charge puis joue (effet)
     if (!a) return;
-    if (playing) {
-      a.pause();
-    } else {
-      setError(false);
-      a.playbackRate = speed;
-      a.play().catch((err) => {
-        console.warn("[NMRY] Audio play error:", err);
-        setError(true);
-        setPlaying(false);
-      });
-    }
+    a.playbackRate = speed;
+    a.play().catch((err) => {
+      console.warn("[NMRY] Audio play error:", err);
+      setError(true);
+      setPlaying(false);
+    });
   }
 
   // Seek en cliquant sur la barre
@@ -109,7 +133,7 @@ function VoicePlayer({ audioUrl, isMe }: { audioUrl?: string; isMe: boolean }) {
       {/* Élément audio — preload + playsInline requis iOS Safari */}
       <audio
         ref={audioRef}
-        src={audioUrl}
+        src={src ?? undefined}
         preload="metadata"
         playsInline
         onLoadedMetadata={(e) => {
@@ -130,7 +154,7 @@ function VoicePlayer({ audioUrl, isMe }: { audioUrl?: string; isMe: boolean }) {
           className="shrink-0 text-base leading-none"
           aria-label={playing ? "Pause" : "Lecture"}
         >
-          {error ? "⚠️" : playing ? "⏸" : "▶️"}
+          {error ? "⚠️" : loadingAudio ? "⏳" : playing ? "⏸" : "▶️"}
         </button>
 
         {/* Barre de progression cliquable */}
@@ -496,7 +520,7 @@ function MessagesTab() {
                     </div>
                   </div>
                 ) : msg.isVoice ? (
-                  <VoicePlayer audioUrl={msg.audioUrl} isMe={isMe} />
+                  <VoicePlayer audioUrl={msg.audioUrl} messageId={msg.id} isMe={isMe} />
                 ) : (
                   <p className={`whitespace-pre-wrap text-sm ${msg.isUrgent ? "text-white" : isMe ? "text-[#1a1500]" : "text-ink"}`}>{msg.text}</p>
                 )}

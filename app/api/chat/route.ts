@@ -63,31 +63,30 @@ export async function GET(req: NextRequest) {
   const before = req.nextUrl.searchParams.get("before");
   const isFirstPage = !before;
 
-  // Marquer comme lus les messages reçus (uniquement à l'ouverture, pas en remontant)
-  if (isFirstPage) {
-    await admin
-      .from("chat_messages")
-      .update({ is_read: true })
-      .eq("client_id", clientId)
-      .neq("sender_id", user.id)
-      .eq("is_read", false);
-  }
-
   // Charger une page : les N+1 plus récents (décroissant) pour détecter s'il en reste.
+  // ⚡ On EXCLUT audio_url (vocaux base64, lourds) : il est chargé à la demande au play
+  //    via GET /api/chat/audio?id=… → payload du chat très allégé.
   let query = admin
     .from("chat_messages")
-    .select("*")
+    .select("id,coach_id,client_id,sender_id,sender_name,body,is_voice,is_urgent,type,is_read,created_at,edited_at")
     .eq("client_id", clientId)
     .order("created_at", { ascending: false })
     .limit(PAGE_SIZE + 1);
   if (before) query = query.lt("created_at", before);
 
-  const { data: rows } = await query;
+  // ⚡ Parallélisation : marquage lu (1ère page) + messages + résolution du coach.
+  const [, { data: rows }, coachId] = await Promise.all([
+    isFirstPage
+      ? admin.from("chat_messages").update({ is_read: true })
+          .eq("client_id", clientId).neq("sender_id", user.id).eq("is_read", false)
+      : Promise.resolve(null),
+    query,
+    getCoachOf(admin, clientId),
+  ]);
+
   const list = (rows as ChatRow[] | null) ?? [];
   const hasMore = list.length > PAGE_SIZE;
   const page = hasMore ? list.slice(0, PAGE_SIZE) : list;
-  // Résoudre le coach une seule fois (utile pour le filtre + les participants).
-  const coachId = await getCoachOf(admin, clientId);
 
   // Défense en profondeur : écarter les messages dont l'expéditeur n'est pas
   // un participant légitime (client ou coach de la conversation).
