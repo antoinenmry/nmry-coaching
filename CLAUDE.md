@@ -105,12 +105,26 @@ Intercepte `?error=access_denied` sur `/` → redirect `/login?error=lien_invali
 ## Sécurité
 
 ### RLS Supabase
-- `state_self_all` (sportif → ses données), `state_coach_all` (coach → tout le monde), `library_read_all` (tous → lecture), `library_coach_write` (coach → écriture).
+- `state_self_all` (sportif → ses données), `state_coach_all` (coach → **uniquement ses sportifs affectés** via `coach_client` + sa propre ligne), `library_read_all` (tous → lecture), `library_coach_write` (coach → écriture). L'admin garde l'accès complet via `state_admin_all`.
+- `profiles_self_update` : `using (id=auth.uid())` **+ `with check (id=auth.uid())`**. Le changement de rôle reste bloqué par le trigger `prevent_role_escalation` (admin only). Le coach modifie le statut d'un sportif via service-role (contourne la RLS).
 - **`template_state`** : RLS `template_coach_all` — `is_coach()` uniquement (bloque les clients).
 - **`broadcasts`** : RLS `broadcast_coach` (coach → ses broadcasts), `broadcast_client_read` (client → broadcasts de son coach).
 - **`push_subscriptions`** : RLS `push_own` (utilisateur → ses propres subscriptions).
 - **`coach_client`** : RLS `cc_read` (coach_id = auth.uid() ou is_admin()). ⚠️ Le client ne peut PAS lire cette table directement → utiliser `/api/me/has-coach` (admin client bypass).
 - **Trigger `prevent_role_escalation`** : empêche un sportif de se passer coach via l'API.
+
+### ⚠️ Isolation `app_state` entre profils (anti-contamination) — CRITIQUE
+`pushNow` (DataProvider) écrit le **blob `app_state` entier** du profil actif via une
+sauvegarde différée (500 ms). Un changement de profil rapide côté coach pouvait écrire les
+données d'un sportif dans la ligne d'un autre (incident réel : fiche affichant les données
+d'un autre sportif). **Trois garde-fous** sont en place — ne pas les retirer :
+1. **Write-fence** : `pushNow(expectedUserId)` abandonne la sauvegarde si `activeUserId` a
+   changé depuis sa programmation.
+2. **`update()`** lie chaque sauvegarde différée au profil édité (capture `activeRef.current`).
+3. **`switchClient`** flush la sauvegarde en attente AVANT de charger le profil suivant.
++ RLS `state_coach_all` resserrée (coach → sportifs affectés) = filet de sécurité en base.
+> Cause structurelle = blob monolithique. Migration future recommandée : `sessions`/`profile`
+> en colonnes/tables dédiées → écritures ciblées, fin des races de blob.
 
 ### Guards applicatifs
 - `update()` dans DataProvider refuse si `role=client` et `activeUserId ≠ me.id`.
@@ -119,8 +133,12 @@ Intercepte `?error=access_denied` sur `/` → redirect `/login?error=lien_invali
 - Open redirect : `?next=` validé chemin relatif uniquement (`startsWith("/") && !startsWith("//")`) dans `/auth/callback`.
 
 ### Guards API (audit complet — dernière passe)
+- **Helper mutualisé** : `lib/apiAuth.ts` → `requireRole(["coach","admin"])` (ou `["admin"]`,
+  `["coach"]`) retourne `{ user, role }` ou `null` (→ 401). À utiliser pour toute nouvelle route
+  (remplace les anciennes gardes locales dupliquées `requireAdmin`/`requireElevated`/`requireCoach`).
 - **Session** : toutes les routes vérifient `supabase.auth.getUser()` avant toute action.
 - **Rôle** : routes elevées vérifient `role === "coach"|"admin"`, routes admin vérifient `role === "admin"`.
+- **Email d'urgence** : nom + texte échappés (HTML) avant insertion dans le mail (anti-injection).
 - **Ownership DELETE** : `DELETE /api/coach/athletes/[id]` — un coach ne peut supprimer que ses propres clients affectés.
 - **Ownership PATCH** : `PATCH /api/coach/athletes/[id]` — un coach ne peut modifier le statut que de ses propres clients.
 - **`clientId` anti-usurpation** : vérifié `=== user.id` dans `urgent`, `notify-injury`, `messages/notify`.
@@ -155,7 +173,8 @@ Exposés par `useData()` : `role`, `me`, `clients`, `activeUserId`, `switchClien
 Document unique par sportif (JSON dans `app_state.data` Supabase) :
 
 - `profile: UserProfileData` :
-  `name`, `photo` (base64), `birthDate`, `gender`, `height`, `weight`, `sports[]`, `diet`,
+  `name`, `photo` (base64, **compressé à l'upload : max 512px, JPEG 0.72 → ~20-40 Ko**),
+  `birthDate`, `gender`, `height`, `weight`, `sports[]`, `diet`,
   `instagram?` (`@handle`), `location?` (`{ label, lat, lng }` via API Nominatim/OpenStreetMap).
   ⚠️ `diet` est affiché/édité dans `/followup` (pas `/profile`).
   ⚠️ `height`/`weight` ne sont plus éditables dans `/profile` (remplacés par insta + localisation) :
@@ -353,18 +372,27 @@ sportif → re-upsert du blob entier à chaque envoi → **contamination croisé
 - **RLS** : `chat_self` (sportif → sa conv), `chat_coach` (coach → conv de SES sportifs via
   `coach_client`), `chat_admin` (admin → tout).
 - **Accès via API uniquement** (admin client server-side, autorisation en code) :
-  - `GET /api/chat?clientId=…` → messages + `participants {client, coach}` (id/nom/photo résolus
-    serveur pour les avatars) ; marque comme lus les messages reçus.
+  - `GET /api/chat?clientId=…[&before=ISO]` → **paginé (15 derniers)** + `participants {client,
+    coach}` (id/nom/**photo** résolus serveur via `data->profile->>photo`, pas tout le blob) +
+    `hasMore`. `before` = curseur pour remonter l'historique. Marque comme lus à la 1ʳᵉ page.
+    ⚡ **Le payload exclut `audio_url`** (vocaux base64) : chargé à la demande au play.
+  - `GET /api/chat/audio?id=…` → renvoie l'audio (data URL) d'**un** message vocal au moment du
+    play (autorisation : sportif de la conv, son coach, ou admin). Allège fortement la liste.
   - `POST /api/chat` `{ clientId?, text?, audioUrl?, isVoice?, isUrgent? }` → insert + push.
     Coach→sportif : push si pref `newMessage`. Sportif→coach : push (sauf si urgent → géré par
     `/api/messages/urgent` qui fait email + push, pour éviter le **double push**).
   - `PATCH /api/chat/:id` `{ text }` / `DELETE /api/chat/:id` → auteur (ou admin) seulement.
-  - `GET /api/chat/unread` → compteur non-lus pour l'appelant (coach = total tous sportifs).
+  - `GET /api/chat/unread` → `{ count, urgent }` pour l'appelant (coach = total tous sportifs).
+    Utilisé par le badge « Mon Suivi » **et** le bandeau « Vue d'ensemble 🚨 » du dashboard
+    (l'accueil ne lit plus l'ancien `app_state.data.messages`).
 - **Helpers** : `lib/chat.ts` → `insertChatMessage`, `rowToMessage`, `getCoachOf`.
   Utilisés aussi par `/api/broadcasts` (`type:'broadcast'`) et `/api/plan/notify` (`type:'plan_update'`).
 - **Front** (`MessagesTab` dans `/followup`) : fetch via API, avatars résolus serveur (photo réelle
   ou initiales colorées), groupement des messages consécutifs (avatar/nom en tête de série seulement).
-  Vocaux (base64, MIME natif), urgent (bandeau rouge + email), édition/suppression : inchangés.
+  **Pagination** : 15 derniers + bouton « Voir les messages précédents » (conserve la position de
+  scroll). **Vocaux chargés à la demande** : `VoicePlayer` récupère l'audio via `/api/chat/audio`
+  au 1er play (indicateur ⏳), garde le chemin direct si `audioUrl` déjà présent. Urgent (bandeau
+  rouge + email), édition/suppression : inchangés.
 - **Migration** : backfill idempotent dans `schema.sql` (depuis `app_state.data.messages`).
   ⚠️ Relancer `schema.sql` dans Supabase pour créer la table + migrer l'historique.
 
@@ -372,6 +400,8 @@ sportif → re-upsert du blob entier à chaque envoi → **contamination croisé
 `vercel.json` : `GET /api/cron/reminders` tous les jours à 7h (`0 7 * * *`).
 Sécurisé par `Authorization: Bearer <CRON_SECRET>`. Si `CRON_SECRET` absent → 503.
 Pour chaque sportif client : rappel séance du jour + rappels J-7/J-1 objectifs (selon `notifPrefs`).
+⚡ Ne charge que les sous-champs utiles (`data->sessions/goals/preferences`) des seuls sportifs,
+pas le blob `app_state` entier de tout le monde.
 
 ## Routes API (server-side, service role)
 | Route | Méthode | Rôle | Guard |
@@ -389,7 +419,8 @@ Pour chaque sportif client : rappel séance du jour + rappels J-7/J-1 objectifs 
 | `/api/chat` | GET | Messages d'une conversation + participants (marque lus) | auth + ownership/coach |
 | `/api/chat` | POST | Envoyer message (texte/vocal) + push | auth + ownership/coach |
 | `/api/chat/[id]` | PATCH/DELETE | Éditer/supprimer un message | auth + auteur (ou admin) |
-| `/api/chat/unread` | GET | Compteur messages non lus de l'appelant | auth |
+| `/api/chat/audio` | GET | Audio d'un message vocal, à la demande (au play) | auth + sportif/coach/admin de la conv |
+| `/api/chat/unread` | GET | Compteur `{count, urgent}` non lus de l'appelant | auth |
 | `/api/messages/urgent` | POST | Email + push urgent au coach | auth + clientId===user.id |
 | `/api/messages/notify` | POST | Push nouveau message (legacy, plus utilisé par le chat) | auth + vérif lien coach_client |
 | `/api/followup/notify-injury` | POST | Push blessure → coach | auth + clientId===user.id |
@@ -414,7 +445,7 @@ Pour chaque sportif client : rappel séance du jour + rappels J-7/J-1 objectifs 
 | `app/(app)/plan/` | Planning mois/sem/synthèse, banque, glisser-déposer, duplication, bouton 🔔 Notifier |
 | `app/(app)/settings/` | Réglages : compte, notifications (NotifPrefsPanel), apparence, couleurs, Sportifs (BroadcastComposer + AthletesManager), Admin |
 | `app/(app)/goals/` | Objectifs + épreuves prévu/réalisé |
-| `app/(app)/profile/` | Profil : photo, nom, naissance, genre, **Instagram**, **localisation** (Nominatim), sports |
+| `app/(app)/profile/` | Profil : photo (**compressée à l'upload via canvas**), nom, naissance, genre, **Instagram**, **localisation** (Nominatim), sports |
 | `app/(app)/followup/` | Suivi : 3 onglets Messages (chat API) / Santé (Suivi + **Métriques**) / Bloc-notes |
 | `app/(app)/followup/MetricsTab.tsx` | Onglet Métriques : Données (cartes + tendance) + Tendances (graphique SVG) |
 | `app/(app)/shop/` | Page Shop & Avantages : onglets Parrainage / Merch / Shop (stockés dans `library_state`, global) |
@@ -443,7 +474,8 @@ Pour chaque sportif client : rappel séance du jour + rappels J-7/J-1 objectifs 
 | `lib/push.ts` | Utilitaire web-push : `sendPushToUser` / `sendPushToCoachClients` |
 | `lib/notifPrefs.ts` | `getUserNotifPrefs(userId)` — lit prefs depuis app_state (admin client) |
 | `lib/chat.ts` | Helpers chat : `insertChatMessage` / `rowToMessage` / `getCoachOf` |
-| `app/api/chat/` | Routes chat : `route.ts` (GET/POST), `[id]/route.ts` (PATCH/DELETE), `unread/route.ts` |
+| `lib/apiAuth.ts` | `requireRole([...])` — garde d'auth + rôle mutualisée pour les routes API |
+| `app/api/chat/` | Routes chat : `route.ts` (GET paginé/POST), `[id]/` (PATCH/DELETE), `audio/` (GET à la demande), `unread/` |
 | `lib/supabase/client.ts` | Client browser |
 | `lib/supabase/server.ts` | Client serveur (Server Components, route handlers) |
 | `lib/supabase/admin.ts` | Client service role — **server-side uniquement** |
@@ -492,4 +524,5 @@ Pour chaque sportif client : rappel séance du jour + rappels J-7/J-1 objectifs 
 - [ ] Tests Supabase bout en bout (schema.sql + RLS + multi-sportif)
 - [ ] Migration : `sessions` et `records` en tables Supabase dédiées plutôt que blob JSON
 - [ ] Rate limiting sur les routes d'envoi (broadcasts, notifications) — issue sécurité moyenne
-- [ ] Limite taille `app_state` (photos/audio base64 sans validation de taille)
+- [x] Limite/compression taille photos (compressées à l'upload). Reste : **borner les vocaux** (audio base64).
+- [ ] Migrer `sessions`/`profile` hors du blob `app_state` (tables/colonnes dédiées) — supprime la cause racine des contaminations de blob
