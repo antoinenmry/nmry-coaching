@@ -86,14 +86,21 @@ export async function GET(req: NextRequest) {
   const list = (rows as ChatRow[] | null) ?? [];
   const hasMore = list.length > PAGE_SIZE;
   const page = hasMore ? list.slice(0, PAGE_SIZE) : list;
+  // Résoudre le coach une seule fois (utile pour le filtre + les participants).
+  const coachId = await getCoachOf(admin, clientId);
+
+  // Défense en profondeur : écarter les messages dont l'expéditeur n'est pas
+  // un participant légitime (client ou coach de la conversation).
+  // Évite d'afficher des bulles parasites héritées d'une migration corrompue.
+  const legitimateSenders = new Set([clientId, ...(coachId ? [coachId] : [])]);
+  const safeRows = page.filter(r => legitimateSenders.has(r.sender_id));
   // Remettre en ordre chronologique croissant pour l'affichage.
-  const messages = page.reverse().map(rowToMessage);
+  const messages = safeRows.reverse().map(rowToMessage);
 
   // Participants (avatars/noms) : utiles seulement à la première page.
   if (!isFirstPage) {
     return NextResponse.json({ messages, hasMore });
   }
-  const coachId = await getCoachOf(admin, clientId);
   const [client, coach] = await Promise.all([
     profileOf(admin, clientId),
     coachId ? profileOf(admin, coachId) : Promise.resolve(null),
