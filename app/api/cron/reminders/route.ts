@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { sendPushToUser } from "@/lib/push";
 import { getUserNotifPrefs } from "@/lib/notifPrefs";
-import type { AppState, SessionInstance, Goal } from "@/lib/types";
+import type { SessionInstance, Goal } from "@/lib/types";
 
 /**
  * GET /api/cron/reminders
@@ -34,30 +34,31 @@ export async function GET(req: NextRequest) {
   const in7Str = in7.toISOString().slice(0, 10);
   const in1Str = in1.toISOString().slice(0, 10);
 
-  // Récupérer tous les app_state des clients actifs
-  const { data: rows } = await admin
-    .from("app_state")
-    .select("user_id, data");
-
-  if (!rows?.length) return NextResponse.json({ processed: 0 });
-
-  // Filtrer uniquement les clients (pas les coaches)
+  // 1) IDs des sportifs (clients) — on ne traite qu'eux.
   const { data: clients } = await admin
     .from("profiles")
     .select("id")
     .eq("role", "client");
+  const clientIds = (clients ?? []).map((c) => c.id);
+  if (clientIds.length === 0) return NextResponse.json({ processed: 0 });
 
-  const clientIds = new Set((clients ?? []).map((c) => c.id));
+  // 2) On ne charge QUE les sous-champs utiles (ni records, ni photo, ni notes…),
+  //    et uniquement pour les sportifs → payload minimal au lieu du blob entier.
+  const { data: rows } = await admin
+    .from("app_state")
+    .select("user_id, sessions:data->sessions, goals:data->goals, prefs:data->preferences")
+    .in("user_id", clientIds);
+
+  if (!rows?.length) return NextResponse.json({ processed: 0 });
 
   let pushed = 0;
 
   await Promise.allSettled(
-    rows
-      .filter((r) => clientIds.has(r.user_id))
-      .map(async (row) => {
-        const state = row.data as AppState;
-        const userId = row.user_id;
-        const prefs = state.preferences?.notifPrefs;
+    rows.map(async (row) => {
+        const userId = row.user_id as string;
+        const sessions = (row.sessions ?? []) as unknown as SessionInstance[];
+        const goals = (row.goals ?? []) as unknown as Goal[];
+        const prefs = (row.prefs as unknown as { notifPrefs?: { sessionReminder?: boolean; goalReminder?: boolean } } | null)?.notifPrefs;
         const wantSession = prefs?.sessionReminder !== false;   // true par défaut
         const wantGoal   = prefs?.goalReminder    !== false;   // true par défaut
 
@@ -65,7 +66,7 @@ export async function GET(req: NextRequest) {
 
         // ── Rappel séance du jour ─────────────────────────────────────────
         if (wantSession) {
-          const todaySessions = (state.sessions ?? []).filter(
+          const todaySessions = sessions.filter(
             (s: SessionInstance) => s.date === todayStr && !s.done
           );
           if (todaySessions.length > 0) {
@@ -84,7 +85,7 @@ export async function GET(req: NextRequest) {
 
         // ── Rappels objectifs J-7 / J-1 ───────────────────────────────────
         if (wantGoal) {
-          for (const goal of (state.goals ?? []) as Goal[]) {
+          for (const goal of goals) {
             if (!goal.date) continue;
             const label =
               goal.date === in7Str ? "J-7" :

@@ -1,19 +1,9 @@
 import { NextRequest, NextResponse } from "next/server";
-import { createClient } from "@/lib/supabase/server";
 import { createAdminClient } from "@/lib/supabase/admin";
+import { requireRole } from "@/lib/apiAuth";
 import type { TemplateLibrary } from "@/lib/types";
 
 const EMPTY: TemplateLibrary = { sessionTemplates: [], weekTemplates: [] };
-
-async function requireCoach() {
-  const supabase = await createClient();
-  const { data: { user } } = await supabase.auth.getUser();
-  if (!user) return null;
-  const { data: profile } = await supabase
-    .from("profiles").select("role").eq("id", user.id).maybeSingle();
-  if (profile?.role !== "coach" && profile?.role !== "admin") return null;
-  return user;
-}
 
 /**
  * GET /api/templates
@@ -21,8 +11,8 @@ async function requireCoach() {
  * Accessible uniquement aux rôles coach et admin.
  */
 export async function GET() {
-  const user = await requireCoach();
-  if (!user) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  const caller = await requireRole(["coach", "admin"]);
+  if (!caller) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
 
   const adminClient = createAdminClient();
   const { data, error } = await adminClient
@@ -41,8 +31,8 @@ export async function GET() {
  * Accessible uniquement aux rôles coach et admin.
  */
 export async function PUT(req: NextRequest) {
-  const user = await requireCoach();
-  if (!user) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  const caller = await requireRole(["coach", "admin"]);
+  if (!caller) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
 
   const body = (await req.json().catch(() => null)) as TemplateLibrary | null;
   if (!body || typeof body !== "object" || !Array.isArray(body.sessionTemplates) || !Array.isArray(body.weekTemplates)) {

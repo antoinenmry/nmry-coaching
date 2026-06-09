@@ -1,16 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
 import { createAdminClient } from "@/lib/supabase/admin";
-
-async function requireElevated() {
-  const supabase = await createClient();
-  const { data: { user } } = await supabase.auth.getUser();
-  if (!user) return null;
-  const { data: profile } = await supabase
-    .from("profiles").select("id,role").eq("id", user.id).maybeSingle();
-  if (!profile || !["coach", "admin"].includes(profile.role)) return null;
-  return { user, role: profile.role as "coach" | "admin" };
-}
+import { requireRole } from "@/lib/apiAuth";
 
 /**
  * DELETE /api/coach/athletes/[id]
@@ -20,7 +11,7 @@ export async function DELETE(
   _req: NextRequest,
   { params }: { params: Promise<{ id: string }> },
 ) {
-  const caller = await requireElevated();
+  const caller = await requireRole(["coach", "admin"]);
   if (!caller) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
 
   const { id } = await params;
@@ -59,7 +50,7 @@ export async function PATCH(
   req: NextRequest,
   { params }: { params: Promise<{ id: string }> },
 ) {
-  const caller = await requireElevated();
+  const caller = await requireRole(["coach", "admin"]);
   if (!caller) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
 
   const { id } = await params;

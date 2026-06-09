@@ -1,24 +1,14 @@
 import { NextResponse } from "next/server";
-import { createClient } from "@/lib/supabase/server";
 import { createAdminClient } from "@/lib/supabase/admin";
-
-async function requireElevated() {
-  const supabase = await createClient();
-  const { data: { user } } = await supabase.auth.getUser();
-  if (!user) return null;
-  const { data: profile } = await supabase
-    .from("profiles").select("role").eq("id", user.id).maybeSingle();
-  if (profile?.role !== "coach" && profile?.role !== "admin") return null;
-  return user;
-}
+import { requireRole } from "@/lib/apiAuth";
 
 /**
  * GET /api/coach/unassigned
  * Retourne les clients sans coach affecté.
  */
 export async function GET() {
-  const user = await requireElevated();
-  if (!user) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  const caller = await requireRole(["coach", "admin"]);
+  if (!caller) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
 
   const adminClient = createAdminClient();
   const { data: assigned } = await adminClient

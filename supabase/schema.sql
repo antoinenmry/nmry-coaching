@@ -46,7 +46,11 @@ drop policy if exists profiles_self_select  on public.profiles;
 drop policy if exists profiles_self_update  on public.profiles;
 drop policy if exists profiles_coach_select on public.profiles;
 create policy profiles_self_select  on public.profiles for select using (id = auth.uid());
-create policy profiles_self_update  on public.profiles for update using (id = auth.uid());
+-- WITH CHECK : l'utilisateur ne peut écrire que SA propre ligne (pas réassigner l'id).
+-- Le changement de rôle reste bloqué par le trigger prevent_role_escalation (section 8).
+-- Le coach/admin modifie le statut via service-role (contourne la RLS) → inchangé.
+create policy profiles_self_update  on public.profiles for update
+  using (id = auth.uid()) with check (id = auth.uid());
 create policy profiles_coach_select on public.profiles for select using (public.is_coach());
 
 -- 5) POLICIES — app_state

@@ -1,16 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
-import { createClient } from "@/lib/supabase/server";
 import { createAdminClient } from "@/lib/supabase/admin";
-
-async function requireCoach() {
-  const supabase = await createClient();
-  const { data: { user } } = await supabase.auth.getUser();
-  if (!user) return null;
-  const { data: profile } = await supabase
-    .from("profiles").select("role").eq("id", user.id).maybeSingle();
-  if (profile?.role !== "coach") return null;
-  return user;
-}
+import { requireRole } from "@/lib/apiAuth";
 
 /**
  * POST /api/coach/self-assign
@@ -18,8 +8,9 @@ async function requireCoach() {
  * Affecte le coach connecté à ce client (si non déjà affecté).
  */
 export async function POST(req: NextRequest) {
-  const user = await requireCoach();
-  if (!user) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  const auth = await requireRole(["coach"]);
+  if (!auth) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  const user = auth.user;
 
   const { clientId } = await req.json().catch(() => ({}));
   if (!clientId) return NextResponse.json({ error: "clientId required" }, { status: 400 });
