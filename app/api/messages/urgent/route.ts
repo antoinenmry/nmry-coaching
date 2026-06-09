@@ -86,6 +86,14 @@ export async function POST(req: NextRequest) {
   const senderLabel = clientName || "Un sportif";
   const preview = messageText ? messageText.slice(0, 200) : null;
 
+  // Échappement HTML pour l'insertion dans le corps de l'email (anti-injection :
+  // un sportif ne peut pas injecter de balises/liens via son nom ou son message).
+  const esc = (s: string) =>
+    s.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;")
+     .replace(/"/g, "&quot;").replace(/'/g, "&#39;");
+  const senderLabelHtml = esc(senderLabel);
+  const previewHtml = preview ? esc(preview) : null;
+
   try {
     await transporter.sendMail({
       from: `NMRY Coaching <${process.env.GMAIL_USER}>`,
@@ -107,11 +115,11 @@ export async function POST(req: NextRequest) {
     <!-- Corps -->
     <div style="padding:28px;">
       <p style="margin:0 0 4px;color:#888;font-size:13px;">De la part de</p>
-      <p style="margin:0 0 24px;color:#111;font-size:20px;font-weight:700;">${senderLabel}</p>
+      <p style="margin:0 0 24px;color:#111;font-size:20px;font-weight:700;">${senderLabelHtml}</p>
 
-      ${preview ? `
+      ${previewHtml ? `
       <div style="background:#fef2f2;border-left:4px solid #ef4444;border-radius:8px;padding:16px 18px;margin-bottom:28px;">
-        <p style="margin:0;color:#333;font-size:15px;line-height:1.6;">${preview}</p>
+        <p style="margin:0;color:#333;font-size:15px;line-height:1.6;">${previewHtml}</p>
       </div>
       ` : `
       <div style="background:#fef2f2;border-left:4px solid #ef4444;border-radius:8px;padding:16px 18px;margin-bottom:28px;">

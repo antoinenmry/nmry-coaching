@@ -3,9 +3,8 @@
 import Link from "next/link";
 import { useEffect, useState } from "react";
 import { useData } from "@/components/DataProvider";
-import { createClient } from "@/lib/supabase/client";
 import { daysUntil, countdownLabel } from "@/lib/dates";
-import type { AppState, ChatMessage, ExerciseLibrary } from "@/lib/types";
+import type { AppState, ExerciseLibrary } from "@/lib/types";
 
 const CARDS = [
   { href: "/profile", icon: "👤", label: "Mon Profil", color: "var(--color-accent)" },
@@ -140,42 +139,29 @@ function DashboardSkeleton() {
 }
 
 export default function Dashboard() {
-  const { me, state, library, loading, role, clients } = useData();
+  const { me, state, library, loading, role } = useData();
   const today = new Date().toISOString().slice(0, 10);
   const isCoach = role === "coach" || role === "admin";
   const displayName = state.profile.name || me?.name || me?.email || "Moi";
 
-  // Pour les clients : messages non lus dans leur propre state
-  const clientUnread = (state.messages ?? []).filter(m => !m.isRead && m.senderId !== me?.id).length;
-
-  // Pour le coach/admin : agréger les messages non lus de TOUS les clients
-  const [coachUnread, setCoachUnread] = useState(0);
+  // Messages non lus + urgents — source unique de vérité : table chat_messages via API
+  // (coach = total tous sportifs ; sportif = sa conversation). Remplace l'ancienne lecture
+  // de app_state.data.messages, obsolète depuis la migration du chat.
+  const [unreadMessages, setUnreadMessages] = useState(0);
   const [coachUrgent, setCoachUrgent] = useState(0);
   useEffect(() => {
-    if (!isCoach || loading || !me) return;
-    const clientIds = clients.filter(c => c.role === "client").map(c => c.id);
-    if (clientIds.length === 0) return;
-    const supabase = createClient();
-    supabase
-      .from("app_state")
-      .select("data")
-      .in("user_id", clientIds)
-      .then(({ data: rows }) => {
-        if (!rows) return;
-        let unread = 0;
-        let urgent = 0;
-        for (const row of rows) {
-          const msgs = ((row.data as { messages?: ChatMessage[] })?.messages ?? []);
-          const fromOthers = msgs.filter(m => !m.isRead && m.senderId !== me.id);
-          unread += fromOthers.length;
-          urgent += fromOthers.filter(m => m.isUrgent).length;
-        }
-        setCoachUnread(unread);
-        setCoachUrgent(urgent);
-      });
-  }, [isCoach, loading, clients, me]); // eslint-disable-line
-
-  const unreadMessages = isCoach ? coachUnread : clientUnread;
+    if (loading || !me) return;
+    let cancelled = false;
+    fetch("/api/chat/unread")
+      .then(r => (r.ok ? r.json() : { count: 0, urgent: 0 }))
+      .then(d => {
+        if (cancelled) return;
+        setUnreadMessages(d.count ?? 0);
+        setCoachUrgent(d.urgent ?? 0);
+      })
+      .catch(() => {});
+    return () => { cancelled = true; };
+  }, [loading, me]);
 
   if (loading) return <DashboardSkeleton />;
   const cardColors = state.preferences?.cardColors ?? {};

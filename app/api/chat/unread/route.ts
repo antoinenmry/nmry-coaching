@@ -17,18 +17,21 @@ export async function GET() {
   const { data: me } = await admin.from("profiles").select("role").eq("id", user.id).maybeSingle();
   const role = (me as { role?: string } | null)?.role ?? "client";
 
-  let query = admin
-    .from("chat_messages")
-    .select("id", { count: "exact", head: true })
-    .eq("is_read", false)
-    .neq("sender_id", user.id);
+  const scopeCol = role === "coach" || role === "admin" ? "coach_id" : "client_id";
 
-  if (role === "coach" || role === "admin") {
-    query = query.eq("coach_id", user.id);
-  } else {
-    query = query.eq("client_id", user.id);
-  }
+  // Deux compteurs : total non-lus + sous-ensemble urgent (pour le bandeau coach).
+  const baseFilter = () =>
+    admin
+      .from("chat_messages")
+      .select("id", { count: "exact", head: true })
+      .eq("is_read", false)
+      .neq("sender_id", user.id)
+      .eq(scopeCol, user.id);
 
-  const { count } = await query;
-  return NextResponse.json({ count: count ?? 0 });
+  const [{ count }, { count: urgent }] = await Promise.all([
+    baseFilter(),
+    baseFilter().eq("is_urgent", true),
+  ]);
+
+  return NextResponse.json({ count: count ?? 0, urgent: urgent ?? 0 });
 }
