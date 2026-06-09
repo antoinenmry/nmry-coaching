@@ -183,7 +183,7 @@ function VoicePlayer({ audioUrl, isMe }: { audioUrl?: string; isMe: boolean }) {
 
 // ─── Tab Messages ─────────────────────────────────────────────────────────────
 function MessagesTab() {
-  const { state, update, me, role, clients } = useData();
+  const { state, update, me, role, clients, activeUserId } = useData();
   const isElevated = role === "coach" || role === "admin";
 
   // ── Mode coach : chat indépendant (ne change PAS le profil actif global) ──
@@ -223,6 +223,13 @@ function MessagesTab() {
 
   // Messages affichés selon le rôle
   const messages = isElevated ? (chatState?.messages ?? []) : (state.messages ?? []);
+
+  // Photos d'avatar — calculées une seule fois, de façon fiable.
+  // myPhoto : ma photo. Côté coach, `state` n'est fiable que si le profil actif = moi.
+  // partnerPhoto : la photo de l'interlocuteur (le sportif sélectionné côté coach ; inconnue côté sportif).
+  const myPhoto =
+    (!isElevated || activeUserId === me?.id ? state.profile?.photo : undefined) || undefined;
+  const partnerPhoto = (isElevated ? chatState?.profile?.photo : undefined) || undefined;
   const [text, setText] = useState("");
   const [isUrgent, setIsUrgent] = useState(false);
   const [notifyDebug, setNotifyDebug] = useState<string | null>(null);
@@ -430,7 +437,7 @@ function MessagesTab() {
         {messages.length === 0 && (
           <p className="py-10 text-center text-sm text-dim">Aucun message. Dis bonjour 👋</p>
         )}
-        {messages.map(msg => {
+        {messages.map((msg, i) => {
           // ── Messages système ──────────────────────────────────────────
           if (msg.type === "broadcast") {
             return (
@@ -467,13 +474,19 @@ function MessagesTab() {
           // ── Message normal ────────────────────────────────────────────
           const isMe = msg.senderId === me?.id;
           const isEditing = editingMsgId === msg.id;
-          const senderPhoto = isMe
-            ? (state.profile?.photo || undefined)
-            : (isElevated ? (chatState?.profile?.photo || undefined) : undefined);
+          const senderPhoto = isMe ? myPhoto : partnerPhoto;
           const senderName = msg.senderName || (isMe ? (me?.name || "Moi") : "Coach");
+          // Avatar affiché seulement en tête d'une série de messages du même expéditeur
+          const prev = messages[i - 1];
+          const showAvatar =
+            !prev || prev.type === "broadcast" || prev.type === "plan_update" || prev.senderId !== msg.senderId;
           return (
-            <div key={msg.id} className={`flex items-end gap-2 ${isMe ? "flex-row-reverse" : ""}`}>
-              <Avatar name={senderName} photo={senderPhoto} size={26} />
+            <div key={msg.id} className={`flex items-end gap-2 ${isMe ? "flex-row-reverse" : ""} ${showAvatar ? "mt-2" : ""}`}>
+              {showAvatar ? (
+                <Avatar name={senderName} photo={senderPhoto} size={26} />
+              ) : (
+                <div className="w-[26px] shrink-0" aria-hidden />
+              )}
               <div className={`flex max-w-[74%] flex-col ${isMe ? "items-end" : "items-start"}`}>
               <div className={`rounded-2xl px-3.5 py-2.5 ${
                 msg.isUrgent
@@ -482,7 +495,7 @@ function MessagesTab() {
                   ? "bg-accent"
                   : "border border-line bg-surface2"
               }`}>
-                {!isMe && (
+                {!isMe && showAvatar && (
                   <p className="mb-1 text-[11px] font-semibold text-dim">{senderName}</p>
                 )}
                 {msg.isUrgent && (
