@@ -28,6 +28,34 @@ function isActive(f: Followup): boolean {
   return !f.dateEnd || f.dateEnd >= today;
 }
 
+// ─── Avatar ───────────────────────────────────────────────────────────────────
+const AVATAR_PALETTE = ["#ef4444","#f97316","#eab308","#22c55e","#06b6d4","#3b82f6","#a855f7","#ec4899"];
+function avatarBg(name: string) {
+  let h = 0;
+  for (const c of name) h = (h * 31 + c.charCodeAt(0)) & 0x7fffffff;
+  return AVATAR_PALETTE[h % AVATAR_PALETTE.length];
+}
+function initials(name: string) {
+  return name.split(/\s+/).slice(0, 2).map(w => w[0]?.toUpperCase() ?? "").join("");
+}
+function Avatar({ name, photo, size = 26 }: { name?: string; photo?: string; size?: number }) {
+  const n = name ?? "?";
+  if (photo) {
+    return (
+      <img src={photo} alt={n} className="shrink-0 rounded-full object-cover"
+        style={{ width: size, height: size }} />
+    );
+  }
+  return (
+    <div
+      className="shrink-0 grid place-items-center rounded-full font-bold text-white"
+      style={{ width: size, height: size, background: avatarBg(n), fontSize: Math.round(size * 0.38) }}
+    >
+      {initials(n)}
+    </div>
+  );
+}
+
 // ─── VoicePlayer ──────────────────────────────────────────────────────────────
 const SPEEDS = [0.5, 1, 1.5, 2] as const;
 type Speed = (typeof SPEEDS)[number];
@@ -439,9 +467,15 @@ function MessagesTab() {
           // ── Message normal ────────────────────────────────────────────
           const isMe = msg.senderId === me?.id;
           const isEditing = editingMsgId === msg.id;
+          const senderPhoto = isMe
+            ? (state.profile?.photo || undefined)
+            : (isElevated ? (chatState?.profile?.photo || undefined) : undefined);
+          const senderName = msg.senderName || (isMe ? (me?.name || "Moi") : "Coach");
           return (
-            <div key={msg.id} className={`flex flex-col ${isMe ? "items-end" : "items-start"}`}>
-              <div className={`max-w-[78%] rounded-2xl px-3.5 py-2.5 ${
+            <div key={msg.id} className={`flex items-end gap-2 ${isMe ? "flex-row-reverse" : ""}`}>
+              <Avatar name={senderName} photo={senderPhoto} size={26} />
+              <div className={`flex max-w-[74%] flex-col ${isMe ? "items-end" : "items-start"}`}>
+              <div className={`rounded-2xl px-3.5 py-2.5 ${
                 msg.isUrgent
                   ? "border border-danger/60 bg-danger/25"
                   : isMe
@@ -449,7 +483,7 @@ function MessagesTab() {
                   : "border border-line bg-surface2"
               }`}>
                 {!isMe && (
-                  <p className="mb-1 text-[11px] font-semibold text-dim">{msg.senderName || "Coach"}</p>
+                  <p className="mb-1 text-[11px] font-semibold text-dim">{senderName}</p>
                 )}
                 {msg.isUrgent && (
                   <p className="mb-1 text-[11px] font-bold text-danger">🚨 URGENCE</p>
@@ -496,6 +530,7 @@ function MessagesTab() {
                   >🗑️ Supprimer</button>
                 </div>
               )}
+              </div>
             </div>
           );
         })}
@@ -555,6 +590,7 @@ function MessagesTab() {
 function SanteTab() {
   const { state, update, role, me } = useData();
   const isElevated = role === "coach" || role === "admin";
+  const [subTab, setSubTab] = useState<"suivi" | "metriques">("suivi");
   const [type, setType] = useState<"pain" | "injury" | "note">("pain");
   const [text, setText] = useState("");
   const [dateStart, setDateStart] = useState(todayKey());
@@ -591,6 +627,24 @@ function SanteTab() {
 
   return (
     <div className="space-y-4">
+      {/* Sous-onglets Suivi / Métriques */}
+      <div className="flex rounded-xl bg-surface2 p-1">
+        {(["suivi", "metriques"] as const).map(t => (
+          <button
+            key={t}
+            onClick={() => setSubTab(t)}
+            className={`flex-1 rounded-lg py-2 text-[13px] font-semibold transition ${
+              subTab === t ? "bg-surface text-ink shadow-sm" : "text-dim"
+            }`}
+          >
+            {t === "suivi" ? "📋 Suivi" : "📊 Métriques"}
+          </button>
+        ))}
+      </div>
+
+      {subTab === "metriques" && <MetricsTab />}
+
+      {subTab === "suivi" && <>
       {/* Nouvelle entrée */}
       <section className="rounded-2xl border border-line bg-surface p-4">
         <h2 className="mb-3 font-bold">Nouvelle entrée</h2>
@@ -721,6 +775,7 @@ function SanteTab() {
       )}
 
       {editing && <EditInjuryModal followup={editing} onClose={() => setEditingId(null)} />}
+      </>}
     </div>
   );
 }
@@ -942,7 +997,7 @@ function BlocNotesTab() {
 // ─── Page principale ──────────────────────────────────────────────────────────
 export default function FollowupPage() {
   const { state, me, loading } = useData();
-  const [tab, setTab] = useState<"messages" | "sante" | "notes" | "metriques">("messages");
+  const [tab, setTab] = useState<"messages" | "sante" | "notes">("messages");
 
   if (loading) return <p className="py-10 text-center text-dim">Chargement…</p>;
 
@@ -950,18 +1005,17 @@ export default function FollowupPage() {
 
   return (
     <div className="space-y-4">
-      {/* Switch onglets — 2 rangées sur mobile */}
-      <div className="grid grid-cols-2 gap-1 rounded-2xl bg-surface2 p-1">
+      {/* Switch onglets */}
+      <div className="flex rounded-2xl bg-surface2 p-1">
         {([
-          { id: "messages",  label: "💬 Messages" },
-          { id: "sante",     label: "🩹 Santé" },
-          { id: "notes",     label: "📓 Bloc-notes" },
-          { id: "metriques", label: "📊 Métriques" },
+          { id: "messages", label: "💬 Messages" },
+          { id: "sante",    label: "🩹 Santé" },
+          { id: "notes",    label: "📓 Bloc-notes" },
         ] as const).map(t => (
           <button
             key={t.id}
             onClick={() => setTab(t.id)}
-            className={`relative rounded-xl py-2.5 text-[13px] font-semibold transition ${
+            className={`relative flex-1 rounded-xl py-2.5 text-[13px] font-semibold transition ${
               tab === t.id ? "bg-accent text-[#1a1500] shadow-sm" : "text-dim"
             }`}
           >
@@ -975,10 +1029,9 @@ export default function FollowupPage() {
         ))}
       </div>
 
-      {tab === "messages"  && <MessagesTab />}
-      {tab === "sante"     && <SanteTab />}
-      {tab === "notes"     && <BlocNotesTab />}
-      {tab === "metriques" && <MetricsTab />}
+      {tab === "messages" && <MessagesTab />}
+      {tab === "sante"    && <SanteTab />}
+      {tab === "notes"    && <BlocNotesTab />}
     </div>
   );
 }
