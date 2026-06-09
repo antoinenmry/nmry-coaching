@@ -1343,31 +1343,29 @@ function SynthesisView({ cursor, todayKey, sessionsByDate, goalsByDate, injuries
                               ex.rpeCoach ? `RPE coach ${ex.rpeCoach}` : null,
                             ].filter(Boolean).join(" · ");
 
-                            const hasClientData = ex.failed || ex.rpeClient > 0 || (ex.weightClient ?? 0) > 0;
                             return (
                               <div key={ex.uid} className="px-3 py-2">
-                                <div className="flex items-start justify-between gap-2">
+                                {/* Ligne 1 : nom · RPE client ou Raté */}
+                                <div className="flex items-baseline justify-between gap-2">
                                   <span className="text-[13px] font-medium">{ex.name}</span>
-                                  {hasClientData && (
-                                    <div className="flex shrink-0 flex-col items-end gap-1">
-                                      {ex.failed ? (
-                                        <span className="text-[11px] font-semibold text-danger">❌ Raté</span>
-                                      ) : ex.rpeClient > 0 ? (
-                                        <span className="text-[11px] font-semibold text-accent">
-                                          RPE client {ex.rpeClient}
-                                        </span>
-                                      ) : null}
-                                      {(ex.weightClient ?? 0) > 0 && (
-                                        <span className="rounded-md bg-ok/15 px-2 py-0.5 text-[11px] font-bold text-ok">
-                                          🏋️ {ex.weightClient} kg
-                                        </span>
-                                      )}
-                                    </div>
-                                  )}
+                                  {ex.failed ? (
+                                    <span className="shrink-0 text-[11px] font-semibold text-danger">❌ Raté</span>
+                                  ) : ex.rpeClient > 0 ? (
+                                    <span className="shrink-0 text-[11px] font-semibold text-accent">RPE client {ex.rpeClient}</span>
+                                  ) : null}
                                 </div>
-                                {prescription && (
-                                  <p className="mt-0.5 text-[12px] text-dim">{prescription}</p>
+                                {/* Ligne 2 : prescription · poids réalisé */}
+                                {(prescription || (ex.weightClient ?? 0) > 0) && (
+                                  <div className="mt-0.5 flex items-baseline justify-between gap-2">
+                                    <p className="text-[12px] text-dim">{prescription}</p>
+                                    {(ex.weightClient ?? 0) > 0 && (
+                                      <span className="shrink-0 rounded-md bg-ok/15 px-2 py-0.5 text-[11px] font-bold text-ok">
+                                        🏋️ {ex.weightClient} kg
+                                      </span>
+                                    )}
+                                  </div>
                                 )}
+                                {/* Ligne 3 : commentaires */}
                                 {ex.coachComment && (
                                   <p className="mt-1 text-[11px] text-dim italic">🗒 {ex.coachComment}</p>
                                 )}
