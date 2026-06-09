@@ -138,12 +138,15 @@ export async function POST(req: NextRequest) {
   // ── Notifications push ──────────────────────────────────────────────────
   const senderIsClient = user.id === clientId;
   if (senderIsClient) {
-    // Sportif → coach
-    sendPushToUser(coachId, {
-      title: isUrgent ? "🚨 Message urgent" : "💬 Nouveau message",
-      body: `${myName} : ${text.trim().slice(0, 80)}`,
-      url: "/followup",
-    }).catch(() => {});
+    // Sportif → coach. Si urgent, le push (+ email) est géré par /api/messages/urgent
+    // appelé côté client → on évite le double push ici.
+    if (!isUrgent) {
+      sendPushToUser(coachId, {
+        title: "💬 Nouveau message",
+        body: `${myName} : ${text.trim().slice(0, 80)}`,
+        url: "/followup",
+      }).catch(() => {});
+    }
   } else {
     // Coach → sportif (respecte la préférence du sportif)
     const prefs = await getUserNotifPrefs(clientId);
