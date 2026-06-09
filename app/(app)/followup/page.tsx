@@ -2,8 +2,7 @@
 
 import { useState, useRef, useEffect, useCallback, memo } from "react";
 import { useData } from "@/components/DataProvider";
-import { createClient } from "@/lib/supabase/client";
-import { emptyState, type AppState, type BlockNote, type ChatMessage, type Followup } from "@/lib/types";
+import { type BlockNote, type ChatMessage, type Followup } from "@/lib/types";
 import MetricsTab from "./MetricsTab";
 
 // ─── Utils ────────────────────────────────────────────────────────────────────
@@ -183,53 +182,44 @@ function VoicePlayer({ audioUrl, isMe }: { audioUrl?: string; isMe: boolean }) {
 
 // ─── Tab Messages ─────────────────────────────────────────────────────────────
 function MessagesTab() {
-  const { state, update, me, role, clients, activeUserId } = useData();
+  const { me, role, clients } = useData();
   const isElevated = role === "coach" || role === "admin";
 
-  // ── Mode coach : chat indépendant (ne change PAS le profil actif global) ──
+  // ── Conversation courante (isolée par sportif, stockée en base) ──
   const clientList = clients.filter(c => c.role === "client");
-  const [chatClientId, setChatClientId] = useState<string | null>(
-    clientList[0]?.id ?? null
-  );
-  const [chatState, setChatState] = useState<AppState | null>(null);
+  const [chatClientId, setChatClientId] = useState<string | null>(null);
+  // Le coach choisit un sportif ; le sportif est toujours sur sa propre conversation.
+  const convClientId = isElevated ? chatClientId : (me?.id ?? null);
+
+  type Participant = { id: string; name: string; photo?: string };
+  const [messages, setMessages] = useState<ChatMessage[]>([]);
+  const [participants, setParticipants] = useState<{ client?: Participant; coach?: Participant }>({});
   const [chatLoading, setChatLoading] = useState(false);
 
-  const loadChat = useCallback(async (clientId: string) => {
-    setChatLoading(true);
-    const supabase = createClient();
-    const { data: row } = await supabase
-      .from("app_state").select("data").eq("user_id", clientId).maybeSingle();
-    const cs: AppState = { ...emptyState(), ...(row?.data ?? {}) };
-    // Marquer comme lus les messages du client
-    const hasUnread = (cs.messages ?? []).some(m => !m.isRead && m.senderId !== me?.id);
-    if (hasUnread && me) {
-      const updated = { ...cs, messages: (cs.messages ?? []).map(m =>
-        (!m.isRead && m.senderId !== me.id) ? { ...m, isRead: true } : m
-      )};
-      await supabase.from("app_state").upsert({
-        user_id: clientId, data: updated,
-        updated_at: new Date().toISOString(), updated_by_coach_at: new Date().toISOString(),
-      });
-      setChatState(updated);
-    } else {
-      setChatState(cs);
+  // Sélectionne le premier sportif une fois la liste chargée (coach)
+  useEffect(() => {
+    if (isElevated && !chatClientId && clientList.length > 0) {
+      setChatClientId(clientList[0].id);
     }
+  }, [isElevated, chatClientId, clientList]);
+
+  const loadMessages = useCallback(async (clientId: string) => {
+    setChatLoading(true);
+    try {
+      const res = await fetch(`/api/chat?clientId=${encodeURIComponent(clientId)}`);
+      if (res.ok) {
+        const data = await res.json();
+        setMessages(data.messages ?? []);
+        setParticipants(data.participants ?? {});
+      }
+    } catch { /* silencieux */ }
     setChatLoading(false);
-  }, [me]);
+  }, []);
 
   useEffect(() => {
-    if (isElevated && chatClientId) loadChat(chatClientId);
-  }, [isElevated, chatClientId, loadChat]);
+    if (convClientId) loadMessages(convClientId);
+  }, [convClientId, loadMessages]);
 
-  // Messages affichés selon le rôle
-  const messages = isElevated ? (chatState?.messages ?? []) : (state.messages ?? []);
-
-  // Photos d'avatar — calculées une seule fois, de façon fiable.
-  // myPhoto : ma photo. Côté coach, `state` n'est fiable que si le profil actif = moi.
-  // partnerPhoto : la photo de l'interlocuteur (le sportif sélectionné côté coach ; inconnue côté sportif).
-  const myPhoto =
-    (!isElevated || activeUserId === me?.id ? state.profile?.photo : undefined) || undefined;
-  const partnerPhoto = (isElevated ? chatState?.profile?.photo : undefined) || undefined;
   const [text, setText] = useState("");
   const [isUrgent, setIsUrgent] = useState(false);
   const [notifyDebug, setNotifyDebug] = useState<string | null>(null);
@@ -240,91 +230,46 @@ function MessagesTab() {
   const timerRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const bottomRef = useRef<HTMLDivElement>(null);
 
-  // Client : marquer les messages de l'autre comme lus à l'ouverture
-  useEffect(() => {
-    if (isElevated) return; // coach gère ses lectures dans loadChat
-    const hasUnread = (state.messages ?? []).some(m => !m.isRead && m.senderId !== me?.id);
-    if (!hasUnread) return;
-    update(d => {
-      (d.messages ?? []).forEach(m => {
-        if (!m.isRead && m.senderId !== me?.id) m.isRead = true;
-      });
-    });
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
-
   useEffect(() => {
     bottomRef.current?.scrollIntoView({ behavior: "smooth" });
   }, [messages.length]);
 
-  async function pushMsg(msg: ChatMessage) {
-    if (isElevated) {
-      // Coach : écriture directe dans l'app_state du client sélectionné
-      if (!chatClientId || !chatState) return;
-      const updated = { ...chatState, messages: [...(chatState.messages ?? []), msg] };
-      const supabase = createClient();
-      await supabase.from("app_state").upsert({
-        user_id: chatClientId, data: updated,
-        updated_at: new Date().toISOString(), updated_by_coach_at: new Date().toISOString(),
+  // Envoie un message (texte ou vocal) via l'API chat, puis recharge la conversation.
+  async function postMessage(payload: { text?: string; audioUrl?: string; isVoice?: boolean; isUrgent?: boolean }) {
+    if (!convClientId || !me) return;
+    try {
+      const res = await fetch("/api/chat", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ clientId: convClientId, ...payload }),
       });
-      setChatState(updated);
-    } else {
-      // Client : via DataProvider (sauvegarde différée)
-      update(d => { if (!d.messages) d.messages = []; d.messages.push(msg); });
+      if (!res.ok) {
+        setNotifyDebug("⚠️ Envoi impossible (HTTP " + res.status + ")");
+        setTimeout(() => setNotifyDebug(null), 6000);
+        return;
+      }
+      // Message urgent d'un sportif → email d'alerte au coach (en plus du push)
+      if (payload.isUrgent && !isElevated) {
+        fetch("/api/messages/urgent", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ clientId: me.id, messageText: payload.text ?? "", clientName: me.name || me.email }),
+        }).catch(() => {});
+      }
+      await loadMessages(convClientId);
+    } catch (e) {
+      setNotifyDebug("⚠️ Erreur réseau : " + (e as Error).message);
+      setTimeout(() => setNotifyDebug(null), 6000);
     }
   }
 
   async function send() {
     if (!text.trim() || !me) return;
     const msgText = text.trim();
-    await pushMsg({
-      id: uid(), text: msgText, isUrgent, isVoice: false,
-      createdAt: new Date().toISOString(),
-      senderId: me.id, senderName: me.name || me.email, isRead: false,
-    });
-    setText(""); setIsUrgent(false);
-
-    // Notification push au destinataire
-    // Coach → notifie le client sélectionné ; Client → notifie son coach (via urgent ou notify)
-    const showResult = async (res: Response) => {
-      try {
-        const data = await res.json();
-        if (data.sent) {
-          const extra = data.recipients !== undefined ? ` (${data.recipients} destinataire(s))` : "";
-          setNotifyDebug(`✅ Notif envoyée${extra}`);
-        } else {
-          setNotifyDebug(`⚠️ Non envoyée : ${data.reason ?? JSON.stringify(data)}`);
-        }
-      } catch {
-        setNotifyDebug(`⚠️ Réponse illisible (HTTP ${res.status})`);
-      }
-      setTimeout(() => setNotifyDebug(null), 8000);
-    };
-
-    if (isElevated && chatClientId) {
-      // Coach envoie → notifie le sportif
-      fetch("/api/messages/notify", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ recipientId: chatClientId, senderName: me.name || me.email, messageText: msgText }),
-      }).then(showResult).catch((e) => setNotifyDebug("⚠️ Erreur réseau : " + e.message));
-    } else if (!isElevated) {
-      if (isUrgent) {
-        // Message urgent → email + push au coach
-        fetch("/api/messages/urgent", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ clientId: me.id, messageText: msgText, clientName: me.name || me.email }),
-        }).then(showResult).catch((e) => setNotifyDebug("⚠️ Erreur réseau : " + e.message));
-      } else {
-        // Message normal → push au coach
-        fetch("/api/messages/notify", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ clientId: me.id, senderName: me.name || me.email, messageText: msgText }),
-        }).then(showResult).catch((e) => setNotifyDebug("⚠️ Erreur réseau : " + e.message));
-      }
-    }
+    setText("");
+    const urgent = isUrgent;
+    setIsUrgent(false);
+    await postMessage({ text: msgText, isUrgent: urgent });
   }
 
   async function startRecording() {
@@ -343,12 +288,7 @@ function MessagesTab() {
         const reader = new FileReader();
         reader.onload = () => {
           if (!me) return;
-          pushMsg({
-            id: uid(), text: "", isUrgent: false, isVoice: true,
-            audioUrl: reader.result as string,
-            createdAt: new Date().toISOString(),
-            senderId: me.id, senderName: me.name || me.email, isRead: false,
-          });
+          postMessage({ isVoice: true, audioUrl: reader.result as string });
         };
         reader.readAsDataURL(blob);
         stream.getTracks().forEach(t => t.stop());
@@ -371,32 +311,23 @@ function MessagesTab() {
   const [editingMsgId, setEditingMsgId] = useState<string | null>(null);
   const [editText, setEditText] = useState("");
 
-  async function applyMessages(next: ChatMessage[]) {
-    if (isElevated) {
-      if (!chatClientId || !chatState) return;
-      const updated = { ...chatState, messages: next };
-      const supabase = createClient();
-      await supabase.from("app_state").upsert({
-        user_id: chatClientId, data: updated,
-        updated_at: new Date().toISOString(), updated_by_coach_at: new Date().toISOString(),
-      });
-      setChatState(updated);
-    } else {
-      update(d => { d.messages = next; });
-    }
-  }
-
   async function deleteMsg(id: string) {
-    await applyMessages(messages.filter(m => m.id !== id));
+    setMessages(prev => prev.filter(m => m.id !== id)); // optimiste
+    await fetch(`/api/chat/${id}`, { method: "DELETE" }).catch(() => {});
   }
 
   async function saveEdit(id: string) {
     const trimmed = editText.trim();
     if (!trimmed) return;
-    await applyMessages(messages.map(m =>
+    setMessages(prev => prev.map(m =>
       m.id === id ? { ...m, text: trimmed, editedAt: new Date().toISOString() } : m
-    ));
+    )); // optimiste
     setEditingMsgId(null);
+    await fetch(`/api/chat/${id}`, {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ text: trimmed }),
+    }).catch(() => {});
   }
 
   // État d'attente coach sans client sélectionné
@@ -474,8 +405,14 @@ function MessagesTab() {
           // ── Message normal ────────────────────────────────────────────
           const isMe = msg.senderId === me?.id;
           const isEditing = editingMsgId === msg.id;
-          const senderPhoto = isMe ? myPhoto : partnerPhoto;
-          const senderName = msg.senderName || (isMe ? (me?.name || "Moi") : "Coach");
+          // Avatar/nom résolus depuis les participants renvoyés par le serveur
+          const sender = msg.senderId === participants.coach?.id
+            ? participants.coach
+            : msg.senderId === participants.client?.id
+            ? participants.client
+            : undefined;
+          const senderPhoto = sender?.photo;
+          const senderName = sender?.name || msg.senderName || (isMe ? (me?.name || "Moi") : "Coach");
           // Avatar affiché seulement en tête d'une série de messages du même expéditeur
           const prev = messages[i - 1];
           const showAvatar =
@@ -1009,12 +946,21 @@ function BlocNotesTab() {
 
 // ─── Page principale ──────────────────────────────────────────────────────────
 export default function FollowupPage() {
-  const { state, me, loading } = useData();
+  const { loading } = useData();
   const [tab, setTab] = useState<"messages" | "sante" | "notes">("messages");
+  const [unreadCount, setUnreadCount] = useState(0);
+
+  // Compteur de messages non lus (rafraîchi à l'ouverture et à chaque changement d'onglet)
+  useEffect(() => {
+    let cancelled = false;
+    fetch("/api/chat/unread")
+      .then(r => r.ok ? r.json() : { count: 0 })
+      .then(d => { if (!cancelled) setUnreadCount(d.count ?? 0); })
+      .catch(() => {});
+    return () => { cancelled = true; };
+  }, [tab]);
 
   if (loading) return <p className="py-10 text-center text-dim">Chargement…</p>;
-
-  const unreadCount = (state.messages ?? []).filter(m => !m.isRead && m.senderId !== me?.id).length;
 
   return (
     <div className="space-y-4">

@@ -3,7 +3,7 @@ import { createClient } from "@/lib/supabase/server";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { sendPushToUser } from "@/lib/push";
 import { getUserNotifPrefs } from "@/lib/notifPrefs";
-import type { ChatMessage } from "@/lib/types";
+import { insertChatMessage } from "@/lib/chat";
 
 /** Insère un message plan_update dans le chat d'un client */
 async function appendPlanUpdateToChat(
@@ -12,25 +12,13 @@ async function appendPlanUpdateToChat(
   coachId: string,
   coachName: string,
 ) {
-  const { data: row } = await admin
-    .from("app_state").select("data").eq("user_id", clientId).maybeSingle();
-  const current = (row?.data ?? {}) as Record<string, unknown>;
-  const msgs: ChatMessage[] = (current.messages as ChatMessage[] | undefined) ?? [];
-  const chatMsg: ChatMessage = {
-    id: crypto.randomUUID(),
-    text: "Votre programmation a été mise à jour.",
-    isUrgent: false,
-    isVoice: false,
-    createdAt: new Date().toISOString(),
+  await insertChatMessage(admin, {
+    coachId,
+    clientId,
     senderId: coachId,
     senderName: coachName,
-    isRead: false,
+    text: "Votre programmation a été mise à jour.",
     type: "plan_update",
-  };
-  await admin.from("app_state").upsert({
-    user_id: clientId,
-    data: { ...current, messages: [...msgs, chatMsg] },
-    updated_at: new Date().toISOString(),
   });
 }
 

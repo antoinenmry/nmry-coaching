@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { sendPushToCoachClients } from "@/lib/push";
-import type { ChatMessage } from "@/lib/types";
+import { insertChatMessage } from "@/lib/chat";
 
 /**
  * POST /api/broadcasts
@@ -71,28 +71,16 @@ export async function POST(req: NextRequest) {
     const coachName = (coachProfile as { name?: string } | null)?.name || "Coach";
 
     await Promise.allSettled(
-      links.map(async ({ client_id }: { client_id: string }) => {
-        const { data: row } = await admin
-          .from("app_state").select("data").eq("user_id", client_id).maybeSingle();
-        const current = (row?.data ?? {}) as Record<string, unknown>;
-        const msgs: ChatMessage[] = (current.messages as ChatMessage[] | undefined) ?? [];
-        const chatMsg: ChatMessage = {
-          id: crypto.randomUUID(),
-          text: message.trim(),
-          isUrgent: false,
-          isVoice: false,
-          createdAt: new Date().toISOString(),
+      links.map(({ client_id }: { client_id: string }) =>
+        insertChatMessage(admin, {
+          coachId: user.id,
+          clientId: client_id,
           senderId: user.id,
           senderName: coachName,
-          isRead: false,
+          text: message.trim(),
           type: "broadcast",
-        };
-        await admin.from("app_state").upsert({
-          user_id: client_id,
-          data: { ...current, messages: [...msgs, chatMsg] },
-          updated_at: new Date().toISOString(),
-        });
-      })
+        })
+      )
     );
   }
 

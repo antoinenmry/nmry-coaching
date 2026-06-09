@@ -178,6 +178,83 @@ create policy state_admin_all on public.app_state for all
   using (public.is_admin()) with check (public.is_admin());
 
 -- =========================================================================
+-- 10) CHAT — table dédiée par conversation coach ↔ sportif
+--     Remplace le stockage des messages dans app_state.data.messages.
+--     Chaque message appartient à un couple (coach_id, client_id) → isolation
+--     stricte des conversations, impossible de les mélanger.
+-- =========================================================================
+
+create table if not exists public.chat_messages (
+  id          uuid primary key default gen_random_uuid(),
+  coach_id    uuid not null references auth.users(id) on delete cascade,
+  client_id   uuid not null references auth.users(id) on delete cascade,
+  sender_id   uuid not null references auth.users(id) on delete cascade,
+  sender_name text,
+  body        text not null default '',
+  audio_url   text,                       -- data URL base64 pour les vocaux
+  is_voice    boolean not null default false,
+  is_urgent   boolean not null default false,
+  type        text,                       -- null=normal, 'broadcast', 'plan_update'
+  is_read     boolean not null default false,
+  created_at  timestamptz not null default now(),
+  edited_at   timestamptz
+);
+
+create index if not exists chat_messages_client_idx on public.chat_messages (client_id, created_at);
+create index if not exists chat_messages_coach_idx  on public.chat_messages (coach_id, created_at);
+
+alter table public.chat_messages enable row level security;
+
+-- Le sportif accède à sa propre conversation
+drop policy if exists chat_self  on public.chat_messages;
+create policy chat_self on public.chat_messages for all
+  using (client_id = auth.uid())
+  with check (client_id = auth.uid() and sender_id = auth.uid());
+
+-- Le coach accède aux conversations de SES sportifs uniquement
+drop policy if exists chat_coach on public.chat_messages;
+create policy chat_coach on public.chat_messages for all
+  using (
+    public.is_coach() and exists (
+      select 1 from public.coach_client cc
+      where cc.coach_id = auth.uid() and cc.client_id = chat_messages.client_id
+    )
+  )
+  with check (
+    public.is_coach() and sender_id = auth.uid() and exists (
+      select 1 from public.coach_client cc
+      where cc.coach_id = auth.uid() and cc.client_id = chat_messages.client_id
+    )
+  );
+
+-- L'admin accède à tout
+drop policy if exists chat_admin on public.chat_messages;
+create policy chat_admin on public.chat_messages for all
+  using (public.is_admin()) with check (public.is_admin());
+
+-- 10b) MIGRATION — recopie les messages existants depuis app_state vers la table.
+--      Idempotent : ne s'exécute que si chat_messages est encore vide.
+insert into public.chat_messages
+  (coach_id, client_id, sender_id, sender_name, body, audio_url, is_voice, is_urgent, type, is_read, created_at, edited_at)
+select
+  cc.coach_id,
+  a.user_id,
+  coalesce((m->>'senderId')::uuid, cc.coach_id),
+  m->>'senderName',
+  coalesce(m->>'text', ''),
+  m->>'audioUrl',
+  coalesce((m->>'isVoice')::boolean, false),
+  coalesce((m->>'isUrgent')::boolean, false),
+  nullif(m->>'type', ''),
+  coalesce((m->>'isRead')::boolean, false),
+  coalesce((m->>'createdAt')::timestamptz, now()),
+  nullif(m->>'editedAt', '')::timestamptz
+from public.app_state a
+join public.coach_client cc on cc.client_id = a.user_id
+cross join lateral jsonb_array_elements(coalesce(a.data->'messages', '[]'::jsonb)) as m
+where not exists (select 1 from public.chat_messages limit 1);
+
+-- =========================================================================
 -- ⚠️  INSTRUCTIONS DE DÉPLOIEMENT
 -- 1) Lancer ce script complet dans Supabase → SQL Editor
 -- 2) Te désigner admin (remplace l'email) :
