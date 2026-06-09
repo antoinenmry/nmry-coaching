@@ -247,9 +247,15 @@ export function DataProvider({ children }: { children: React.ReactNode }) {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  const pushNow = useCallback(async () => {
+  const pushNow = useCallback(async (expectedUserId?: string) => {
     const userId = activeRef.current;
     if (!userId) return;
+
+    // ── Write-fence (anti-contamination) ──────────────────────────────────────
+    // Si le profil actif a changé depuis la programmation de cette sauvegarde,
+    // on l'abandonne : les données en mémoire (stateRef) appartiennent désormais
+    // à un autre profil et ne doivent JAMAIS être écrites dans la ligne d'un tiers.
+    if (expectedUserId && expectedUserId !== userId) return;
 
     if (modeRef.current !== "auth") {
       localStorage.setItem(LOCAL_KEY, JSON.stringify(stateRef.current));
@@ -306,8 +312,11 @@ export function DataProvider({ children }: { children: React.ReactNode }) {
         recipe(next);
         return next;
       });
+      // On capture le profil actif au moment de l'édition : la sauvegarde différée
+      // ne pourra s'écrire que dans CETTE ligne (cf. write-fence dans pushNow).
+      const scheduledFor = activeRef.current ?? undefined;
       if (saveTimer.current) clearTimeout(saveTimer.current);
-      saveTimer.current = setTimeout(pushNow, 500);
+      saveTimer.current = setTimeout(() => pushNow(scheduledFor), 500);
     },
     [pushNow],
   );
@@ -348,12 +357,19 @@ export function DataProvider({ children }: { children: React.ReactNode }) {
 
   const switchClient = useCallback(
     async (userId: string) => {
+      // Flush la sauvegarde en attente du profil COURANT avant de charger le suivant :
+      // ses données sont écrites dans SA ligne, puis on bascule. Ni perte, ni mélange.
+      if (saveTimer.current) {
+        clearTimeout(saveTimer.current);
+        saveTimer.current = null;
+        await pushNow(activeRef.current ?? undefined);
+      }
       setLoading(true);
       if (typeof window !== "undefined") localStorage.setItem(COACH_CLIENT_KEY, userId);
       await loadStateFor(userId);
       setLoading(false);
     },
-    [loadStateFor],
+    [loadStateFor, pushNow],
   );
 
   const signOut = useCallback(async () => {

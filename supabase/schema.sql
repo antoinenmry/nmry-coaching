@@ -49,13 +49,34 @@ create policy profiles_self_select  on public.profiles for select using (id = au
 create policy profiles_self_update  on public.profiles for update using (id = auth.uid());
 create policy profiles_coach_select on public.profiles for select using (public.is_coach());
 
--- 5) POLICIES — app_state (chaque client gère ses données ; le coach gère tout)
+-- 5) POLICIES — app_state
+--    - chaque sportif gère SES données (user_id = auth.uid())
+--    - un coach gère sa propre ligne + UNIQUEMENT ses sportifs affectés (coach_client)
+--      → défense en profondeur : un bug côté coach ne peut plus écrire hors périmètre
+--    - l'admin garde un accès complet (policy state_admin_all, section 9f)
 drop policy if exists state_self_all  on public.app_state;
 drop policy if exists state_coach_all on public.app_state;
 create policy state_self_all  on public.app_state for all
   using (user_id = auth.uid())   with check (user_id = auth.uid());
 create policy state_coach_all on public.app_state for all
-  using (public.is_coach())      with check (public.is_coach());
+  using (
+    public.is_coach() and (
+      user_id = auth.uid()
+      or exists (
+        select 1 from public.coach_client cc
+        where cc.coach_id = auth.uid() and cc.client_id = app_state.user_id
+      )
+    )
+  )
+  with check (
+    public.is_coach() and (
+      user_id = auth.uid()
+      or exists (
+        select 1 from public.coach_client cc
+        where cc.coach_id = auth.uid() and cc.client_id = app_state.user_id
+      )
+    )
+  );
 
 -- 6) TRIGGER : créer profil + état vide à chaque inscription
 create or replace function public.handle_new_user()
