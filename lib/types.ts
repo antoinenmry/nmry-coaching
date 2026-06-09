@@ -40,6 +40,23 @@ export interface AdminOverview {
   unassigned: Profile[]; // clients sans coach
 }
 
+/** Une entrée de mesure pour une métrique corporelle (date + valeur). */
+export interface MetricEntry {
+  id: string;
+  date: string;   // YYYY-MM-DD
+  value: number;
+}
+
+/** Une métrique personnalisable (Poids, Taille, Tour de taille…). */
+export interface Metric {
+  id: string;
+  name: string;
+  unit: string;
+  emoji?: string;
+  entries: MetricEntry[];  // triées par date asc
+  visible: boolean;
+}
+
 /** Un exercice dans une séance posée (la prescription, éditable). */
 export interface ExerciseInstance {
   uid: string;
@@ -76,11 +93,13 @@ export interface UserProfileData {
   photo: string;      // base64 data URL ou ""
   birthDate: string;  // "YYYY-MM-DD" ou ""
   gender: string;     // "homme" | "femme" | ""
-  height: string;     // cm
-  weight: string;     // kg
+  height: string;     // cm (conservé pour rétrocompat / migration métriques)
+  weight: string;     // kg (conservé pour rétrocompat / migration métriques)
   sports: string[];   // sports sélectionnés
   diet: string;
   dietComment?: string; // commentaire / retour du sportif sur sa diète
+  instagram?: string;   // @username ou URL complète
+  location?: { label: string; lat: number; lng: number };
 }
 
 export interface GoalEvent {
@@ -325,6 +344,7 @@ export interface AppState {
   library: ExerciseLibrary;
   records: RecordsData;
   preferences: UserPreferences;
+  metrics?: Metric[];          // métriques corporelles personnalisables
 }
 
 // Bibliothèque de départ (catégories muscu modifiables/supprimables).

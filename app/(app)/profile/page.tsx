@@ -1,6 +1,6 @@
 "use client";
 
-import { useRef } from "react";
+import { useRef, useState, useEffect } from "react";
 import { useData } from "@/components/DataProvider";
 
 const SPORTS = [
@@ -9,6 +9,96 @@ const SPORTS = [
   "Powerbuilding", "Préparation physique",
 ];
 
+// ─── Localisation (Nominatim / OpenStreetMap) ─────────────────────────────────
+interface GeoResult {
+  label: string;
+  lat: number;
+  lng: number;
+}
+
+function LocationPicker({
+  value,
+  onChange,
+}: {
+  value?: { label: string; lat: number; lng: number };
+  onChange: (loc: GeoResult | null) => void;
+}) {
+  const [query, setQuery] = useState("");
+  const [results, setResults] = useState<GeoResult[]>([]);
+  const [loading, setLoading] = useState(false);
+  const [open, setOpen] = useState(false);
+
+  useEffect(() => {
+    if (query.length < 2) { setResults([]); setOpen(false); return; }
+    const timer = setTimeout(async () => {
+      setLoading(true);
+      try {
+        const res = await fetch(
+          `https://nominatim.openstreetmap.org/search?q=${encodeURIComponent(query)}&format=json&limit=5`,
+          { headers: { "Accept-Language": "fr", "Referer": "https://nmry-coaching.vercel.app" } }
+        );
+        const data: Array<{ display_name: string; lat: string; lon: string }> = await res.json();
+        setResults(
+          data.map(r => ({
+            label: r.display_name.split(",").slice(0, 3).join(", "),
+            lat: parseFloat(r.lat),
+            lng: parseFloat(r.lon),
+          }))
+        );
+        setOpen(true);
+      } catch {
+        setResults([]);
+      } finally {
+        setLoading(false);
+      }
+    }, 400);
+    return () => clearTimeout(timer);
+  }, [query]);
+
+  if (value) {
+    return (
+      <div className="flex items-center gap-2 rounded-xl border border-line bg-surface2 px-3 py-2.5">
+        <span className="flex-1 text-sm">📍 {value.label}</span>
+        <button onClick={() => onChange(null)} className="shrink-0 text-dim hover:text-danger">✕</button>
+      </div>
+    );
+  }
+
+  return (
+    <div className="relative">
+      <div className="relative">
+        <input
+          value={query}
+          onChange={e => { setQuery(e.target.value); setOpen(false); }}
+          placeholder="Paris, Lyon, Bordeaux…"
+        />
+        {loading && (
+          <span className="absolute right-3 top-1/2 -translate-y-1/2 text-[12px] text-dim">…</span>
+        )}
+      </div>
+      {open && results.length > 0 && (
+        <div className="absolute top-full left-0 right-0 z-10 mt-1 overflow-hidden rounded-xl border border-line bg-surface shadow-lg">
+          {results.map((r, i) => (
+            <button
+              key={i}
+              onClick={() => {
+                onChange(r);
+                setQuery("");
+                setOpen(false);
+                setResults([]);
+              }}
+              className="w-full px-3 py-2.5 text-left text-sm hover:bg-surface2 border-b border-line/50 last:border-0"
+            >
+              📍 {r.label}
+            </button>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
+
+// ─── Page profil ──────────────────────────────────────────────────────────────
 export default function ProfilePage() {
   const { state, update, loading } = useData();
   const p = state.profile;
@@ -101,16 +191,34 @@ export default function ProfilePage() {
           </label>
         </div>
 
-        {/* Taille + Poids */}
-        <div className="mb-4 grid grid-cols-2 gap-3">
+        {/* Instagram + Localisation */}
+        <div className="mb-4 flex flex-col gap-3">
           <label className="block">
-            <span className="mb-1.5 block text-[13px] text-dim">Taille (cm)</span>
-            <input type="number" value={p.height} onChange={set("height")} placeholder="cm" />
+            <span className="mb-1.5 block text-[13px] text-dim">📸 Instagram</span>
+            <div className="relative">
+              <span className="absolute left-3 top-1/2 -translate-y-1/2 text-dim text-sm font-semibold">@</span>
+              <input
+                value={(p.instagram ?? "").replace(/^@/, "")}
+                onChange={e => update(d => { d.profile.instagram = e.target.value ? `@${e.target.value.replace(/^@/, "")}` : ""; })}
+                placeholder="username"
+                className="pl-7"
+              />
+            </div>
           </label>
-          <label className="block">
-            <span className="mb-1.5 block text-[13px] text-dim">Poids (kg)</span>
-            <input type="number" value={p.weight} onChange={set("weight")} placeholder="kg" />
-          </label>
+          <div>
+            <span className="mb-1.5 block text-[13px] text-dim">📍 Localisation</span>
+            <LocationPicker
+              value={p.location}
+              onChange={loc =>
+                update(d => { d.profile.location = loc ?? undefined; })
+              }
+            />
+            {p.location && (
+              <p className="mt-1 text-[11px] text-dim">
+                {p.location.lat.toFixed(4)}, {p.location.lng.toFixed(4)}
+              </p>
+            )}
+          </div>
         </div>
 
         {/* Sports */}

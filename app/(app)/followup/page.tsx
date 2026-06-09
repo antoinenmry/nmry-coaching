@@ -4,6 +4,7 @@ import { useState, useRef, useEffect, useCallback } from "react";
 import { useData } from "@/components/DataProvider";
 import { createClient } from "@/lib/supabase/client";
 import { emptyState, type AppState, type BlockNote, type ChatMessage, type Followup } from "@/lib/types";
+import MetricsTab from "./MetricsTab";
 
 // ─── Utils ────────────────────────────────────────────────────────────────────
 const uid = () => Math.random().toString(36).slice(2, 9);
@@ -941,7 +942,7 @@ function BlocNotesTab() {
 // ─── Page principale ──────────────────────────────────────────────────────────
 export default function FollowupPage() {
   const { state, me, loading } = useData();
-  const [tab, setTab] = useState<"messages" | "sante" | "notes">("messages");
+  const [tab, setTab] = useState<"messages" | "sante" | "notes" | "metriques">("messages");
 
   if (loading) return <p className="py-10 text-center text-dim">Chargement…</p>;
 
@@ -949,17 +950,18 @@ export default function FollowupPage() {
 
   return (
     <div className="space-y-4">
-      {/* Switch onglets */}
-      <div className="flex rounded-2xl bg-surface2 p-1">
+      {/* Switch onglets — 2 rangées sur mobile */}
+      <div className="grid grid-cols-2 gap-1 rounded-2xl bg-surface2 p-1">
         {([
-          { id: "messages", label: "💬 Messages" },
-          { id: "sante",    label: "🩹 Santé" },
-          { id: "notes",    label: "📓 Bloc-notes" },
+          { id: "messages",  label: "💬 Messages" },
+          { id: "sante",     label: "🩹 Santé" },
+          { id: "notes",     label: "📓 Bloc-notes" },
+          { id: "metriques", label: "📊 Métriques" },
         ] as const).map(t => (
           <button
             key={t.id}
             onClick={() => setTab(t.id)}
-            className={`relative flex-1 rounded-xl py-2.5 text-[13px] font-semibold transition ${
+            className={`relative rounded-xl py-2.5 text-[13px] font-semibold transition ${
               tab === t.id ? "bg-accent text-[#1a1500] shadow-sm" : "text-dim"
             }`}
           >
@@ -973,9 +975,10 @@ export default function FollowupPage() {
         ))}
       </div>
 
-      {tab === "messages" && <MessagesTab />}
-      {tab === "sante"    && <SanteTab />}
-      {tab === "notes"    && <BlocNotesTab />}
+      {tab === "messages"  && <MessagesTab />}
+      {tab === "sante"     && <SanteTab />}
+      {tab === "notes"     && <BlocNotesTab />}
+      {tab === "metriques" && <MetricsTab />}
     </div>
   );
 }
