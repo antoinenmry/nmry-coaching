@@ -12,17 +12,22 @@ import { insertChatMessage, rowToMessage, getCoachOf, type ChatRow } from "@/lib
  * Conversation = couple (coach, sportif). Isolation stricte garantie en base.
  */
 
+// Nombre de messages chargés par page (les plus récents). On remonte au besoin.
+const PAGE_SIZE = 15;
+
 async function profileOf(admin: ReturnType<typeof createAdminClient>, id: string) {
-  const [{ data: prof }, { data: stateRow }] = await Promise.all([
+  // On ne sélectionne QUE la photo (chemin JSON) au lieu de tout le blob app_state,
+  // qui peut peser plusieurs Mo (programmation, bibliothèque, métriques…).
+  const [{ data: prof }, { data: photoRow }] = await Promise.all([
     admin.from("profiles").select("name, role").eq("id", id).maybeSingle(),
-    admin.from("app_state").select("data").eq("user_id", id).maybeSingle(),
+    admin.from("app_state").select("photo:data->profile->>photo").eq("user_id", id).maybeSingle(),
   ]);
-  const photo = ((stateRow?.data as Record<string, unknown> | null)?.profile as Record<string, unknown> | undefined)?.photo;
+  const photo = (photoRow as { photo?: string | null } | null)?.photo;
   return {
     id,
     name: (prof as { name?: string } | null)?.name ?? "",
     role: (prof as { role?: string } | null)?.role ?? "client",
-    photo: typeof photo === "string" ? photo : undefined,
+    photo: typeof photo === "string" && photo ? photo : undefined,
   };
 }
 
@@ -53,31 +58,48 @@ export async function GET(req: NextRequest) {
     }
   }
 
-  // Marquer comme lus les messages reçus (envoyés par l'autre)
-  await admin
-    .from("chat_messages")
-    .update({ is_read: true })
-    .eq("client_id", clientId)
-    .neq("sender_id", user.id)
-    .eq("is_read", false);
+  // Curseur de pagination : on charge les messages ANTÉRIEURS à `before` (created_at ISO).
+  // Absent → première page (les plus récents).
+  const before = req.nextUrl.searchParams.get("before");
+  const isFirstPage = !before;
 
-  // Charger les messages
-  const { data: rows } = await admin
+  // Marquer comme lus les messages reçus (uniquement à l'ouverture, pas en remontant)
+  if (isFirstPage) {
+    await admin
+      .from("chat_messages")
+      .update({ is_read: true })
+      .eq("client_id", clientId)
+      .neq("sender_id", user.id)
+      .eq("is_read", false);
+  }
+
+  // Charger une page : les N+1 plus récents (décroissant) pour détecter s'il en reste.
+  let query = admin
     .from("chat_messages")
     .select("*")
     .eq("client_id", clientId)
-    .order("created_at", { ascending: true });
+    .order("created_at", { ascending: false })
+    .limit(PAGE_SIZE + 1);
+  if (before) query = query.lt("created_at", before);
 
-  const messages = ((rows as ChatRow[] | null) ?? []).map(rowToMessage);
+  const { data: rows } = await query;
+  const list = (rows as ChatRow[] | null) ?? [];
+  const hasMore = list.length > PAGE_SIZE;
+  const page = hasMore ? list.slice(0, PAGE_SIZE) : list;
+  // Remettre en ordre chronologique croissant pour l'affichage.
+  const messages = page.reverse().map(rowToMessage);
 
-  // Participants (pour avatars / noms)
+  // Participants (avatars/noms) : utiles seulement à la première page.
+  if (!isFirstPage) {
+    return NextResponse.json({ messages, hasMore });
+  }
   const coachId = await getCoachOf(admin, clientId);
   const [client, coach] = await Promise.all([
     profileOf(admin, clientId),
     coachId ? profileOf(admin, coachId) : Promise.resolve(null),
   ]);
 
-  return NextResponse.json({ messages, participants: { client, coach } });
+  return NextResponse.json({ messages, hasMore, participants: { client, coach } });
 }
 
 // ─── POST ───────────────────────────────────────────────────────────────────

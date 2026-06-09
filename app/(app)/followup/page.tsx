@@ -195,6 +195,10 @@ function MessagesTab() {
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [participants, setParticipants] = useState<{ client?: Participant; coach?: Participant }>({});
   const [chatLoading, setChatLoading] = useState(false);
+  const [hasMore, setHasMore] = useState(false);
+  const [loadingMore, setLoadingMore] = useState(false);
+  const scrollRef = useRef<HTMLDivElement>(null);
+  const isPrependingRef = useRef(false);
 
   // Sélectionne le premier sportif une fois la liste chargée (coach)
   useEffect(() => {
@@ -203,6 +207,7 @@ function MessagesTab() {
     }
   }, [isElevated, chatClientId, clientList]);
 
+  // Première page : les 15 messages les plus récents.
   const loadMessages = useCallback(async (clientId: string) => {
     setChatLoading(true);
     try {
@@ -211,10 +216,36 @@ function MessagesTab() {
         const data = await res.json();
         setMessages(data.messages ?? []);
         setParticipants(data.participants ?? {});
+        setHasMore(!!data.hasMore);
       }
     } catch { /* silencieux */ }
     setChatLoading(false);
   }, []);
+
+  // Remonter : charge la page précédente (messages antérieurs au plus ancien affiché),
+  // en préservant la position de défilement.
+  const loadMore = useCallback(async () => {
+    if (!convClientId || loadingMore || messages.length === 0) return;
+    setLoadingMore(true);
+    const scroller = scrollRef.current;
+    const prevHeight = scroller?.scrollHeight ?? 0;
+    const oldest = messages[0];
+    try {
+      const res = await fetch(
+        `/api/chat?clientId=${encodeURIComponent(convClientId)}&before=${encodeURIComponent(oldest.createdAt)}`,
+      );
+      if (res.ok) {
+        const data = await res.json();
+        isPrependingRef.current = true; // empêche le scroll auto vers le bas
+        setMessages(prev => [...(data.messages ?? []), ...prev]);
+        setHasMore(!!data.hasMore);
+        requestAnimationFrame(() => {
+          if (scroller) scroller.scrollTop = scroller.scrollHeight - prevHeight;
+        });
+      }
+    } catch { /* silencieux */ }
+    setLoadingMore(false);
+  }, [convClientId, loadingMore, messages]);
 
   useEffect(() => {
     if (convClientId) loadMessages(convClientId);
@@ -231,6 +262,8 @@ function MessagesTab() {
   const bottomRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
+    // En remontant l'historique, on conserve la position (pas de scroll vers le bas).
+    if (isPrependingRef.current) { isPrependingRef.current = false; return; }
     bottomRef.current?.scrollIntoView({ behavior: "smooth" });
   }, [messages.length]);
 
@@ -364,9 +397,18 @@ function MessagesTab() {
       )}
 
       {/* Bulles */}
-      <div className="min-h-[280px] max-h-[52vh] overflow-y-auto space-y-2 rounded-2xl border border-line bg-surface p-3">
-        {messages.length === 0 && (
+      <div ref={scrollRef} className="min-h-[280px] max-h-[52vh] overflow-y-auto space-y-2 rounded-2xl border border-line bg-surface p-3">
+        {messages.length === 0 && !chatLoading && (
           <p className="py-10 text-center text-sm text-dim">Aucun message. Dis bonjour 👋</p>
+        )}
+        {hasMore && (
+          <button
+            onClick={loadMore}
+            disabled={loadingMore}
+            className="mx-auto block rounded-full border border-line bg-surface2 px-4 py-1.5 text-[12px] font-semibold text-dim transition disabled:opacity-50"
+          >
+            {loadingMore ? "Chargement…" : "↑ Voir les messages précédents"}
+          </button>
         )}
         {messages.map((msg, i) => {
           // ── Messages système ──────────────────────────────────────────
