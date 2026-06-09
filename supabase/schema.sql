@@ -124,7 +124,8 @@ create or replace function public.prevent_role_escalation()
 returns trigger language plpgsql security definer
 set search_path = public as $$
 begin
-  if OLD.role != NEW.role and not public.is_coach() then
+  -- Seul un admin peut changer un rôle (is_admin défini en 9b, résolu à l'exécution).
+  if OLD.role != NEW.role and not public.is_admin() then
     raise exception 'Modification du rôle non autorisée';
   end if;
   return NEW;
@@ -159,17 +160,7 @@ set search_path = public as $$
   select exists (select 1 from public.profiles where id = auth.uid() and role in ('coach','admin'));
 $$;
 
--- 9d) Trigger : seul l'admin peut changer les rôles
-create or replace function public.prevent_role_escalation()
-returns trigger language plpgsql security definer
-set search_path = public as $$
-begin
-  if OLD.role != NEW.role and not public.is_admin() then
-    raise exception 'Modification du rôle non autorisée';
-  end if;
-  return NEW;
-end;
-$$;
+-- 9d) (Le garde anti-élévation de rôle est défini en section 8, avec is_admin.)
 
 -- 9e) Table d'affectation coach ↔ client
 create table if not exists public.coach_client (

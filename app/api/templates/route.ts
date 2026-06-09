@@ -44,7 +44,10 @@ export async function PUT(req: NextRequest) {
   const user = await requireCoach();
   if (!user) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
 
-  const body: TemplateLibrary = await req.json();
+  const body = (await req.json().catch(() => null)) as TemplateLibrary | null;
+  if (!body || typeof body !== "object" || !Array.isArray(body.sessionTemplates) || !Array.isArray(body.weekTemplates)) {
+    return NextResponse.json({ error: "Corps de requête invalide" }, { status: 400 });
+  }
   const adminClient = createAdminClient();
   const { error } = await adminClient
     .from("template_state")
