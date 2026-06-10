@@ -50,13 +50,17 @@ function TrendBadge({ entries, unit }: { entries: MetricEntry[]; unit: string })
 }
 
 // ─── SVG Chart ────────────────────────────────────────────────────────────────
+type TooltipPoint = { x: number; y: number; value: number; date: string; unit: string };
+
 function MetricChart({ allMetrics, visibleIds, days }: {
   allMetrics: Metric[];
   visibleIds: string[];
   days: number;
 }) {
-  const W = 300, H = 130;
-  const PAD = { t: 10, r: 10, b: 22, l: 10 };
+  const [tooltip, setTooltip] = useState<TooltipPoint | null>(null);
+
+  const W = 300, H = 140;
+  const PAD = { t: 10, r: 10, b: 22, l: 36 };
   const cW = W - PAD.l - PAD.r;
   const cH = H - PAD.t - PAD.b;
 
@@ -89,66 +93,120 @@ function MetricChart({ allMetrics, visibleIds, days }: {
   const tMax = new Date(dMax).getTime();
   const tRange = tMax - tMin || 1;
 
+  // Échelle Y globale (toutes les courbes visibles)
+  const allVals = lines.flatMap(({ pts }) => pts.map(p => p.value));
+  const gMin = Math.min(...allVals);
+  const gMax = Math.max(...allVals);
+  const gRange = gMax - gMin || 1;
+
   function xOf(date: string) {
     return PAD.l + ((new Date(date).getTime() - tMin) / tRange) * cW;
   }
 
-  function yOf(val: number, vMin: number, vMax: number) {
-    const range = vMax - vMin || 1;
-    return PAD.t + cH - ((val - vMin) / range) * cH;
+  function yOf(val: number) {
+    return PAD.t + cH - ((val - gMin) / gRange) * cH;
   }
 
+  // Ticks Y : 3 valeurs (min, milieu, max)
+  const yTicks = [gMax, (gMin + gMax) / 2, gMin];
+
+  // Ticks X : début, milieu, fin
+  const tMid = (tMin + tMax) / 2;
+  const dMid = new Date(tMid).toISOString().slice(0, 10);
+  const xTicks = dMin === dMax
+    ? [{ d: dMin, x: xOf(dMin), anchor: "middle" as const }]
+    : [
+        { d: dMin, x: xOf(dMin), anchor: "start" as const },
+        ...(tRange > 4 * 86_400_000 ? [{ d: dMid, x: xOf(dMid), anchor: "middle" as const }] : []),
+        { d: dMax, x: xOf(dMax), anchor: "end" as const },
+      ];
+
+  const firstUnit = lines[0]?.m.unit ?? "";
+
+  // Tooltip: positionner en haut si le point est dans la moitié basse
+  const ttAbove = tooltip ? tooltip.y > PAD.t + cH / 2 : false;
+
   return (
-    <svg viewBox={`0 0 ${W} ${H}`} className="w-full">
+    <svg viewBox={`0 0 ${W} ${H}`} className="w-full" onClick={() => setTooltip(null)}>
       {/* Grille horizontale */}
-      {[0, 0.25, 0.5, 0.75, 1].map(t => (
+      {yTicks.map((v, i) => (
         <line
-          key={t}
+          key={i}
           x1={PAD.l} x2={W - PAD.r}
-          y1={PAD.t + t * cH} y2={PAD.t + t * cH}
-          stroke="currentColor" strokeWidth="0.5" opacity="0.08"
+          y1={yOf(v)} y2={yOf(v)}
+          stroke="currentColor" strokeWidth="0.5" opacity="0.1"
         />
+      ))}
+
+      {/* Labels axe Y */}
+      {yTicks.map((v, i) => (
+        <text
+          key={i}
+          x={PAD.l - 4}
+          y={yOf(v) + 3}
+          fontSize="7.5"
+          fill="currentColor"
+          opacity="0.45"
+          textAnchor="end"
+        >
+          {Number.isInteger(v) ? v : v.toFixed(1)}{lines.length === 1 ? ` ${firstUnit}` : ""}
+        </text>
       ))}
 
       {/* Courbes */}
       {lines.map(({ m, color, pts }) => {
-        const vals = pts.map(p => p.value);
-        const vMin = Math.min(...vals);
-        const vMax = Math.max(...vals);
-        const points = pts.map(p => ({
-          x: xOf(p.date),
-          y: yOf(p.value, vMin, vMax),
-        }));
+        const points = pts.map(p => ({ x: xOf(p.date), y: yOf(p.value), value: p.value, date: p.date }));
         const d = points
           .map((p, i) => `${i === 0 ? "M" : "L"}${p.x.toFixed(1)},${p.y.toFixed(1)}`)
           .join(" ");
         return (
           <g key={m.id}>
-            {/* Zone sous la courbe */}
             <path
               d={`${d} L${points[points.length - 1].x.toFixed(1)},${(PAD.t + cH).toFixed(1)} L${points[0].x.toFixed(1)},${(PAD.t + cH).toFixed(1)} Z`}
-              fill={color}
-              opacity="0.06"
+              fill={color} opacity="0.06"
             />
-            {/* Ligne */}
             <path d={d} fill="none" stroke={color} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
-            {/* Points */}
             {points.map((p, i) => (
-              <circle key={i} cx={p.x.toFixed(1)} cy={p.y.toFixed(1)} r="2.5" fill={color} />
+              <circle
+                key={i}
+                cx={p.x.toFixed(1)} cy={p.y.toFixed(1)} r="4"
+                fill={color} fillOpacity="0"
+                stroke="transparent" strokeWidth="8"
+                style={{ cursor: "pointer" }}
+                onClick={(e) => {
+                  e.stopPropagation();
+                  setTooltip(t => t?.date === p.date && t?.value === p.value ? null : { x: p.x, y: p.y, value: p.value, date: p.date, unit: m.unit });
+                }}
+              />
+            ))}
+            {points.map((p, i) => (
+              <circle key={`dot-${i}`} cx={p.x.toFixed(1)} cy={p.y.toFixed(1)} r="2.5" fill={color} style={{ pointerEvents: "none" }} />
             ))}
           </g>
         );
       })}
 
-      {/* Labels de dates */}
-      <text x={PAD.l} y={H - 4} fontSize="8" fill="currentColor" opacity="0.4" textAnchor="start">
-        {fmtDate(dMin)}
-      </text>
-      {dMin !== dMax && (
-        <text x={W - PAD.r} y={H - 4} fontSize="8" fill="currentColor" opacity="0.4" textAnchor="end">
-          {fmtDate(dMax)}
+      {/* Labels axe X */}
+      {xTicks.map(({ d, x, anchor }) => (
+        <text key={d} x={x.toFixed(1)} y={H - 4} fontSize="8" fill="currentColor" opacity="0.4" textAnchor={anchor}>
+          {fmtDate(d)}
         </text>
-      )}
+      ))}
+
+      {/* Tooltip */}
+      {tooltip && (() => {
+        const tw = 76, th = 28;
+        const tx = Math.min(Math.max(tooltip.x - tw / 2, PAD.l), W - PAD.r - tw);
+        const ty = ttAbove ? tooltip.y - th - 8 : tooltip.y + 8;
+        const label = `${Number.isInteger(tooltip.value) ? tooltip.value : tooltip.value.toFixed(1)} ${tooltip.unit}`;
+        return (
+          <g style={{ pointerEvents: "none" }}>
+            <rect x={tx} y={ty} width={tw} height={th} rx="4" fill="var(--color-surface)" stroke="var(--color-line)" strokeWidth="0.5" />
+            <text x={tx + tw / 2} y={ty + 10} fontSize="7.5" fill="currentColor" opacity="0.55" textAnchor="middle">{fmtDate(tooltip.date)}</text>
+            <text x={tx + tw / 2} y={ty + 21} fontSize="9" fontWeight="600" fill="currentColor" textAnchor="middle">{label}</text>
+          </g>
+        );
+      })()}
     </svg>
   );
 }

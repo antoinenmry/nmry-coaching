@@ -217,13 +217,13 @@ export default function ProfilePage() {
         <div className="mb-4 flex flex-col gap-3">
           <label className="block">
             <span className="mb-1.5 block text-[13px] text-dim">📸 Instagram</span>
-            <div className="relative">
-              <span className="absolute left-3 top-1/2 -translate-y-1/2 text-dim text-sm font-semibold">@</span>
+            <div className="flex items-center overflow-hidden rounded-[10px] border border-[var(--color-line)] bg-[var(--color-surface2)]">
+              <span className="shrink-0 select-none pl-3 text-base text-dim" aria-hidden="true">@</span>
               <input
                 value={(p.instagram ?? "").replace(/^@/, "")}
                 onChange={e => update(d => { d.profile.instagram = e.target.value ? `@${e.target.value.replace(/^@/, "")}` : ""; })}
                 placeholder="username"
-                className="pl-7"
+                style={{ border: "none", background: "transparent", borderRadius: 0, paddingLeft: 4, boxShadow: "none", width: "100%" }}
               />
             </div>
           </label>

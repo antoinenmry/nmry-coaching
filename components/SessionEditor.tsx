@@ -8,6 +8,101 @@ import type { ExerciseInstance, Role } from "@/lib/types";
 
 const EMOJIS = ["😫", "😕", "😐", "🙂", "🤩"]; // ressenti 1 → 5
 
+// ---- Pace helpers (allure min/km) ----
+
+function parsePaceToMinutes(raw: string): number | null {
+  const s = raw.trim();
+  if (!s) return null;
+  const colon = s.match(/^(\d{1,2}):(\d{2})$/);
+  if (colon) {
+    const secs = parseInt(colon[2], 10);
+    if (secs >= 60) return null;
+    return parseInt(colon[1], 10) + secs / 60;
+  }
+  const n = parseFloat(s);
+  return !isNaN(n) && n > 0 ? n : null;
+}
+
+function fmtPaceDisplay(minutes: number): string {
+  if (!minutes || minutes <= 0) return "";
+  const m = Math.floor(minutes);
+  const s = Math.round((minutes - m) * 60);
+  return `${m} min ${s.toString().padStart(2, "0")} s/km`;
+}
+
+function minutesToPaceInput(minutes: number): string {
+  if (!minutes || minutes <= 0) return "";
+  const m = Math.floor(minutes);
+  const s = Math.round((minutes - m) * 60);
+  return `${m}:${s.toString().padStart(2, "0")}`;
+}
+
+function PaceInput({
+  value,
+  onChange,
+  placeholder,
+  className,
+}: {
+  value: number;
+  onChange: (v: number) => void;
+  placeholder?: string;
+  className?: string;
+}) {
+  const [raw, setRaw] = useState(() => minutesToPaceInput(value));
+  const focusedRef = useRef(false);
+
+  // Sync when value changes externally (e.g. coach edits, parent re-renders)
+  const prevValue = useRef(value);
+  if (!focusedRef.current && prevValue.current !== value) {
+    prevValue.current = value;
+    setRaw(minutesToPaceInput(value));
+  }
+
+  const handleChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const r = e.target.value;
+    setRaw(r);
+    const parsed = parsePaceToMinutes(r);
+    if (parsed !== null) onChange(parsed);
+  };
+
+  const handleBlur = () => {
+    focusedRef.current = false;
+    const parsed = parsePaceToMinutes(raw);
+    if (parsed !== null) {
+      setRaw(minutesToPaceInput(parsed));
+      onChange(parsed);
+    } else if (!raw.trim()) {
+      onChange(0);
+      setRaw("");
+    }
+  };
+
+  const parsed = parsePaceToMinutes(raw);
+
+  return (
+    <div className={className}>
+      <div className="flex items-center gap-2">
+        <input
+          type="text"
+          inputMode="decimal"
+          value={raw}
+          onChange={handleChange}
+          onFocus={() => { focusedRef.current = true; }}
+          onBlur={handleBlur}
+          placeholder={placeholder ?? "ex : 5:30"}
+          className="flex-1"
+        />
+        <span className="shrink-0 rounded-lg bg-surface px-2.5 py-1.5 text-[13px] font-semibold text-dim">
+          min/km
+        </span>
+      </div>
+      {parsed !== null && (
+        <p className="mt-1 text-[12px] font-semibold text-ok">{fmtPaceDisplay(parsed)}</p>
+      )}
+    </div>
+  );
+}
+
 // ---- RPE helpers ----
 
 /** Parse "7", "7.5", "7/8", "7-8", "~7" → { lo, hi } ou null si non parseable */
@@ -392,19 +487,25 @@ function ExerciseBlock({
           </div>
           <div className="mt-2.5">
             <span className="mb-1 block text-[13px] text-dim">{isPace ? "Allure prescrite (min/km)" : "Poids prescrit (kg)"}</span>
-            <input
-              type="number"
-              min={0}
-              step={isPace ? 0.05 : 1}
-              placeholder={isPace ? "ex : 4.5 → 4 min 30 s/km" : "0"}
-              value={ex.weight || ""}
-              onChange={(e) => onPatch({ weight: +e.target.value || 0 })}
-            />
+            {isPace ? (
+              <PaceInput value={ex.weight} onChange={(v) => onPatch({ weight: v })} />
+            ) : (
+              <input
+                type="number"
+                min={0}
+                step={1}
+                placeholder="0"
+                value={ex.weight || ""}
+                onChange={(e) => onPatch({ weight: +e.target.value || 0 })}
+              />
+            )}
           </div>
           {(ex.weightClient ?? 0) > 0 && (
             <div className="mt-1.5 flex items-center gap-2 rounded-lg bg-ok/10 px-3 py-1.5">
               <span className="text-[12px] text-dim">Réalisé par le sportif :</span>
-              <span className="text-sm font-bold text-ok">{ex.weightClient} {isPace ? "min/km" : "kg"}</span>
+              <span className="text-sm font-bold text-ok">
+                {isPace ? fmtPaceDisplay(ex.weightClient ?? 0) : `${ex.weightClient} kg`}
+              </span>
             </div>
           )}
           <div className="mt-2.5">
@@ -442,7 +543,7 @@ function ExerciseBlock({
             <span><strong>{ex.setsLabel ?? ex.sets}</strong> × <strong>{ex.repsLabel ?? ex.reps}</strong> reps</span>
             {ex.weight > 0 && (
               <span className="rounded-md bg-surface px-2 py-0.5 text-[12px] font-semibold text-dim">
-                Prescrit : {isPace ? `${ex.weight} min/km` : `${ex.weight} kg`}
+                Prescrit : {isPace ? fmtPaceDisplay(ex.weight) : `${ex.weight} kg`}
               </span>
             )}
           </div>
@@ -452,23 +553,28 @@ function ExerciseBlock({
           {/* Poids sportif — toujours disponible, indépendant de la prescription */}
           <div className="mt-2.5">
             <span className="mb-1 block text-[13px] text-dim">
-              {ex.weight > 0 ? "Mon poids réalisé" : "Poids utilisé"}
+              {ex.weight > 0 ? (isPace ? "Mon allure réalisée" : "Mon poids réalisé") : (isPace ? "Allure réalisée" : "Poids utilisé")}
             </span>
-            <div className="flex items-center gap-2">
-              <input
-                type="number"
-                inputMode="decimal"
-                min={0}
-                step={0.5}
-                placeholder={isPace ? "ex : 4.5" : "ex : 80"}
-                value={ex.weightClient ?? ""}
-                onChange={(e) => onPatch({ weightClient: e.target.value !== "" ? +e.target.value : undefined })}
-                className="flex-1"
+            {isPace ? (
+              <PaceInput
+                value={ex.weightClient ?? 0}
+                onChange={(v) => onPatch({ weightClient: v > 0 ? v : undefined })}
               />
-              <span className="shrink-0 rounded-lg bg-surface px-2.5 py-1.5 text-[13px] font-semibold text-dim">
-                {isPace ? "min/km" : "kg"}
-              </span>
-            </div>
+            ) : (
+              <div className="flex items-center gap-2">
+                <input
+                  type="number"
+                  inputMode="decimal"
+                  min={0}
+                  step={0.5}
+                  placeholder="ex : 80"
+                  value={ex.weightClient ?? ""}
+                  onChange={(e) => onPatch({ weightClient: e.target.value !== "" ? +e.target.value : undefined })}
+                  className="flex-1"
+                />
+                <span className="shrink-0 rounded-lg bg-surface px-2.5 py-1.5 text-[13px] font-semibold text-dim">kg</span>
+              </div>
+            )}
           </div>
           {/* RPE prescrit par le coach — affiché au client */}
           {!!ex.rpeCoach && ex.rpeCoach !== 0 && (
