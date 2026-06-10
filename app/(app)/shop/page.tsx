@@ -2,7 +2,8 @@
 
 import { useMemo, useState } from "react";
 import { useData } from "@/components/DataProvider";
-import type { MerchItem, PartnerLink, ShopItem, TrainingPlan } from "@/lib/types";
+import type { PartnerLink, ShopItem, TrainingPlan } from "@/lib/types";
+import { countProgramSessions } from "@/lib/program";
 
 /* ── Helpers ────────────────────────────────────────────────────────────── */
 
@@ -276,125 +277,294 @@ function ParrainageTab({ isCoach }: { isCoach: boolean }) {
 }
 
 /* ══════════════════════════════════════════════════════════════════════════
-   ONGLET PLANS
+   ONGLET PLANS — vitrine de vente reliée aux programmes de la bibliothèque
 ══════════════════════════════════════════════════════════════════════════ */
 
-const LEVEL_OPTIONS = ["Débutant", "Intermédiaire", "Avancé"];
-
-const EMPTY_PLAN: Omit<TrainingPlan, "id" | "sessions"> = {
-  name: "", sport: "", level: "Débutant", durationWeeks: 8, sessionsPerWeek: 3, description: "",
-};
+type PublishForm = { price: string; description: string };
 
 function PlanTab({ isCoach }: { isCoach: boolean }) {
-  const { library, updateLibrary } = useData();
+  const { library, updateLibrary, templates } = useData();
   const plans = library.trainingPlans ?? [];
-  const [editingId, setEditingId] = useState<string | null>(null);
-  const [form, setForm] = useState<Omit<TrainingPlan, "id" | "sessions">>(EMPTY_PLAN);
+  const programs = templates.programs ?? [];
 
-  function openNew() { setForm(EMPTY_PLAN); setEditingId("new"); }
-  function openEdit(p: TrainingPlan) {
-    setForm({ name: p.name, sport: p.sport, level: p.level, durationWeeks: p.durationWeeks, sessionsPerWeek: p.sessionsPerWeek, description: p.description });
-    setEditingId(p.id);
+  // Programmes pas encore publiés (disponibles à la mise en vente)
+  const publishedProgramIds = new Set(plans.map((p) => p.programId));
+  const unpublished = programs.filter((p) => !publishedProgramIds.has(p.id));
+
+  // État du formulaire de publication / édition
+  const [editingId, setEditingId] = useState<string | null>(null);   // trainingPlan.id en édition
+  const [publishingProgramId, setPublishingProgramId] = useState<string | null>(null);
+  const [form, setForm] = useState<PublishForm>({ price: "", description: "" });
+
+  function startPublish(programId: string) {
+    const prog = programs.find((p) => p.id === programId);
+    setPublishingProgramId(programId);
+    setEditingId(null);
+    setForm({ price: "", description: prog?.description ?? "" });
   }
-  function cancel() { setEditingId(null); }
+  function startEdit(plan: TrainingPlan) {
+    setEditingId(plan.id);
+    setPublishingProgramId(null);
+    setForm({ price: plan.price, description: plan.description });
+  }
+  function cancel() { setEditingId(null); setPublishingProgramId(null); }
 
-  function save() {
-    if (!form.name.trim() || !form.sport.trim()) return;
+  function savePublish() {
+    const prog = programs.find((p) => p.id === publishingProgramId);
+    if (!prog) return;
+    const sessionsTotal = countProgramSessions(prog, templates.weekTemplates);
     updateLibrary((lib) => {
       const list = lib.trainingPlans ?? [];
-      if (editingId === "new") {
-        lib.trainingPlans = [...list, { id: crypto.randomUUID(), ...form, sessions: [] }];
-      } else {
-        lib.trainingPlans = list.map((p) => p.id === editingId ? { ...p, ...form } : p);
-      }
+      lib.trainingPlans = [...list, {
+        id: crypto.randomUUID(),
+        programId: prog.id,
+        name: prog.name,
+        sport: prog.sport,
+        level: prog.level,
+        durationWeeks: prog.weeks.length,
+        sessionsTotal,
+        price: form.price.trim(),
+        description: form.description.trim(),
+        visible: false, // masqué par défaut → le coach l'active quand prêt
+      }];
     });
     cancel();
   }
 
-  function remove(id: string) {
+  function saveEdit() {
+    updateLibrary((lib) => {
+      lib.trainingPlans = (lib.trainingPlans ?? []).map((p) =>
+        p.id === editingId ? { ...p, price: form.price.trim(), description: form.description.trim() } : p);
+    });
+    cancel();
+  }
+
+  function toggleVisible(id: string) {
+    updateLibrary((lib) => {
+      lib.trainingPlans = (lib.trainingPlans ?? []).map((p) =>
+        p.id === id ? { ...p, visible: !p.visible } : p);
+    });
+  }
+
+  // Re-synchronise les snapshots depuis le programme source (si modifié depuis)
+  function resync(plan: TrainingPlan) {
+    const prog = programs.find((p) => p.id === plan.programId);
+    if (!prog) return;
+    const sessionsTotal = countProgramSessions(prog, templates.weekTemplates);
+    updateLibrary((lib) => {
+      lib.trainingPlans = (lib.trainingPlans ?? []).map((p) =>
+        p.id === plan.id ? { ...p, name: prog.name, sport: prog.sport, level: prog.level, durationWeeks: prog.weeks.length, sessionsTotal } : p);
+    });
+  }
+
+  function unpublish(id: string) {
     updateLibrary((lib) => { lib.trainingPlans = (lib.trainingPlans ?? []).filter((p) => p.id !== id); });
   }
 
+  // ── Vue SPORTIF : uniquement les plans visibles ──────────────────────────
+  if (!isCoach) {
+    const visible = plans.filter((p) => p.visible);
+    if (visible.length === 0) {
+      return <EmptyState emoji="📋" title="Aucun plan disponible" subtitle="Aucun plan en vente pour l'instant." />;
+    }
+    return (
+      <div className="space-y-4">
+        {visible.map((plan) => <PlanCard key={plan.id} plan={plan} />)}
+      </div>
+    );
+  }
+
+  // ── Vue COACH : gestion complète ─────────────────────────────────────────
   return (
-    <div className="space-y-4">
-      {plans.length === 0 && !editingId && (
-        <EmptyState
-          emoji="📋"
-          title="Aucun plan disponible"
-          subtitle={isCoach ? "Crée tes premiers plans de programmation — ils seront proposés ici." : "Aucun plan disponible pour l'instant."}
-        />
-      )}
+    <div className="space-y-6">
+      {/* Section : plans en vente */}
+      <div className="space-y-4">
+        <SectionLabel emoji="🏷️" text={`Mes plans (${plans.length})`} />
 
-      {plans.map((plan) => {
-        if (editingId === plan.id) {
+        {plans.length === 0 && (
+          <p className="rounded-xl border border-dashed border-line bg-surface2 p-4 text-center text-[13px] text-dim">
+            Aucun plan publié. Mets un programme en vente ci-dessous ↓
+          </p>
+        )}
+
+        {plans.map((plan) => {
+          const sourceExists = programs.some((p) => p.id === plan.programId);
+          if (editingId === plan.id) {
+            return (
+              <div key={plan.id} className="overflow-hidden rounded-2xl border border-accent/30 bg-surface2">
+                <PlanForm form={form} setForm={setForm} onSave={saveEdit} onCancel={cancel} title="Modifier le plan" />
+              </div>
+            );
+          }
           return (
-            <div key={plan.id} className="overflow-hidden rounded-2xl border border-accent/30 bg-surface2">
-              <PlanForm form={form} setForm={setForm} onSave={save} onCancel={cancel} />
-            </div>
+            <PlanCard
+              key={plan.id}
+              plan={plan}
+              coach={{
+                sourceExists,
+                onToggle: () => toggleVisible(plan.id),
+                onEdit: () => startEdit(plan),
+                onResync: () => resync(plan),
+                onUnpublish: () => unpublish(plan.id),
+              }}
+            />
           );
-        }
-        return (
-          <div key={plan.id} className="overflow-hidden rounded-2xl border border-line bg-surface2 shadow-sm">
-            {/* Header coloré */}
-            <div className="relative overflow-hidden bg-gradient-to-br from-accent/30 to-accent/10 p-5">
-              <div className="pointer-events-none absolute -right-8 -top-8 h-32 w-32 rounded-full bg-accent/10" />
-              <div className="relative flex items-start justify-between gap-3">
+        })}
+      </div>
+
+      {/* Section : programmes à publier */}
+      <div className="space-y-3">
+        <SectionLabel emoji="📦" text="Mettre un programme en vente" />
+
+        {programs.length === 0 ? (
+          <p className="rounded-xl border border-dashed border-line bg-surface2 p-4 text-center text-[13px] text-dim">
+            Aucun programme dans la bibliothèque. Crée-en un dans <span className="font-semibold text-ink">Bibliothèque → Programmes</span>.
+          </p>
+        ) : unpublished.length === 0 ? (
+          <p className="rounded-xl border border-dashed border-line bg-surface2 p-4 text-center text-[13px] text-dim">
+            ✅ Tous tes programmes sont déjà en vente.
+          </p>
+        ) : (
+          unpublished.map((prog) => {
+            if (publishingProgramId === prog.id) {
+              const sessionsTotal = countProgramSessions(prog, templates.weekTemplates);
+              return (
+                <div key={prog.id} className="overflow-hidden rounded-2xl border border-accent/30 bg-surface2">
+                  <div className="border-b border-line bg-accent/5 px-4 py-2.5 text-[13px]">
+                    <span className="font-bold">{prog.name}</span>
+                    <span className="text-dim"> · {prog.weeks.length} sem. · {sessionsTotal} séances</span>
+                  </div>
+                  <PlanForm form={form} setForm={setForm} onSave={savePublish} onCancel={cancel} title="Mettre en vente" isPublish />
+                </div>
+              );
+            }
+            return (
+              <button
+                key={prog.id}
+                onClick={() => startPublish(prog.id)}
+                className="flex w-full items-center gap-3 rounded-2xl border border-line bg-surface2 p-3.5 text-left transition hover:border-accent/40 hover:bg-accent/5"
+              >
+                <div className="grid h-10 w-10 shrink-0 place-items-center rounded-xl bg-accent/15 text-lg">📋</div>
                 <div className="min-w-0 flex-1">
-                  <div className="mb-1 flex flex-wrap items-center gap-2">
-                    <span className="rounded-full bg-accent/20 px-2.5 py-0.5 text-[11px] font-bold text-accent">{plan.sport}</span>
-                    <span className="rounded-full border border-line bg-surface/50 px-2.5 py-0.5 text-[11px] font-semibold text-dim">{plan.level}</span>
-                  </div>
-                  <p className="font-bold text-ink">{plan.name}</p>
+                  <p className="truncate font-semibold text-ink">{prog.name}</p>
+                  <p className="text-[12px] text-dim">{prog.sport} · {prog.level} · {prog.weeks.length} semaines</p>
                 </div>
-                {isCoach && (
-                  <div className="flex shrink-0 gap-1">
-                    <button onClick={() => openEdit(plan)} className="grid h-8 w-8 place-items-center rounded-lg bg-surface/60 text-sm backdrop-blur-sm hover:bg-surface">✏️</button>
-                    <button onClick={() => remove(plan.id)} className="grid h-8 w-8 place-items-center rounded-lg bg-surface/60 text-sm backdrop-blur-sm hover:bg-danger/20">🗑️</button>
-                  </div>
-                )}
-              </div>
+                <span className="shrink-0 rounded-lg bg-accent px-3 py-1.5 text-[12px] font-bold text-[#1a1500]">Vendre →</span>
+              </button>
+            );
+          })
+        )}
+      </div>
+    </div>
+  );
+}
+
+/* Carte d'un plan — partagée vue coach (avec contrôles) / sportif (vitrine). */
+function PlanCard({ plan, coach }: {
+  plan: TrainingPlan;
+  coach?: {
+    sourceExists: boolean;
+    onToggle: () => void;
+    onEdit: () => void;
+    onResync: () => void;
+    onUnpublish: () => void;
+  };
+}) {
+  const sessionsPerWeek = plan.durationWeeks > 0 ? Math.round(plan.sessionsTotal / plan.durationWeeks) : 0;
+  const dimmed = coach && !plan.visible;
+  return (
+    <div className={`overflow-hidden rounded-2xl border shadow-sm transition ${dimmed ? "border-line opacity-60" : "border-accent/30"} bg-surface2`}>
+      {/* Header coloré */}
+      <div className="relative overflow-hidden bg-gradient-to-br from-accent/30 to-accent/10 p-5">
+        <div className="pointer-events-none absolute -right-8 -top-8 h-32 w-32 rounded-full bg-accent/10" />
+        <div className="relative flex items-start justify-between gap-3">
+          <div className="min-w-0 flex-1">
+            <div className="mb-1 flex flex-wrap items-center gap-2">
+              <span className="rounded-full bg-accent/20 px-2.5 py-0.5 text-[11px] font-bold text-accent">{plan.sport}</span>
+              <span className="rounded-full border border-line bg-surface/50 px-2.5 py-0.5 text-[11px] font-semibold text-dim">{plan.level}</span>
             </div>
+            <p className="font-bold text-ink">{plan.name}</p>
+          </div>
+          {plan.price && (
+            <div className="shrink-0 rounded-xl bg-surface/80 px-3 py-1.5 text-center backdrop-blur-sm">
+              <p className="text-[16px] font-black text-ink">{plan.price}</p>
+            </div>
+          )}
+        </div>
+      </div>
 
-            {/* Corps */}
-            <div className="p-4 space-y-3">
-              {/* Stats */}
-              <div className="flex gap-3">
-                <div className="flex-1 rounded-xl bg-surface p-3 text-center">
-                  <p className="text-[20px] font-black text-ink">{plan.durationWeeks}</p>
-                  <p className="text-[11px] text-dim">semaines</p>
-                </div>
-                <div className="flex-1 rounded-xl bg-surface p-3 text-center">
-                  <p className="text-[20px] font-black text-ink">{plan.sessionsPerWeek}</p>
-                  <p className="text-[11px] text-dim">séances / sem.</p>
-                </div>
-                <div className="flex-1 rounded-xl bg-surface p-3 text-center">
-                  <p className="text-[20px] font-black text-ink">{plan.durationWeeks * plan.sessionsPerWeek}</p>
-                  <p className="text-[11px] text-dim">séances total</p>
-                </div>
+      {/* Corps */}
+      <div className="space-y-3 p-4">
+        {/* Stats */}
+        <div className="flex gap-3">
+          <Stat value={plan.durationWeeks} label="semaines" />
+          <Stat value={sessionsPerWeek} label="séances / sem." />
+          <Stat value={plan.sessionsTotal} label="séances total" />
+        </div>
+
+        {plan.description && (
+          <p className="border-l-2 border-accent/40 pl-3 text-[13px] text-dim">{plan.description}</p>
+        )}
+
+        {/* Contrôles coach */}
+        {coach ? (
+          <div className="space-y-2 border-t border-line pt-3">
+            {!coach.sourceExists && (
+              <p className="rounded-lg bg-danger/10 px-3 py-2 text-[12px] text-danger">
+                ⚠ Programme source supprimé de la bibliothèque. La vente reste possible mais l&apos;injection ne fonctionnera plus.
+              </p>
+            )}
+            {/* Toggle visibilité */}
+            <div className="flex items-center justify-between rounded-xl bg-surface px-3 py-2.5">
+              <div>
+                <p className="text-[13px] font-semibold">{plan.visible ? "👁️ Visible par les sportifs" : "🙈 Masqué"}</p>
+                <p className="text-[11px] text-dim">{plan.visible ? "En vente dans leur onglet Plans" : "Brouillon — invisible côté sportif"}</p>
               </div>
-
-              {plan.description && (
-                <p className="border-l-2 border-accent/40 pl-3 text-[13px] text-dim">{plan.description}</p>
+              <button
+                onClick={coach.onToggle}
+                className={`relative h-7 w-12 shrink-0 rounded-full transition-colors ${plan.visible ? "bg-ok" : "bg-surface2"}`}
+              >
+                <span className={`absolute top-1 h-5 w-5 rounded-full bg-white shadow transition-all ${plan.visible ? "left-6" : "left-1"}`} />
+              </button>
+            </div>
+            {/* Actions */}
+            <div className="flex gap-2">
+              <button onClick={coach.onEdit} className="flex-1 rounded-lg bg-surface py-2 text-[12px] font-semibold text-ink hover:bg-line">✏️ Prix / texte</button>
+              {coach.sourceExists && (
+                <button onClick={coach.onResync} className="rounded-lg bg-surface px-3 py-2 text-[12px] font-semibold text-dim hover:bg-line" title="Resynchroniser depuis le programme">↻</button>
               )}
-
-              {/* CTA placeholder paiement */}
-              <div className="rounded-xl border border-dashed border-line bg-surface px-4 py-3 text-center text-[12px] text-dim">
-                Paiement & injection automatique — à venir
-              </div>
+              <button onClick={coach.onUnpublish} className="rounded-lg bg-surface px-3 py-2 text-[12px] font-semibold text-danger hover:bg-danger/15" title="Retirer de la vente">🗑️</button>
             </div>
           </div>
-        );
-      })}
+        ) : (
+          /* CTA sportif */
+          <button
+            disabled
+            className="w-full cursor-not-allowed rounded-xl border border-dashed border-line bg-surface px-4 py-3 text-center text-[13px] font-semibold text-dim"
+          >
+            🔒 Achat bientôt disponible
+          </button>
+        )}
+      </div>
+    </div>
+  );
+}
 
-      {editingId === "new" && (
-        <div className="overflow-hidden rounded-2xl border border-accent/30 bg-surface2">
-          <PlanForm form={form} setForm={setForm} onSave={save} onCancel={cancel} isNew />
-        </div>
-      )}
+function Stat({ value, label }: { value: number; label: string }) {
+  return (
+    <div className="flex-1 rounded-xl bg-surface p-3 text-center">
+      <p className="text-[20px] font-black text-ink">{value}</p>
+      <p className="text-[11px] text-dim">{label}</p>
+    </div>
+  );
+}
 
-      {isCoach && !editingId && (
-        <AddButton onClick={openNew} label="Ajouter un plan" />
-      )}
+function SectionLabel({ emoji, text }: { emoji: string; text: string }) {
+  return (
+    <div className="flex items-center gap-2">
+      <span className="text-base">{emoji}</span>
+      <span className="text-[11px] font-bold uppercase tracking-widest text-dim">{text}</span>
+      <div className="h-px flex-1 bg-line" />
     </div>
   );
 }
@@ -613,33 +783,26 @@ function PartnerForm({ form, setForm, onSave, onCancel, isNew }: {
   );
 }
 
-function PlanForm({ form, setForm, onSave, onCancel, isNew }: {
-  form: Omit<TrainingPlan, "id" | "sessions">;
-  setForm: React.Dispatch<React.SetStateAction<Omit<TrainingPlan, "id" | "sessions">>>;
-  onSave: () => void; onCancel: () => void; isNew?: boolean;
+function PlanForm({ form, setForm, onSave, onCancel, title, isPublish }: {
+  form: PublishForm;
+  setForm: React.Dispatch<React.SetStateAction<PublishForm>>;
+  onSave: () => void; onCancel: () => void; title: string; isPublish?: boolean;
 }) {
-  const f = (k: keyof typeof form) => (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement>) =>
+  const f = (k: keyof PublishForm) => (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>) =>
     setForm((prev) => ({ ...prev, [k]: e.target.value }));
-  const fNum = (k: "durationWeeks" | "sessionsPerWeek") => (e: React.ChangeEvent<HTMLInputElement>) =>
-    setForm((prev) => ({ ...prev, [k]: Math.max(1, parseInt(e.target.value) || 1) }));
   return (
     <div className="space-y-3 p-4">
-      {isNew && <p className="text-[11px] font-bold uppercase tracking-widest text-accent">Nouveau plan</p>}
-      <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
-        <Field label="Nom du plan *"><input autoFocus value={form.name} onChange={f("name")} placeholder="ex: CAP 10km — 8 semaines" className={inputCls} /></Field>
-        <Field label="Sport *"><input value={form.sport} onChange={f("sport")} placeholder="ex: Course à pied" className={inputCls} /></Field>
-        <Field label="Niveau">
-          <select value={form.level} onChange={f("level")} className={inputCls}>
-            {LEVEL_OPTIONS.map((l) => <option key={l} value={l}>{l}</option>)}
-          </select>
-        </Field>
-        <Field label="Durée (semaines)"><input type="number" min={1} value={form.durationWeeks} onChange={fNum("durationWeeks")} className={inputCls} /></Field>
-        <Field label="Séances / semaine"><input type="number" min={1} max={14} value={form.sessionsPerWeek} onChange={fNum("sessionsPerWeek")} className={inputCls} /></Field>
-      </div>
-      <Field label="Description">
-        <textarea value={form.description} onChange={f("description")} placeholder="Objectifs, public cible, points forts du plan…" rows={3} className={`${inputCls} resize-none`} />
+      <p className="text-[11px] font-bold uppercase tracking-widest text-accent">{title}</p>
+      <Field label="Prix"><input autoFocus value={form.price} onChange={f("price")} placeholder="ex: 49 €" className={inputCls} /></Field>
+      <Field label="Description (argumentaire de vente)">
+        <textarea value={form.description} onChange={f("description")} placeholder="À qui s'adresse ce plan, objectifs, ce qu'il contient…" rows={3} className={`${inputCls} resize-none`} />
       </Field>
-      <FormFooter onSave={onSave} onCancel={onCancel} canSave={!!form.name.trim() && !!form.sport.trim()} isNew={isNew} />
+      <div className="flex gap-2 pt-2">
+        <button onClick={onCancel} className="flex-1 rounded-xl border border-line py-2.5 text-[13px] font-semibold text-dim hover:bg-surface">Annuler</button>
+        <button onClick={onSave} className="flex-1 rounded-xl bg-accent py-2.5 text-[13px] font-semibold text-[#1a1500]">
+          {isPublish ? "✓ Mettre en vente" : "✓ Enregistrer"}
+        </button>
+      </div>
     </div>
   );
 }

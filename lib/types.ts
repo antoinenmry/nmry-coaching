@@ -212,30 +212,22 @@ export interface ShopItem {
 }
 
 /**
- * Plan de programmation pré-construit, vendable / injectable dans l'onglet plan du sportif.
- * Les séances stockent un `weekOffset` (0-based) + `dayOfWeek` (0=Lun, 6=Dim)
- * pour calculer les dates absolues à partir d'une date de départ au moment de l'injection.
+ * Plan vendable dans /shop. C'est une VITRINE qui pointe vers un Program de la
+ * bibliothèque (`programId`). Comme les sportifs ne chargent pas les templates
+ * (RLS coach-only), les infos d'affichage sont SNAPSHOT ici au moment de la
+ * publication → lisibles par tous via library_state.
  */
-export interface TrainingPlanSession {
-  id: string;
-  name: string;
-  color: string;
-  tplId: string;
-  weekOffset: number; // semaine dans le plan (0 = semaine 1)
-  dayOfWeek: number;  // 0 = Lundi … 6 = Dimanche
-  exercises: ExerciseInstance[];
-  coachComment: string;
-}
-
 export interface TrainingPlan {
   id: string;
-  name: string;               // ex: "CAP 10km - 8 semaines"
-  sport: string;              // ex: "Course à pied"
-  level: string;              // ex: "Débutant"
-  durationWeeks: number;
-  sessionsPerWeek: number;
-  description: string;
-  sessions: TrainingPlanSession[];
+  programId: string;          // → Program.id (source pour l'injection après achat)
+  name: string;               // snapshot
+  sport: string;              // snapshot
+  level: string;              // snapshot
+  durationWeeks: number;      // snapshot (= program.weeks.length)
+  sessionsTotal: number;      // snapshot (nb de séances générées)
+  price: string;              // texte libre, ex: "49 €"
+  description: string;        // description marketing
+  visible: boolean;           // activé / désactivé pour les sportifs
 }
 
 export interface ExerciseLibrary {
