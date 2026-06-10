@@ -175,7 +175,8 @@ Document unique par sportif (JSON dans `app_state.data` Supabase) :
 - `profile: UserProfileData` :
   `name`, `photo` (base64, **compressé à l'upload : max 512px, JPEG 0.72 → ~20-40 Ko**),
   `birthDate`, `gender`, `height`, `weight`, `sports[]`, `diet`,
-  `instagram?` (`@handle`), `location?` (`{ label, lat, lng }` via API Nominatim/OpenStreetMap).
+  `instagram?` (`@handle` ; le `@` est un préfixe visuel en `span` flex hors de l'`input`, la valeur
+  stockée n'inclut pas de `@` doublé), `location?` (`{ label, lat, lng }` via API Nominatim/OpenStreetMap).
   ⚠️ `diet` est affiché/édité dans `/followup` (pas `/profile`).
   ⚠️ `height`/`weight` ne sont plus éditables dans `/profile` (remplacés par insta + localisation) :
   ils servent de valeurs initiales migrées vers les **métriques** (voir `metrics`). `/profile` propose
@@ -190,6 +191,10 @@ Document unique par sportif (JSON dans `app_state.data` Supabase) :
     `weightClient?` = poids **réellement réalisé** par le sportif (indépendant de la prescription
     `weight` du coach ; saisissable même si le coach ne prescrit rien, ex. « travaille ton max »).
     Affiché en vert dans la synthèse `/plan` + vue coach (« Réalisé »).
+  - **Allure (course)** : un exercice tagué `isPace` (option de filtre) utilise l'allure (min/km)
+    au lieu du poids (kg). `weight`/`weightClient` stockent alors des **minutes décimales**.
+    Saisie via `PaceInput` (`SessionEditor`) : accepte `5:30` (mm:ss) ou `5.5` (décimal), affiche
+    « 5 min 30 s/km » en live. Côté coach (prescrit) et sportif (réalisé).
   - **Verrou date** : quand `session.done === true`, la date est figée (input désactivé côté sportif,
     drag bloqué dans `/plan`, garde dans `place()`). Indicateur 🔒.
 
@@ -214,7 +219,9 @@ Document unique par sportif (JSON dans `app_state.data` Supabase) :
   `Metric { id, name, unit, emoji?, entries: MetricEntry[], visible }`,
   `MetricEntry { id, date, value }`. Affiché dans **`/followup` → Santé → sous-onglet Métriques**
   (sous-onglets **Données** : cartes + tendance ↗/↘ +% vert/rouge + historique + ajout d'entrée ;
-  **Tendances** : graphique SVG multi-courbes, toggles de sélection, périodes 1/3/6 mois/tout).
+  **Tendances** : graphique SVG multi-courbes, toggles de sélection, périodes 1/3/6 mois/tout.
+  ⚡ **Axes** : axe Y (3 valeurs min/milieu/max + unité si 1 seule courbe), axe X (3 dates :
+  début/milieu/fin), échelle Y globale, **tooltip au tap** sur un point (date + valeur exacte)).
   Migration auto au 1er chargement : `profile.height`/`profile.weight` → 1ère entrée des métriques.
 
 - `records: RecordsData` : force (max 3 par exercice), CAP, Hyrox.
