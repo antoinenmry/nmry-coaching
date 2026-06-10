@@ -16,6 +16,11 @@ type ConvCache = {
 };
 const chatCache = new Map<string, ConvCache>();
 
+// Cache des avatars par personne (id → photo base64). Indépendant des messages :
+// les photos (parfois lourdes) sont chargées hors du chemin critique via
+// /api/chat/avatars, et réutilisées d'une conversation à l'autre (instantané).
+const avatarCache = new Map<string, string>();
+
 // Convertit une ligne brute chat_messages (Realtime) en ChatMessage.
 // ⚡ On omet l'audio (base64) : il reste chargé à la demande au play via messageId.
 function rowToChatMessage(r: Record<string, unknown>): ChatMessage {
@@ -247,6 +252,8 @@ function MessagesTab() {
   type Participant = { id: string; name: string; photo?: string };
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [participants, setParticipants] = useState<{ client?: Participant; coach?: Participant }>({});
+  // Photos des participants (id → base64), chargées séparément des messages.
+  const [avatarPhotos, setAvatarPhotos] = useState<Record<string, string>>({});
   const [chatLoading, setChatLoading] = useState(false);
   const [hasMore, setHasMore] = useState(false);
   const [loadingMore, setLoadingMore] = useState(false);
@@ -315,9 +322,36 @@ function MessagesTab() {
     setLoadingMore(false);
   }, [convClientId, loadingMore, messages]);
 
+  // Charge les photos des participants HORS du chemin critique : les messages
+  // s'affichent sans les attendre, les avatars apparaissent dès qu'elles arrivent.
+  const loadAvatars = useCallback(async (clientId: string) => {
+    try {
+      const res = await fetch(`/api/chat/avatars?clientId=${encodeURIComponent(clientId)}`);
+      if (!res.ok) return;
+      const data = await res.json();
+      const next: Record<string, string> = {};
+      for (const p of [data.client, data.coach]) {
+        if (p?.id && p.photo) { avatarCache.set(p.id, p.photo); next[p.id] = p.photo; }
+      }
+      if (Object.keys(next).length) setAvatarPhotos(prev => ({ ...prev, ...next }));
+    } catch { /* silencieux */ }
+  }, []);
+
   useEffect(() => {
-    if (convClientId) loadMessages(convClientId);
-  }, [convClientId, loadMessages]);
+    if (!convClientId) return;
+    loadMessages(convClientId);   // messages (rapide)
+    loadAvatars(convClientId);    // photos (en parallèle, hors chemin critique)
+  }, [convClientId, loadMessages, loadAvatars]);
+
+  // Seed instantané des avatars déjà connus (cache module) dès que les
+  // participants (ids) sont résolus → pas de clignotement au retour.
+  useEffect(() => {
+    const seed: Record<string, string> = {};
+    for (const p of [participants.client, participants.coach]) {
+      if (p?.id && avatarCache.has(p.id)) seed[p.id] = avatarCache.get(p.id)!;
+    }
+    if (Object.keys(seed).length) setAvatarPhotos(prev => ({ ...prev, ...seed }));
+  }, [participants]);
 
   // Garde le cache mémoire à jour après chaque évolution de la liste
   // (Realtime, envoi optimiste, édition, suppression).
@@ -565,7 +599,7 @@ function MessagesTab() {
             : msg.senderId === participants.client?.id
             ? participants.client
             : undefined;
-          const senderPhoto = sender?.photo;
+          const senderPhoto = (sender ? avatarPhotos[sender.id] : undefined) ?? sender?.photo;
           const senderName = sender?.name || msg.senderName || (isMe ? (me?.name || "Moi") : "Coach");
           // Avatar affiché seulement en tête d'une série de messages du même expéditeur
           const prev = messages[i - 1];

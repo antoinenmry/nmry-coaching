@@ -373,11 +373,13 @@ sportif → re-upsert du blob entier à chaque envoi → **contamination croisé
   `coach_client`), `chat_admin` (admin → tout).
 - **Accès via API uniquement** (admin client server-side, autorisation en code) :
   - `GET /api/chat?clientId=…[&before=ISO]` → **paginé (15 derniers)** + `participants {client,
-    coach}` (id/nom/**photo** résolus serveur via `data->profile->>photo`, pas tout le blob) +
-    `hasMore`. `before` = curseur pour remonter l'historique. Marque comme lus à la 1ʳᵉ page.
-    ⚡ **Le payload exclut `audio_url`** (vocaux base64) : chargé à la demande au play.
-    ⚡ Participants résolus en **2 requêtes batchées** (`resolveParticipants` + `.in(...)`) au lieu
-    de 2 requêtes × participant (moins de round-trips Supabase = chat plus rapide).
+    coach}` (id/**nom/rôle** seulement) + `hasMore`. `before` = curseur pour remonter l'historique.
+    Marque comme lus à la 1ʳᵉ page. ⚡ Payload **ultra léger** : exclut `audio_url` (vocaux base64,
+    au play) **ET les photos** (base64, parfois lourdes pour de vieux uploads). Participants résolus
+    en **1 requête batchée** (`resolveParticipants` + `.in(...)`) → chemin critique minimal.
+  - `GET /api/chat/avatars?clientId=…` → `{ client:{id,photo?}, coach:{id,photo?} }`. Photos
+    chargées **hors du chemin critique** (les messages s'affichent sans les attendre). Même
+    autorisation que `/api/chat`. Front : cache par personne (`avatarCache`), fusion dans `avatarPhotos`.
   - `GET /api/chat/audio?id=…` → renvoie l'audio (data URL) d'**un** message vocal au moment du
     play (autorisation : sportif de la conv, son coach, ou admin). Allège fortement la liste.
   - `POST /api/chat` `{ clientId?, text?, audioUrl?, isVoice?, isUrgent? }` → insert + push.
@@ -389,8 +391,9 @@ sportif → re-upsert du blob entier à chaque envoi → **contamination croisé
     (l'accueil ne lit plus l'ancien `app_state.data.messages`).
 - **Helpers** : `lib/chat.ts` → `insertChatMessage`, `rowToMessage`, `getCoachOf`.
   Utilisés aussi par `/api/broadcasts` (`type:'broadcast'`) et `/api/plan/notify` (`type:'plan_update'`).
-- **Front** (`MessagesTab` dans `/followup`) : fetch via API, avatars résolus serveur (photo réelle
-  ou initiales colorées), groupement des messages consécutifs (avatar/nom en tête de série seulement).
+- **Front** (`MessagesTab` dans `/followup`) : fetch via API, **avatars chargés séparément** des
+  messages (photo réelle via `/api/chat/avatars` ou initiales colorées en attendant), groupement
+  des messages consécutifs (avatar/nom en tête de série seulement).
   **Pagination** : 15 derniers + bouton « Voir les messages précédents » (conserve la position de
   scroll). **Vocaux chargés à la demande** : `VoicePlayer` récupère l'audio via `/api/chat/audio`
   au 1er play (indicateur ⏳), garde le chemin direct si `audioUrl` déjà présent. Urgent (bandeau
@@ -431,6 +434,7 @@ pas le blob `app_state` entier de tout le monde.
 | `/api/chat` | POST | Envoyer message (texte/vocal) + push | auth + ownership/coach |
 | `/api/chat/[id]` | PATCH/DELETE | Éditer/supprimer un message | auth + auteur (ou admin) |
 | `/api/chat/audio` | GET | Audio d'un message vocal, à la demande (au play) | auth + sportif/coach/admin de la conv |
+| `/api/chat/avatars` | GET | Photos des participants, hors chemin critique | auth + sportif/coach/admin de la conv |
 | `/api/chat/unread` | GET | Compteur `{count, urgent}` non lus de l'appelant | auth |
 | `/api/messages/urgent` | POST | Email + push urgent au coach | auth + clientId===user.id |
 | `/api/messages/notify` | POST | Push nouveau message (legacy, plus utilisé par le chat) | auth + vérif lien coach_client |

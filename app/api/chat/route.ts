@@ -16,33 +16,25 @@ import { insertChatMessage, rowToMessage, getCoachOf, type ChatRow } from "@/lib
 const PAGE_SIZE = 15;
 
 /**
- * Résout nom + rôle + photo des participants (client + coach) en 2 requêtes
- * BATCHÉES (`.in(...)`) au lieu de 2 requêtes × participant. On ne sélectionne
- * QUE la photo (chemin JSON) au lieu du blob app_state entier (plusieurs Mo).
+ * Résout nom + rôle des participants (client + coach) en 1 requête batchée.
+ * ⚡ Les PHOTOS sont volontairement EXCLUES ici : elles sont base64 (parfois
+ *    plusieurs Mo pour de vieux uploads) et alourdiraient le payload des
+ *    messages. Elles sont chargées séparément via GET /api/chat/avatars,
+ *    hors du chemin critique → les messages s'affichent sans les attendre.
  */
 async function resolveParticipants(
   admin: ReturnType<typeof createAdminClient>,
   ids: string[],
 ) {
-  const [{ data: profs }, { data: photos }] = await Promise.all([
-    admin.from("profiles").select("id, name, role").in("id", ids),
-    admin.from("app_state").select("user_id, photo:data->profile->>photo").in("user_id", ids),
-  ]);
+  const { data: profs } = await admin.from("profiles").select("id, name, role").in("id", ids);
   const profMap = new Map(
     (profs as { id: string; name?: string; role?: string }[] | null ?? []).map(p => [p.id, p]),
   );
-  const photoMap = new Map(
-    (photos as { user_id: string; photo?: string | null }[] | null ?? []).map(p => [p.user_id, p.photo]),
-  );
-  return (id: string) => {
-    const photo = photoMap.get(id);
-    return {
-      id,
-      name: profMap.get(id)?.name ?? "",
-      role: profMap.get(id)?.role ?? "client",
-      photo: typeof photo === "string" && photo ? photo : undefined,
-    };
-  };
+  return (id: string) => ({
+    id,
+    name: profMap.get(id)?.name ?? "",
+    role: profMap.get(id)?.role ?? "client",
+  });
 }
 
 // ─── GET ────────────────────────────────────────────────────────────────────
