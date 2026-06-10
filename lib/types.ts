@@ -211,13 +211,41 @@ export interface ShopItem {
   category: string; // texte libre, ex: "Compléments"
 }
 
+/**
+ * Plan de programmation pré-construit, vendable / injectable dans l'onglet plan du sportif.
+ * Les séances stockent un `weekOffset` (0-based) + `dayOfWeek` (0=Lun, 6=Dim)
+ * pour calculer les dates absolues à partir d'une date de départ au moment de l'injection.
+ */
+export interface TrainingPlanSession {
+  id: string;
+  name: string;
+  color: string;
+  tplId: string;
+  weekOffset: number; // semaine dans le plan (0 = semaine 1)
+  dayOfWeek: number;  // 0 = Lundi … 6 = Dimanche
+  exercises: ExerciseInstance[];
+  coachComment: string;
+}
+
+export interface TrainingPlan {
+  id: string;
+  name: string;               // ex: "CAP 10km - 8 semaines"
+  sport: string;              // ex: "Course à pied"
+  level: string;              // ex: "Débutant"
+  durationWeeks: number;
+  sessionsPerWeek: number;
+  description: string;
+  sessions: TrainingPlanSession[];
+}
+
 export interface ExerciseLibrary {
   categories: FilterCategory[];
   exercises: LibraryExercise[];
   partnerLinks?: PartnerLink[];
   merchandiseItems?: MerchItem[];
   shopItems?: ShopItem[];
-  shopTabsVisible?: { merch: boolean; shop: boolean };
+  trainingPlans?: TrainingPlan[];
+  shopTabsVisible?: { merch?: boolean; plan?: boolean; shop: boolean };
 }
 
 // ---- Templates (Séances types & Semaines types) — visibles coach/admin seulement ----

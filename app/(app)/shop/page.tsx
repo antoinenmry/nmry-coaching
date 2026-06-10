@@ -2,7 +2,7 @@
 
 import { useMemo, useState } from "react";
 import { useData } from "@/components/DataProvider";
-import type { MerchItem, PartnerLink, ShopItem } from "@/lib/types";
+import type { MerchItem, PartnerLink, ShopItem, TrainingPlan } from "@/lib/types";
 
 /* ── Helpers ────────────────────────────────────────────────────────────── */
 
@@ -29,19 +29,19 @@ function displayUrl(url: string) {
 
 /* ── Composant principal ────────────────────────────────────────────────── */
 
-type TabId = "parrainage" | "merch" | "shop";
+type TabId = "parrainage" | "plan" | "shop";
 
 export default function ShopPage() {
   const { library, updateLibrary, role, previewAsClient } = useData();
   const isCoach = !previewAsClient && (role === "coach" || role === "admin");
-  const tabsVisible = library.shopTabsVisible ?? { merch: false, shop: false };
+  const tabsVisible = library.shopTabsVisible ?? { plan: false, shop: false };
 
   // Onglets visibles selon le rôle
   const visibleTabs = useMemo<{ id: TabId; label: string; locked?: boolean }[]>(() => {
     const tabs: { id: TabId; label: string; locked?: boolean }[] = [
       { id: "parrainage", label: "🤝 Parrainage" },
     ];
-    if (isCoach || tabsVisible.merch) tabs.push({ id: "merch", label: "👕 Merch", locked: isCoach && !tabsVisible.merch });
+    if (isCoach || tabsVisible.plan) tabs.push({ id: "plan", label: "📋 Plans", locked: isCoach && !tabsVisible.plan });
     if (isCoach || tabsVisible.shop) tabs.push({ id: "shop", label: "🛒 Shop", locked: isCoach && !tabsVisible.shop });
     return tabs;
   }, [isCoach, tabsVisible]);
@@ -49,9 +49,9 @@ export default function ShopPage() {
   const [activeTab, setActiveTab] = useState<TabId>("parrainage");
   const currentTab = visibleTabs.find((t) => t.id === activeTab) ? activeTab : "parrainage";
 
-  function toggleTab(tab: "merch" | "shop") {
+  function toggleTab(tab: "plan" | "shop") {
     updateLibrary((lib) => {
-      const cur = lib.shopTabsVisible ?? { merch: false, shop: false };
+      const cur = lib.shopTabsVisible ?? { plan: false, shop: false };
       lib.shopTabsVisible = { ...cur, [tab]: !cur[tab] };
     });
   }
@@ -84,7 +84,7 @@ export default function ShopPage() {
 
       {/* Contenu des onglets */}
       {currentTab === "parrainage" && <ParrainageTab isCoach={isCoach} />}
-      {currentTab === "merch" && <MerchTab isCoach={isCoach} />}
+      {currentTab === "plan" && <PlanTab isCoach={isCoach} />}
       {currentTab === "shop" && <ShopTab isCoach={isCoach} />}
 
       {/* Panneau gestion onglets — coach uniquement */}
@@ -92,10 +92,10 @@ export default function ShopPage() {
         <div className="mt-10 rounded-2xl border border-line bg-surface p-4">
           <p className="mb-3 text-[11px] font-bold uppercase tracking-widest text-dim">⚙ Activation des onglets</p>
           <div className="space-y-2.5">
-            {(["merch", "shop"] as const).map((tab) => (
+            {(["plan", "shop"] as const).map((tab) => (
               <div key={tab} className="flex items-center justify-between">
                 <div>
-                  <p className="text-sm font-semibold capitalize">{tab === "merch" ? "👕 Merch" : "🛒 Shop"}</p>
+                  <p className="text-sm font-semibold">{tab === "plan" ? "📋 Plans" : "🛒 Shop"}</p>
                   <p className="text-[12px] text-dim">
                     {tabsVisible[tab] ? "Visible par tous les sportifs" : "Masqué aux sportifs"}
                   </p>
@@ -276,112 +276,124 @@ function ParrainageTab({ isCoach }: { isCoach: boolean }) {
 }
 
 /* ══════════════════════════════════════════════════════════════════════════
-   ONGLET MERCH
+   ONGLET PLANS
 ══════════════════════════════════════════════════════════════════════════ */
 
-const EMPTY_MERCH: Omit<MerchItem, "id"> = { image: "", name: "", price: "", url: "", comment: "" };
+const LEVEL_OPTIONS = ["Débutant", "Intermédiaire", "Avancé"];
 
-function MerchTab({ isCoach }: { isCoach: boolean }) {
+const EMPTY_PLAN: Omit<TrainingPlan, "id" | "sessions"> = {
+  name: "", sport: "", level: "Débutant", durationWeeks: 8, sessionsPerWeek: 3, description: "",
+};
+
+function PlanTab({ isCoach }: { isCoach: boolean }) {
   const { library, updateLibrary } = useData();
-  const items = library.merchandiseItems ?? [];
+  const plans = library.trainingPlans ?? [];
   const [editingId, setEditingId] = useState<string | null>(null);
-  const [form, setForm] = useState<Omit<MerchItem, "id">>(EMPTY_MERCH);
+  const [form, setForm] = useState<Omit<TrainingPlan, "id" | "sessions">>(EMPTY_PLAN);
 
-  function openNew() { setForm(EMPTY_MERCH); setEditingId("new"); }
-  function openEdit(item: MerchItem) {
-    setForm({ image: item.image, name: item.name, price: item.price, url: item.url, comment: item.comment ?? "" });
-    setEditingId(item.id);
+  function openNew() { setForm(EMPTY_PLAN); setEditingId("new"); }
+  function openEdit(p: TrainingPlan) {
+    setForm({ name: p.name, sport: p.sport, level: p.level, durationWeeks: p.durationWeeks, sessionsPerWeek: p.sessionsPerWeek, description: p.description });
+    setEditingId(p.id);
   }
   function cancel() { setEditingId(null); }
 
   function save() {
-    if (!form.name.trim() || !form.url.trim()) return;
+    if (!form.name.trim() || !form.sport.trim()) return;
     updateLibrary((lib) => {
-      const list = lib.merchandiseItems ?? [];
-      const entry: MerchItem = {
-        id: editingId === "new" ? crypto.randomUUID() : editingId!,
-        image: form.image.trim(),
-        name: form.name.trim(),
-        price: form.price.trim(),
-        url: normalizeUrl(form.url.trim()),
-        comment: form.comment?.trim() || undefined,
-      };
-      lib.merchandiseItems = editingId === "new" ? [...list, entry] : list.map((i) => i.id === editingId ? entry : i);
+      const list = lib.trainingPlans ?? [];
+      if (editingId === "new") {
+        lib.trainingPlans = [...list, { id: crypto.randomUUID(), ...form, sessions: [] }];
+      } else {
+        lib.trainingPlans = list.map((p) => p.id === editingId ? { ...p, ...form } : p);
+      }
     });
     cancel();
   }
 
   function remove(id: string) {
-    updateLibrary((lib) => { lib.merchandiseItems = (lib.merchandiseItems ?? []).filter((i) => i.id !== id); });
+    updateLibrary((lib) => { lib.trainingPlans = (lib.trainingPlans ?? []).filter((p) => p.id !== id); });
   }
 
   return (
-    <div>
-      {items.length === 0 && !editingId && (
-        <EmptyState emoji="👕" title="Aucun produit merch" subtitle={isCoach ? "Ajoute tes produits — ils s'afficheront ici pour tous tes sportifs." : "Aucun produit disponible pour l'instant."} />
+    <div className="space-y-4">
+      {plans.length === 0 && !editingId && (
+        <EmptyState
+          emoji="📋"
+          title="Aucun plan disponible"
+          subtitle={isCoach ? "Crée tes premiers plans de programmation — ils seront proposés ici." : "Aucun plan disponible pour l'instant."}
+        />
       )}
 
-      {/* Grille 2 colonnes */}
-      <div className="grid grid-cols-2 gap-3 sm:grid-cols-3">
-        {items.map((item) => {
-          if (editingId === item.id) {
-            return (
-              <div key={item.id} className="col-span-2 overflow-hidden rounded-2xl border border-accent/30 bg-surface2 sm:col-span-3">
-                <MerchForm form={form} setForm={setForm} onSave={save} onCancel={cancel} />
-              </div>
-            );
-          }
+      {plans.map((plan) => {
+        if (editingId === plan.id) {
           return (
-            <div key={item.id} className="group relative overflow-hidden rounded-2xl border border-line bg-surface2 shadow-sm">
-              {/* Image */}
-              <div className="relative aspect-square overflow-hidden bg-surface">
-                {item.image ? (
-                  // eslint-disable-next-line @next/next/no-img-element
-                  <img src={item.image} alt={item.name} className="h-full w-full object-cover" onError={(e) => { (e.target as HTMLImageElement).style.display = "none"; }} />
-                ) : (
-                  <div className="flex h-full w-full items-center justify-center text-5xl text-dim">👕</div>
-                )}
-                {/* Badge prix */}
-                {item.price && (
-                  <div className="absolute bottom-2 right-2 rounded-lg bg-black/70 px-2 py-1 text-[12px] font-bold text-white backdrop-blur-sm">
-                    {item.price}
-                  </div>
-                )}
-                {/* Actions coach */}
-                {isCoach && (
-                  <div className="absolute right-2 top-2 flex gap-1 opacity-0 transition-opacity group-hover:opacity-100">
-                    <button onClick={() => openEdit(item)} className="grid h-7 w-7 place-items-center rounded-lg bg-black/60 text-xs backdrop-blur-sm">✏️</button>
-                    <button onClick={() => remove(item.id)} className="grid h-7 w-7 place-items-center rounded-lg bg-black/60 text-xs backdrop-blur-sm hover:bg-red-500/70">🗑️</button>
-                  </div>
-                )}
-              </div>
-
-              {/* Infos */}
-              <div className="p-3">
-                <p className="truncate font-bold text-ink">{item.name}</p>
-                {item.comment && <p className="mt-0.5 line-clamp-2 text-[11px] text-dim">{item.comment}</p>}
-                <a
-                  href={normalizeUrl(item.url)} target="_blank" rel="noopener noreferrer"
-                  className="mt-2 flex items-center justify-center gap-1.5 rounded-lg bg-accent/15 py-2 text-[12px] font-semibold text-accent hover:bg-accent/25"
-                >
-                  Voir <span>↗</span>
-                </a>
-              </div>
+            <div key={plan.id} className="overflow-hidden rounded-2xl border border-accent/30 bg-surface2">
+              <PlanForm form={form} setForm={setForm} onSave={save} onCancel={cancel} />
             </div>
           );
-        })}
-      </div>
+        }
+        return (
+          <div key={plan.id} className="overflow-hidden rounded-2xl border border-line bg-surface2 shadow-sm">
+            {/* Header coloré */}
+            <div className="relative overflow-hidden bg-gradient-to-br from-accent/30 to-accent/10 p-5">
+              <div className="pointer-events-none absolute -right-8 -top-8 h-32 w-32 rounded-full bg-accent/10" />
+              <div className="relative flex items-start justify-between gap-3">
+                <div className="min-w-0 flex-1">
+                  <div className="mb-1 flex flex-wrap items-center gap-2">
+                    <span className="rounded-full bg-accent/20 px-2.5 py-0.5 text-[11px] font-bold text-accent">{plan.sport}</span>
+                    <span className="rounded-full border border-line bg-surface/50 px-2.5 py-0.5 text-[11px] font-semibold text-dim">{plan.level}</span>
+                  </div>
+                  <p className="font-bold text-ink">{plan.name}</p>
+                </div>
+                {isCoach && (
+                  <div className="flex shrink-0 gap-1">
+                    <button onClick={() => openEdit(plan)} className="grid h-8 w-8 place-items-center rounded-lg bg-surface/60 text-sm backdrop-blur-sm hover:bg-surface">✏️</button>
+                    <button onClick={() => remove(plan.id)} className="grid h-8 w-8 place-items-center rounded-lg bg-surface/60 text-sm backdrop-blur-sm hover:bg-danger/20">🗑️</button>
+                  </div>
+                )}
+              </div>
+            </div>
+
+            {/* Corps */}
+            <div className="p-4 space-y-3">
+              {/* Stats */}
+              <div className="flex gap-3">
+                <div className="flex-1 rounded-xl bg-surface p-3 text-center">
+                  <p className="text-[20px] font-black text-ink">{plan.durationWeeks}</p>
+                  <p className="text-[11px] text-dim">semaines</p>
+                </div>
+                <div className="flex-1 rounded-xl bg-surface p-3 text-center">
+                  <p className="text-[20px] font-black text-ink">{plan.sessionsPerWeek}</p>
+                  <p className="text-[11px] text-dim">séances / sem.</p>
+                </div>
+                <div className="flex-1 rounded-xl bg-surface p-3 text-center">
+                  <p className="text-[20px] font-black text-ink">{plan.durationWeeks * plan.sessionsPerWeek}</p>
+                  <p className="text-[11px] text-dim">séances total</p>
+                </div>
+              </div>
+
+              {plan.description && (
+                <p className="border-l-2 border-accent/40 pl-3 text-[13px] text-dim">{plan.description}</p>
+              )}
+
+              {/* CTA placeholder paiement */}
+              <div className="rounded-xl border border-dashed border-line bg-surface px-4 py-3 text-center text-[12px] text-dim">
+                Paiement & injection automatique — à venir
+              </div>
+            </div>
+          </div>
+        );
+      })}
 
       {editingId === "new" && (
-        <div className="mt-3 overflow-hidden rounded-2xl border border-accent/30 bg-surface2">
-          <MerchForm form={form} setForm={setForm} onSave={save} onCancel={cancel} isNew />
+        <div className="overflow-hidden rounded-2xl border border-accent/30 bg-surface2">
+          <PlanForm form={form} setForm={setForm} onSave={save} onCancel={cancel} isNew />
         </div>
       )}
 
       {isCoach && !editingId && (
-        <div className={items.length > 0 ? "mt-4" : ""}>
-          <AddButton onClick={openNew} label="Ajouter un produit" />
-        </div>
+        <AddButton onClick={openNew} label="Ajouter un plan" />
       )}
     </div>
   );
@@ -601,26 +613,33 @@ function PartnerForm({ form, setForm, onSave, onCancel, isNew }: {
   );
 }
 
-function MerchForm({ form, setForm, onSave, onCancel, isNew }: {
-  form: Omit<MerchItem, "id">;
-  setForm: React.Dispatch<React.SetStateAction<Omit<MerchItem, "id">>>;
+function PlanForm({ form, setForm, onSave, onCancel, isNew }: {
+  form: Omit<TrainingPlan, "id" | "sessions">;
+  setForm: React.Dispatch<React.SetStateAction<Omit<TrainingPlan, "id" | "sessions">>>;
   onSave: () => void; onCancel: () => void; isNew?: boolean;
 }) {
-  const f = (k: keyof typeof form) => (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>) =>
+  const f = (k: keyof typeof form) => (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement>) =>
     setForm((prev) => ({ ...prev, [k]: e.target.value }));
+  const fNum = (k: "durationWeeks" | "sessionsPerWeek") => (e: React.ChangeEvent<HTMLInputElement>) =>
+    setForm((prev) => ({ ...prev, [k]: Math.max(1, parseInt(e.target.value) || 1) }));
   return (
     <div className="space-y-3 p-4">
-      {isNew && <p className="text-[11px] font-bold uppercase tracking-widest text-accent">Nouveau produit merch</p>}
+      {isNew && <p className="text-[11px] font-bold uppercase tracking-widest text-accent">Nouveau plan</p>}
       <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
-        <Field label="Nom du produit *"><input autoFocus value={form.name} onChange={f("name")} placeholder="ex: NMRY Hoodie" className={inputCls} /></Field>
-        <Field label="Prix (texte libre)"><input value={form.price} onChange={f("price")} placeholder="ex: 59 €" className={inputCls} /></Field>
-        <Field label="Lien d'achat *"><input value={form.url} onChange={f("url")} placeholder="https://..." type="url" className={inputCls} /></Field>
-        <Field label="Image (URL)"><input value={form.image} onChange={f("image")} placeholder="https://..." type="url" className={inputCls} /></Field>
+        <Field label="Nom du plan *"><input autoFocus value={form.name} onChange={f("name")} placeholder="ex: CAP 10km — 8 semaines" className={inputCls} /></Field>
+        <Field label="Sport *"><input value={form.sport} onChange={f("sport")} placeholder="ex: Course à pied" className={inputCls} /></Field>
+        <Field label="Niveau">
+          <select value={form.level} onChange={f("level")} className={inputCls}>
+            {LEVEL_OPTIONS.map((l) => <option key={l} value={l}>{l}</option>)}
+          </select>
+        </Field>
+        <Field label="Durée (semaines)"><input type="number" min={1} value={form.durationWeeks} onChange={fNum("durationWeeks")} className={inputCls} /></Field>
+        <Field label="Séances / semaine"><input type="number" min={1} max={14} value={form.sessionsPerWeek} onChange={fNum("sessionsPerWeek")} className={inputCls} /></Field>
       </div>
-      <Field label="Commentaire">
-        <textarea value={form.comment} onChange={f("comment")} placeholder="Description, tailles disponibles…" rows={2} className={`${inputCls} resize-none`} />
+      <Field label="Description">
+        <textarea value={form.description} onChange={f("description")} placeholder="Objectifs, public cible, points forts du plan…" rows={3} className={`${inputCls} resize-none`} />
       </Field>
-      <FormFooter onSave={onSave} onCancel={onCancel} canSave={!!form.name.trim() && !!form.url.trim()} isNew={isNew} />
+      <FormFooter onSave={onSave} onCancel={onCancel} canSave={!!form.name.trim() && !!form.sport.trim()} isNew={isNew} />
     </div>
   );
 }
