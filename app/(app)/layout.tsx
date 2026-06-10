@@ -6,6 +6,7 @@ import BroadcastPopup from "@/components/BroadcastPopup";
 import NoCoachGate from "@/components/NoCoachGate";
 import ServiceWorkerRegistrar from "@/components/ServiceWorkerRegistrar";
 import BgColorSyncer from "@/components/BgColorSyncer";
+import PullToRefresh from "@/components/PullToRefresh";
 import { AUTH_ENABLED } from "@/lib/config";
 
 export default async function AppLayout({ children }: { children: React.ReactNode }) {
@@ -22,9 +23,11 @@ export default async function AppLayout({ children }: { children: React.ReactNod
       {/* Enregistre le SW dès l'ouverture de l'app — pas seulement depuis Settings */}
       <ServiceWorkerRegistrar />
       <NoCoachGate>
-        <Header />
-        <main className="mx-auto max-w-3xl p-4">{children}</main>
-        <BroadcastPopup />
+        <PullToRefresh>
+          <Header />
+          <main className="mx-auto max-w-3xl p-4">{children}</main>
+          <BroadcastPopup />
+        </PullToRefresh>
       </NoCoachGate>
     </DataProvider>
   );
