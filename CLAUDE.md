@@ -511,6 +511,12 @@ pas le blob `app_state` entier de tout le monde.
 - **Thème clair/sombre** : `[data-theme="light"]` dans `globals.css`. Script anti-flash dans `app/layout.tsx`.
 - **Modales** : `fixed inset-0 z-50 flex items-end justify-center bg-black/60 sm:items-center`
   + contenu `rounded-t-3xl sm:rounded-3xl border-t border-line bg-surface p-5`.
+- **Modale longue (en-tête + bas d'action fixes)** : conteneur `flex max-h-[92vh] flex-col`
+  (PAS `overflow-y-auto` sur le conteneur) → en-tête `shrink-0`, zone centrale
+  `min-h-0 flex-1 overflow-y-auto` (seule à défiler), pied `shrink-0 border-t pt-3`.
+  Implémenté dans `ComposeModal` (`/plan`, « Nouvelle séance ») : haut fixe (titre/nom/couleur/
+  biblio+filtres), milieu défilant (formulaire + bibliothèque), bas fixe (récapitulatif plafonné
+  `max-h-[26vh] overflow-y-auto` + bouton « Créer la séance » toujours visible).
 - **Dropdowns dans le header** : utiliser `createPortal(…, document.body)` + `position:fixed` pour
   éviter le clipping causé par `backdrop-filter: blur()` sur le header sticky.
 - **Mutations d'état sportif** : `update((draft) => { ... })` — immuable + sauvegarde différée 500 ms.
