@@ -616,12 +616,15 @@ function ComposeModal({ onClose, onCreated }: { onClose: () => void; onCreated: 
       onPointerDown={(e) => { backdropDown.current = e.target === e.currentTarget; }}
       onClick={(e) => { if (backdropDown.current && e.target === e.currentTarget) onClose(); }}
     >
-      <div className="flex max-h-[92vh] w-full max-w-xl flex-col overflow-y-auto rounded-t-3xl border-t border-line bg-surface p-5 sm:rounded-3xl sm:border">
-        {/* En-tête */}
-        <div className="mb-3 flex items-center justify-between">
+      <div className="flex max-h-[92vh] w-full max-w-xl flex-col rounded-t-3xl border-t border-line bg-surface p-5 sm:rounded-3xl sm:border">
+        {/* En-tête (fixe) */}
+        <div className="mb-3 flex shrink-0 items-center justify-between">
           <h2 className="text-lg font-bold">Nouvelle séance</h2>
           <button onClick={onClose} className="grid h-9 w-9 place-items-center rounded-lg bg-surface2">✕</button>
         </div>
+
+        {/* Zone défilante : seuls le formulaire + la bibliothèque scrollent */}
+        <div className="-mr-2 min-h-0 flex-1 overflow-y-auto pr-2">
 
         {/* Nom */}
         <label className="mb-3 block">
@@ -738,10 +741,15 @@ function ComposeModal({ onClose, onCreated }: { onClose: () => void; onCreated: 
             </div>
           )}
         </div>
+        </div>
+        {/* fin zone défilante */}
+
+        {/* Bas fixe : récapitulatif + bouton « Créer la séance », toujours visibles */}
+        <div className="mt-3 shrink-0 border-t border-line pt-3">
 
         {/* Récapitulatif ordonné — tous les exercices sélectionnés */}
         {exercises.length > 0 && (
-          <div className="mt-4 rounded-xl border border-line bg-surface p-3">
+          <div className="rounded-xl border border-line bg-surface p-3">
             <div className="mb-2 flex items-center justify-between">
               <p className="text-[13px] font-semibold text-dim">
                 Récapitulatif · {exercises.length} exercice{exercises.length > 1 ? "s" : ""}
@@ -759,7 +767,7 @@ function ComposeModal({ onClose, onCreated }: { onClose: () => void; onCreated: 
                 </label>
               )}
             </div>
-            <ol className="space-y-1">
+            <ol className="max-h-[26vh] space-y-1 overflow-y-auto pr-1">
               {exercises.map((ex, i) => {
                 const labels = categories.flatMap((c) =>
                   (ex.tags[c.id] ?? []).map((tid) => c.options.find((o) => o.id === tid)?.label).filter(Boolean) as string[]
@@ -789,10 +797,12 @@ function ComposeModal({ onClose, onCreated }: { onClose: () => void; onCreated: 
 
         <button
           onClick={create}
-          className="mt-4 w-full rounded-xl bg-accent py-3 font-semibold text-[#1a1500]"
+          className="mt-3 w-full rounded-xl bg-accent py-3 font-semibold text-[#1a1500]"
         >
           Créer la séance{exercises.length > 0 ? ` (${exercises.length} exercice${exercises.length > 1 ? "s" : ""})` : ""}
         </button>
+        </div>
+        {/* fin bas fixe */}
       </div>
     </div>
   );
