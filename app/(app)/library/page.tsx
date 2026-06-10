@@ -6,9 +6,10 @@ import ExerciseModal from "@/components/library/ExerciseModal";
 import FiltersModal from "@/components/library/FiltersModal";
 import SessionTemplateModal from "@/components/library/SessionTemplateModal";
 import WeekTemplateModal from "@/components/library/WeekTemplateModal";
-import type { LibraryExercise, SessionTemplate, WeekTemplate } from "@/lib/types";
+import ProgramModal from "@/components/library/ProgramModal";
+import type { LibraryExercise, SessionTemplate, WeekTemplate, Program } from "@/lib/types";
 
-type Tab = "exercises" | "sessions" | "weeks";
+type Tab = "exercises" | "sessions" | "weeks" | "programs";
 
 const DAYS = ["Lun", "Mar", "Mer", "Jeu", "Ven", "Sam", "Dim"];
 
@@ -29,6 +30,9 @@ export default function LibraryPage() {
 
   // --- Onglet Semaines types ---
   const [editingWeek, setEditingWeek] = useState<WeekTemplate | null | "new">(null);
+
+  // --- Onglet Programmes ---
+  const [editingProgram, setEditingProgram] = useState<Program | null | "new">(null);
 
   // Exercices filtrés
   const filtered = useMemo(() => {
@@ -72,6 +76,7 @@ export default function LibraryPage() {
           <>
             <TabButton active={tab === "sessions"} onClick={() => setTab("sessions")} label="Séances types" count={templates.sessionTemplates.length} />
             <TabButton active={tab === "weeks"} onClick={() => setTab("weeks")} label="Semaines types" count={templates.weekTemplates.length} />
+            <TabButton active={tab === "programs"} onClick={() => setTab("programs")} label="Programmes" count={(templates.programs ?? []).length} />
           </>
         )}
       </div>
@@ -291,6 +296,53 @@ export default function LibraryPage() {
           )}
         </div>
       )}
+
+      {/* ===== TAB : PROGRAMMES ===== */}
+      {tab === "programs" && canEdit && (
+        <div>
+          <div className="mb-4 flex items-center justify-between">
+            <p className="text-[13px] text-dim">
+              {(templates.programs ?? []).length} programme{(templates.programs ?? []).length !== 1 ? "s" : ""}
+            </p>
+            <button
+              onClick={() => setEditingProgram("new")}
+              className="rounded-lg bg-ok px-3 py-2 text-[13px] font-semibold text-[#06210a]"
+            >
+              + Nouveau programme
+            </button>
+          </div>
+
+          {(templates.programs ?? []).length === 0 ? (
+            <div className="py-10 text-center">
+              <p className="text-dim">Aucun programme pour l&apos;instant.</p>
+              <p className="mt-1 text-[13px] text-dim">Enchaîne des semaines types pour créer un programme complet, prêt à vendre ou à injecter.</p>
+            </div>
+          ) : (
+            <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+              {(templates.programs ?? []).map((prog) => (
+                <ProgramCard
+                  key={prog.id}
+                  program={prog}
+                  weekTemplates={templates.weekTemplates}
+                  onEdit={() => setEditingProgram(prog)}
+                  onDelete={() =>
+                    updateTemplates((t) => {
+                      t.programs = (t.programs ?? []).filter((p) => p.id !== prog.id);
+                    })
+                  }
+                />
+              ))}
+            </div>
+          )}
+
+          {editingProgram !== null && (
+            <ProgramModal
+              program={editingProgram === "new" ? null : editingProgram}
+              onClose={() => setEditingProgram(null)}
+            />
+          )}
+        </div>
+      )}
     </div>
   );
 }
@@ -475,6 +527,56 @@ function WeekTemplateCard({ template, sessionTemplates, onEdit, onDelete }: {
 
       <p className="mt-2 text-[12px] text-dim">
         {activeDays.length} jour{activeDays.length !== 1 ? "s" : ""} d&apos;entraînement
+      </p>
+    </div>
+  );
+}
+
+function ProgramCard({ program, weekTemplates, onEdit, onDelete }: {
+  program: Program;
+  weekTemplates: WeekTemplate[];
+  onEdit: () => void;
+  onDelete: () => void;
+}) {
+  return (
+    <div className="group rounded-2xl border border-line bg-surface p-4 transition hover:border-accent/40">
+      <div className="flex items-start justify-between gap-2">
+        <div className="min-w-0">
+          <div className="mb-1 flex flex-wrap items-center gap-1.5">
+            <span className="rounded-full bg-accent/15 px-2 py-0.5 text-[11px] font-bold text-accent">{program.sport}</span>
+            <span className="rounded-full border border-line px-2 py-0.5 text-[11px] font-semibold text-dim">{program.level}</span>
+          </div>
+          <h3 className="font-bold">{program.name}</h3>
+        </div>
+        <div className="flex shrink-0 gap-1">
+          <button onClick={onEdit} className="grid h-8 w-8 place-items-center rounded-lg bg-surface2" aria-label="Modifier">✏️</button>
+          <button onClick={onDelete} className="grid h-8 w-8 place-items-center rounded-lg bg-surface2" aria-label="Supprimer">🗑️</button>
+        </div>
+      </div>
+      {program.description && (
+        <p className="mt-1.5 text-[13px] text-dim line-clamp-2">{program.description}</p>
+      )}
+
+      {/* Frise des semaines */}
+      {program.weeks.length > 0 && (
+        <div className="mt-3 flex flex-wrap gap-1">
+          {program.weeks.map((w, idx) => {
+            const wk = weekTemplates.find((t) => t.id === w.weekTplId);
+            return (
+              <span
+                key={idx}
+                className="rounded-md bg-surface2 px-1.5 py-0.5 text-[10px] font-semibold text-dim"
+                title={wk?.name ?? "Semaine supprimée"}
+              >
+                S{idx + 1}
+              </span>
+            );
+          })}
+        </div>
+      )}
+
+      <p className="mt-2 text-[12px] text-dim">
+        {program.weeks.length} semaine{program.weeks.length !== 1 ? "s" : ""}
       </p>
     </div>
   );

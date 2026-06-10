@@ -287,10 +287,26 @@ export interface WeekTemplate {
   days: WeekTemplateDay[];               // 0..7 entrées (jours non vides seulement)
 }
 
+/** Programme : enchaînement ordonné de semaines types sur plusieurs semaines (coach/admin only).
+ *  Brique au-dessus de la semaine type. Sert de source pour les plans vendus dans /shop. */
+export interface ProgramWeek {
+  weekTplId: string;   // → WeekTemplate.id
+}
+
+export interface Program {
+  id: string;
+  name: string;
+  sport: string;        // ex: "Course à pied", "Muscu"
+  level: string;        // "Débutant" | "Intermédiaire" | "Avancé"
+  description: string;
+  weeks: ProgramWeek[]; // liste ordonnée — une même semaine type peut être répétée
+}
+
 /** Ensemble des templates, stocké dans template_state (Supabase). */
 export interface TemplateLibrary {
   sessionTemplates: SessionTemplate[];
   weekTemplates: WeekTemplate[];
+  programs?: Program[];
 }
 
 // ---- Records ----
