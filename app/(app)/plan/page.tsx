@@ -5,6 +5,7 @@ import { useData } from "@/components/DataProvider";
 import SessionEditor from "@/components/SessionEditor";
 import ExerciseMultiSelect from "@/components/ExerciseMultiSelect";
 import GoalInfoModal from "@/components/GoalInfoModal";
+import InjectProgramModal from "@/components/plan/InjectProgramModal";
 import { AUTH_ENABLED } from "@/lib/config";
 import { SESSION_COLORS, newSession, exerciseInstanceFromLibrary } from "@/lib/data";
 import { countdownLabel } from "@/lib/dates";
@@ -21,7 +22,7 @@ const EMOJIS = ["😫", "😕", "😐", "🙂", "🤩"];
 const emojiOf = (n: number) => (n >= 1 && n <= 5 ? EMOJIS[n - 1] + " " : "");
 
 export default function PlanPage() {
-  const { state, update, role, setRole, loading, clients, activeUserId, me, recordPlanNotif } = useData();
+  const { state, update, role, setRole, loading, clients, activeUserId, me, recordPlanNotif, templates } = useData();
   const isCoach = role === "coach" || role === "admin";
   const [notifying, setNotifying] = useState(false);
   const [notifSent, setNotifSent] = useState(false);
@@ -51,6 +52,7 @@ export default function PlanPage() {
   const [composing, setComposing] = useState(false);
   const [duplicating, setDuplicating] = useState(false);
   const [transferring, setTransferring] = useState(false);
+  const [injecting, setInjecting] = useState(false);
   const [viewingGoals, setViewingGoals] = useState<Goal[] | null>(null);
   // Objectifs des autres sportifs (coach uniquement)
   const [otherGoals, setOtherGoals] = useState<Goal[]>([]);
@@ -233,6 +235,11 @@ export default function PlanPage() {
               <button onClick={() => setDuplicating(true)} className="rounded-lg px-3 py-1.5 text-[13px] font-semibold text-white" style={{ background: "#a855f7" }}>
                 Dupliquer la semaine
               </button>
+              {(templates.programs ?? []).length > 0 && (
+                <button onClick={() => setInjecting(true)} className="rounded-lg px-3 py-1.5 text-[13px] font-semibold text-white" style={{ background: "#0ea5e9" }}>
+                  📋 Injecter un programme
+                </button>
+              )}
               {clients && clients.filter((c) => c.id !== activeUserId).length > 0 && (
                 <button onClick={() => setTransferring(true)} className="rounded-lg bg-surface2 px-3 py-1.5 text-[13px] font-semibold text-ink hover:bg-surface">
                   Copier vers →
@@ -380,6 +387,17 @@ export default function PlanPage() {
           sessionsByDate={sessionsByDate}
           activeUserId={activeUserId}
           onClose={() => setTransferring(false)}
+        />
+      )}
+
+      {injecting && (
+        <InjectProgramModal
+          clientName={
+            activeUserId && activeUserId !== me?.id
+              ? (clients.find((c) => c.id === activeUserId)?.name || "ce sportif")
+              : (me?.name || "ce sportif")
+          }
+          onClose={() => setInjecting(false)}
         />
       )}
     </div>
