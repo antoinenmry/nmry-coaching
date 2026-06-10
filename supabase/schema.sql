@@ -248,6 +248,20 @@ drop policy if exists chat_admin on public.chat_messages;
 create policy chat_admin on public.chat_messages for all
   using (public.is_admin()) with check (public.is_admin());
 
+-- 10a-bis) REALTIME — diffuse les changements de chat_messages aux abonnés
+--          (messages en direct côté front). La RLS ci-dessus borne ce que chaque
+--          abonné reçoit (chat_self/chat_coach/chat_admin). Idempotent.
+do $$
+begin
+  if not exists (
+    select 1 from pg_publication_tables
+    where pubname = 'supabase_realtime'
+      and schemaname = 'public' and tablename = 'chat_messages'
+  ) then
+    alter publication supabase_realtime add table public.chat_messages;
+  end if;
+end $$;
+
 -- 10b) MIGRATION — recopie les messages existants depuis app_state vers la table.
 --      Idempotent : ne s'exécute que si chat_messages est encore vide.
 insert into public.chat_messages

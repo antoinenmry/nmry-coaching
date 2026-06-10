@@ -2,8 +2,37 @@
 
 import { useState, useRef, useEffect, useCallback, memo } from "react";
 import { useData } from "@/components/DataProvider";
+import { createClient } from "@/lib/supabase/client";
 import { type BlockNote, type ChatMessage, type Followup } from "@/lib/types";
 import MetricsTab from "./MetricsTab";
+
+// Cache mémoire des conversations (par sportif) : réafficher instantanément au
+// retour sur l'onglet, puis revalider en arrière-plan. Vit le temps de la session.
+type ConvParticipant = { id: string; name: string; photo?: string };
+type ConvCache = {
+  messages: ChatMessage[];
+  participants: { client?: ConvParticipant; coach?: ConvParticipant };
+  hasMore: boolean;
+};
+const chatCache = new Map<string, ConvCache>();
+
+// Convertit une ligne brute chat_messages (Realtime) en ChatMessage.
+// ⚡ On omet l'audio (base64) : il reste chargé à la demande au play via messageId.
+function rowToChatMessage(r: Record<string, unknown>): ChatMessage {
+  return {
+    id: String(r.id),
+    text: (r.body as string) ?? "",
+    isUrgent: !!r.is_urgent,
+    isVoice: !!r.is_voice,
+    audioUrl: undefined,
+    createdAt: (r.created_at as string) ?? new Date().toISOString(),
+    editedAt: (r.edited_at as string) ?? undefined,
+    senderId: String(r.sender_id),
+    senderName: (r.sender_name as string) ?? undefined,
+    isRead: !!r.is_read,
+    type: (r.type as ChatMessage["type"]) ?? undefined,
+  };
+}
 
 // ─── Utils ────────────────────────────────────────────────────────────────────
 const uid = () => Math.random().toString(36).slice(2, 9);
@@ -232,15 +261,30 @@ function MessagesTab() {
   }, [isElevated, chatClientId, clientList]);
 
   // Première page : les 15 messages les plus récents.
+  // ⚡ Cache-first : si la conversation est déjà en mémoire, on l'affiche
+  //    instantanément (pas de spinner) puis on revalide en arrière-plan.
   const loadMessages = useCallback(async (clientId: string) => {
-    setChatLoading(true);
+    const cached = chatCache.get(clientId);
+    if (cached) {
+      setMessages(cached.messages);
+      setParticipants(cached.participants);
+      setHasMore(cached.hasMore);
+    } else {
+      setChatLoading(true);
+    }
     try {
       const res = await fetch(`/api/chat?clientId=${encodeURIComponent(clientId)}`);
       if (res.ok) {
         const data = await res.json();
-        setMessages(data.messages ?? []);
-        setParticipants(data.participants ?? {});
-        setHasMore(!!data.hasMore);
+        const next: ConvCache = {
+          messages: data.messages ?? [],
+          participants: data.participants ?? {},
+          hasMore: !!data.hasMore,
+        };
+        setMessages(next.messages);
+        setParticipants(next.participants);
+        setHasMore(next.hasMore);
+        chatCache.set(clientId, next);
       }
     } catch { /* silencieux */ }
     setChatLoading(false);
@@ -274,6 +318,50 @@ function MessagesTab() {
   useEffect(() => {
     if (convClientId) loadMessages(convClientId);
   }, [convClientId, loadMessages]);
+
+  // Garde le cache mémoire à jour après chaque évolution de la liste
+  // (Realtime, envoi optimiste, édition, suppression).
+  useEffect(() => {
+    if (!convClientId) return;
+    chatCache.set(convClientId, { messages, participants, hasMore });
+  }, [convClientId, messages, participants, hasMore]);
+
+  // ⚡ Realtime : messages en direct (plus besoin de recharger). On s'abonne
+  //    UNIQUEMENT à la conversation active (filter client_id) → isolation stricte,
+  //    et la RLS (chat_self/chat_coach/chat_admin) borne ce que l'abonné peut voir.
+  useEffect(() => {
+    if (!convClientId) return;
+    const supabase = createClient();
+    const channel = supabase
+      .channel(`chat:${convClientId}`)
+      .on(
+        "postgres_changes",
+        { event: "INSERT", schema: "public", table: "chat_messages", filter: `client_id=eq.${convClientId}` },
+        payload => {
+          const m = rowToChatMessage(payload.new as Record<string, unknown>);
+          setMessages(prev => (prev.some(x => x.id === m.id) ? prev : [...prev, m]));
+        },
+      )
+      .on(
+        "postgres_changes",
+        { event: "UPDATE", schema: "public", table: "chat_messages", filter: `client_id=eq.${convClientId}` },
+        payload => {
+          const m = rowToChatMessage(payload.new as Record<string, unknown>);
+          // On conserve l'audioUrl déjà chargé localement le cas échéant.
+          setMessages(prev => prev.map(x => (x.id === m.id ? { ...m, audioUrl: x.audioUrl ?? m.audioUrl } : x)));
+        },
+      )
+      .on(
+        "postgres_changes",
+        { event: "DELETE", schema: "public", table: "chat_messages", filter: `client_id=eq.${convClientId}` },
+        payload => {
+          const oldId = (payload.old as { id?: string })?.id;
+          if (oldId) setMessages(prev => prev.filter(x => x.id !== oldId));
+        },
+      )
+      .subscribe();
+    return () => { supabase.removeChannel(channel); };
+  }, [convClientId]);
 
   const [text, setText] = useState("");
   const [isUrgent, setIsUrgent] = useState(false);

@@ -376,6 +376,8 @@ sportif → re-upsert du blob entier à chaque envoi → **contamination croisé
     coach}` (id/nom/**photo** résolus serveur via `data->profile->>photo`, pas tout le blob) +
     `hasMore`. `before` = curseur pour remonter l'historique. Marque comme lus à la 1ʳᵉ page.
     ⚡ **Le payload exclut `audio_url`** (vocaux base64) : chargé à la demande au play.
+    ⚡ Participants résolus en **2 requêtes batchées** (`resolveParticipants` + `.in(...)`) au lieu
+    de 2 requêtes × participant (moins de round-trips Supabase = chat plus rapide).
   - `GET /api/chat/audio?id=…` → renvoie l'audio (data URL) d'**un** message vocal au moment du
     play (autorisation : sportif de la conv, son coach, ou admin). Allège fortement la liste.
   - `POST /api/chat` `{ clientId?, text?, audioUrl?, isVoice?, isUrgent? }` → insert + push.
@@ -393,8 +395,17 @@ sportif → re-upsert du blob entier à chaque envoi → **contamination croisé
   scroll). **Vocaux chargés à la demande** : `VoicePlayer` récupère l'audio via `/api/chat/audio`
   au 1er play (indicateur ⏳), garde le chemin direct si `audioUrl` déjà présent. Urgent (bandeau
   rouge + email), édition/suppression : inchangés.
+- ⚡ **Realtime** : `MessagesTab` s'abonne aux `postgres_changes` de `chat_messages` filtrés
+  `client_id=eq.<conversation active>` (INSERT/UPDATE/DELETE) → messages **en direct** sans
+  recharger, accusés de lecture ✓✓ live. Isolation : un seul `client_id` par canal + RLS
+  (`chat_self`/`chat_coach`/`chat_admin`) borne ce que l'abonné reçoit. L'INSERT Realtime **omet
+  l'audio** (lazy-load au play conservé). ⚠️ Nécessite `chat_messages` dans la publication
+  `supabase_realtime` (bloc idempotent dans `schema.sql`). L'envoi refait quand même un
+  `loadMessages` (fonctionne même si Realtime pas encore activé en base).
+- ⚡ **Cache mémoire** (`chatCache`, module-level) : réaffiche la conversation **instantanément**
+  au retour sur l'onglet, puis revalide en arrière-plan. Tenu à jour à chaque évolution de la liste.
 - **Migration** : backfill idempotent dans `schema.sql` (depuis `app_state.data.messages`).
-  ⚠️ Relancer `schema.sql` dans Supabase pour créer la table + migrer l'historique.
+  ⚠️ Relancer `schema.sql` dans Supabase pour créer la table + migrer l'historique + activer Realtime.
 
 ## Cron Vercel
 `vercel.json` : `GET /api/cron/reminders` tous les jours à 7h (`0 7 * * *`).

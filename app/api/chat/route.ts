@@ -15,19 +15,33 @@ import { insertChatMessage, rowToMessage, getCoachOf, type ChatRow } from "@/lib
 // Nombre de messages chargés par page (les plus récents). On remonte au besoin.
 const PAGE_SIZE = 15;
 
-async function profileOf(admin: ReturnType<typeof createAdminClient>, id: string) {
-  // On ne sélectionne QUE la photo (chemin JSON) au lieu de tout le blob app_state,
-  // qui peut peser plusieurs Mo (programmation, bibliothèque, métriques…).
-  const [{ data: prof }, { data: photoRow }] = await Promise.all([
-    admin.from("profiles").select("name, role").eq("id", id).maybeSingle(),
-    admin.from("app_state").select("photo:data->profile->>photo").eq("user_id", id).maybeSingle(),
+/**
+ * Résout nom + rôle + photo des participants (client + coach) en 2 requêtes
+ * BATCHÉES (`.in(...)`) au lieu de 2 requêtes × participant. On ne sélectionne
+ * QUE la photo (chemin JSON) au lieu du blob app_state entier (plusieurs Mo).
+ */
+async function resolveParticipants(
+  admin: ReturnType<typeof createAdminClient>,
+  ids: string[],
+) {
+  const [{ data: profs }, { data: photos }] = await Promise.all([
+    admin.from("profiles").select("id, name, role").in("id", ids),
+    admin.from("app_state").select("user_id, photo:data->profile->>photo").in("user_id", ids),
   ]);
-  const photo = (photoRow as { photo?: string | null } | null)?.photo;
-  return {
-    id,
-    name: (prof as { name?: string } | null)?.name ?? "",
-    role: (prof as { role?: string } | null)?.role ?? "client",
-    photo: typeof photo === "string" && photo ? photo : undefined,
+  const profMap = new Map(
+    (profs as { id: string; name?: string; role?: string }[] | null ?? []).map(p => [p.id, p]),
+  );
+  const photoMap = new Map(
+    (photos as { user_id: string; photo?: string | null }[] | null ?? []).map(p => [p.user_id, p.photo]),
+  );
+  return (id: string) => {
+    const photo = photoMap.get(id);
+    return {
+      id,
+      name: profMap.get(id)?.name ?? "",
+      role: profMap.get(id)?.role ?? "client",
+      photo: typeof photo === "string" && photo ? photo : undefined,
+    };
   };
 }
 
@@ -100,10 +114,9 @@ export async function GET(req: NextRequest) {
   if (!isFirstPage) {
     return NextResponse.json({ messages, hasMore });
   }
-  const [client, coach] = await Promise.all([
-    profileOf(admin, clientId),
-    coachId ? profileOf(admin, coachId) : Promise.resolve(null),
-  ]);
+  const build = await resolveParticipants(admin, [clientId, ...(coachId ? [coachId] : [])]);
+  const client = build(clientId);
+  const coach = coachId ? build(coachId) : null;
 
   return NextResponse.json({ messages, hasMore, participants: { client, coach } });
 }
