@@ -6,6 +6,7 @@ import SessionEditor from "@/components/SessionEditor";
 import ExerciseMultiSelect from "@/components/ExerciseMultiSelect";
 import GoalInfoModal from "@/components/GoalInfoModal";
 import InjectProgramModal from "@/components/plan/InjectProgramModal";
+import PlaceSessionModal from "@/components/plan/PlaceSessionModal";
 import { AUTH_ENABLED } from "@/lib/config";
 import { SESSION_COLORS, newSession, exerciseInstanceFromLibrary } from "@/lib/data";
 import { countdownLabel } from "@/lib/dates";
@@ -53,6 +54,7 @@ export default function PlanPage() {
   const [duplicating, setDuplicating] = useState(false);
   const [transferring, setTransferring] = useState(false);
   const [injecting, setInjecting] = useState(false);
+  const [placing, setPlacing] = useState(false);
   const [viewingGoals, setViewingGoals] = useState<Goal[] | null>(null);
   // Objectifs des autres sportifs (coach uniquement)
   const [otherGoals, setOtherGoals] = useState<Goal[]>([]);
@@ -232,12 +234,17 @@ export default function PlanPage() {
               <button onClick={() => setComposing(true)} className="rounded-lg bg-ok px-3 py-1.5 text-[13px] font-semibold text-[#06210a]">
                 + Créer une séance
               </button>
+              {(templates.sessionTemplates ?? []).length > 0 && (
+                <button onClick={() => setPlacing(true)} className="rounded-lg px-3 py-1.5 text-[13px] font-semibold text-white" style={{ background: "#f97316" }}>
+                  📌 Séance type
+                </button>
+              )}
               <button onClick={() => setDuplicating(true)} className="rounded-lg px-3 py-1.5 text-[13px] font-semibold text-white" style={{ background: "#a855f7" }}>
                 Dupliquer la semaine
               </button>
               {(templates.programs ?? []).length > 0 && (
                 <button onClick={() => setInjecting(true)} className="rounded-lg px-3 py-1.5 text-[13px] font-semibold text-white" style={{ background: "#0ea5e9" }}>
-                  📋 Injecter un programme
+                  📋 Programme
                 </button>
               )}
               {clients && clients.filter((c) => c.id !== activeUserId).length > 0 && (
@@ -387,6 +394,13 @@ export default function PlanPage() {
           sessionsByDate={sessionsByDate}
           activeUserId={activeUserId}
           onClose={() => setTransferring(false)}
+        />
+      )}
+
+      {placing && (
+        <PlaceSessionModal
+          defaultDate={ymd(cursor)}
+          onClose={() => setPlacing(false)}
         />
       )}
 

@@ -27,9 +27,13 @@ export default function LibraryPage() {
 
   // --- Onglet Séances types ---
   const [editingSession, setEditingSession] = useState<SessionTemplate | null | "new">(null);
+  const [sessionSearch, setSessionSearch] = useState("");
+  const [sessionColorFilter, setSessionColorFilter] = useState<string | null>(null);
+  const [expandedSession, setExpandedSession] = useState<string | null>(null);
 
   // --- Onglet Semaines types ---
   const [editingWeek, setEditingWeek] = useState<WeekTemplate | null | "new">(null);
+  const [weekSearch, setWeekSearch] = useState("");
 
   // --- Onglet Programmes ---
   const [editingProgram, setEditingProgram] = useState<Program | null | "new">(null);
@@ -197,105 +201,167 @@ export default function LibraryPage() {
       )}
 
       {/* ===== TAB : SÉANCES TYPES ===== */}
-      {tab === "sessions" && canEdit && (
-        <div>
-          <div className="mb-4 flex items-center justify-between">
-            <p className="text-[13px] text-dim">
-              {templates.sessionTemplates.length} séance{templates.sessionTemplates.length !== 1 ? "s" : ""} type
-            </p>
-            <button
-              onClick={() => setEditingSession("new")}
-              className="rounded-lg bg-ok px-3 py-2 text-[13px] font-semibold text-[#06210a]"
-            >
-              + Nouvelle séance type
-            </button>
+      {tab === "sessions" && canEdit && (() => {
+        const colors = [...new Set(templates.sessionTemplates.map((s) => s.color))];
+        const filtered = templates.sessionTemplates.filter((s) => {
+          const matchSearch = !sessionSearch || s.name.toLowerCase().includes(sessionSearch.toLowerCase());
+          const matchColor = !sessionColorFilter || s.color === sessionColorFilter;
+          return matchSearch && matchColor;
+        });
+        return (
+          <div>
+            {/* Barre filtres */}
+            {templates.sessionTemplates.length > 0 && (
+              <div className="mb-4 space-y-2">
+                <div className="flex items-center gap-2">
+                  <input
+                    value={sessionSearch}
+                    onChange={(e) => setSessionSearch(e.target.value)}
+                    placeholder="Rechercher une séance…"
+                    className="flex-1"
+                  />
+                  <button
+                    onClick={() => setEditingSession("new")}
+                    className="shrink-0 rounded-lg bg-ok px-3 py-2 text-[13px] font-semibold text-[#06210a]"
+                  >
+                    + Nouvelle
+                  </button>
+                </div>
+                {colors.length > 1 && (
+                  <div className="flex flex-wrap gap-1.5">
+                    <button
+                      onClick={() => setSessionColorFilter(null)}
+                      className={`rounded-full px-3 py-1 text-[12px] font-semibold transition ${!sessionColorFilter ? "bg-accent text-[#1a1500]" : "bg-surface2 text-dim hover:text-ink"}`}
+                    >
+                      Toutes
+                    </button>
+                    {colors.map((c) => {
+                      const names = templates.sessionTemplates.filter((s) => s.color === c).map((s) => s.name).join(", ");
+                      return (
+                        <button
+                          key={c}
+                          onClick={() => setSessionColorFilter(sessionColorFilter === c ? null : c)}
+                          title={names}
+                          className={`flex items-center gap-1.5 rounded-full px-3 py-1 text-[12px] font-semibold transition ${sessionColorFilter === c ? "ring-2 ring-offset-1" : "bg-surface2 hover:bg-surface"}`}
+                          style={sessionColorFilter === c ? { background: c + "33", color: c } : {}}
+                        >
+                          <span className="h-2.5 w-2.5 rounded-full shrink-0" style={{ background: c }} />
+                          {templates.sessionTemplates.filter((s) => s.color === c).length}
+                        </button>
+                      );
+                    })}
+                  </div>
+                )}
+              </div>
+            )}
+
+            {templates.sessionTemplates.length === 0 ? (
+              <div className="py-10 text-center">
+                <p className="text-dim">Aucune séance type pour l&apos;instant.</p>
+                <p className="mt-1 text-[13px] text-dim">Crée ta première séance type pour l&apos;utiliser dans les semaines types et l&apos;appliquer rapidement au planning.</p>
+                <button onClick={() => setEditingSession("new")} className="mt-4 rounded-lg bg-ok px-4 py-2 text-[13px] font-semibold text-[#06210a]">
+                  + Nouvelle séance type
+                </button>
+              </div>
+            ) : filtered.length === 0 ? (
+              <p className="py-8 text-center text-[13px] text-dim">Aucune séance trouvée.</p>
+            ) : (
+              <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+                {filtered.map((tpl) => (
+                  <SessionTemplateCard
+                    key={tpl.id}
+                    template={tpl}
+                    expanded={expandedSession === tpl.id}
+                    onToggleExpand={() => setExpandedSession(expandedSession === tpl.id ? null : tpl.id)}
+                    onEdit={() => setEditingSession(tpl)}
+                    onDelete={() =>
+                      updateTemplates((t) => {
+                        t.sessionTemplates = t.sessionTemplates.filter((s) => s.id !== tpl.id);
+                        t.weekTemplates = t.weekTemplates.map((w) => ({
+                          ...w,
+                          days: w.days.map((d) => ({
+                            ...d,
+                            sessions: d.sessions.filter((s) => s.tplId !== tpl.id),
+                          })).filter((d) => d.sessions.length > 0),
+                        }));
+                      })
+                    }
+                  />
+                ))}
+              </div>
+            )}
+
+            {editingSession !== null && (
+              <SessionTemplateModal
+                template={editingSession === "new" ? null : editingSession}
+                onClose={() => setEditingSession(null)}
+              />
+            )}
           </div>
-
-          {templates.sessionTemplates.length === 0 ? (
-            <div className="py-10 text-center">
-              <p className="text-dim">Aucune séance type pour l&apos;instant.</p>
-              <p className="mt-1 text-[13px] text-dim">Crée ta première séance type pour l&apos;utiliser dans les semaines types et l&apos;appliquer rapidement au planning.</p>
-            </div>
-          ) : (
-            <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
-              {templates.sessionTemplates.map((tpl) => (
-                <SessionTemplateCard
-                  key={tpl.id}
-                  template={tpl}
-                  onEdit={() => setEditingSession(tpl)}
-                  onDelete={() =>
-                    updateTemplates((t) => {
-                      t.sessionTemplates = t.sessionTemplates.filter((s) => s.id !== tpl.id);
-                      // Nettoyer les références dans les semaines types
-                      t.weekTemplates = t.weekTemplates.map((w) => ({
-                        ...w,
-                        days: w.days.map((d) => ({
-                          ...d,
-                          sessions: d.sessions.filter((s) => s.tplId !== tpl.id),
-                        })).filter((d) => d.sessions.length > 0),
-                      }));
-                    })
-                  }
-                />
-              ))}
-            </div>
-          )}
-
-          {editingSession !== null && (
-            <SessionTemplateModal
-              template={editingSession === "new" ? null : editingSession}
-              onClose={() => setEditingSession(null)}
-            />
-          )}
-        </div>
-      )}
+        );
+      })()}
 
       {/* ===== TAB : SEMAINES TYPES ===== */}
-      {tab === "weeks" && canEdit && (
-        <div>
-          <div className="mb-4 flex items-center justify-between">
-            <p className="text-[13px] text-dim">
-              {templates.weekTemplates.length} semaine{templates.weekTemplates.length !== 1 ? "s" : ""} type
-            </p>
-            <button
-              onClick={() => setEditingWeek("new")}
-              className="rounded-lg bg-ok px-3 py-2 text-[13px] font-semibold text-[#06210a]"
-            >
-              + Nouvelle semaine type
-            </button>
-          </div>
-
-          {templates.weekTemplates.length === 0 ? (
-            <div className="py-10 text-center">
-              <p className="text-dim">Aucune semaine type pour l&apos;instant.</p>
-              <p className="mt-1 text-[13px] text-dim">Assemble des séances types pour créer un modèle de semaine réutilisable.</p>
-            </div>
-          ) : (
-            <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
-              {templates.weekTemplates.map((wk) => (
-                <WeekTemplateCard
-                  key={wk.id}
-                  template={wk}
-                  sessionTemplates={templates.sessionTemplates}
-                  onEdit={() => setEditingWeek(wk)}
-                  onDelete={() =>
-                    updateTemplates((t) => {
-                      t.weekTemplates = t.weekTemplates.filter((w) => w.id !== wk.id);
-                    })
-                  }
+      {tab === "weeks" && canEdit && (() => {
+        const filteredWeeks = templates.weekTemplates.filter((w) =>
+          !weekSearch || w.name.toLowerCase().includes(weekSearch.toLowerCase())
+        );
+        return (
+          <div>
+            {templates.weekTemplates.length > 0 && (
+              <div className="mb-4 flex items-center gap-2">
+                <input
+                  value={weekSearch}
+                  onChange={(e) => setWeekSearch(e.target.value)}
+                  placeholder="Rechercher une semaine…"
+                  className="flex-1"
                 />
-              ))}
-            </div>
-          )}
+                <button
+                  onClick={() => setEditingWeek("new")}
+                  className="shrink-0 rounded-lg bg-ok px-3 py-2 text-[13px] font-semibold text-[#06210a]"
+                >
+                  + Nouvelle
+                </button>
+              </div>
+            )}
 
-          {editingWeek !== null && (
-            <WeekTemplateModal
-              template={editingWeek === "new" ? null : editingWeek}
-              onClose={() => setEditingWeek(null)}
-            />
-          )}
-        </div>
-      )}
+            {templates.weekTemplates.length === 0 ? (
+              <div className="py-10 text-center">
+                <p className="text-dim">Aucune semaine type pour l&apos;instant.</p>
+                <p className="mt-1 text-[13px] text-dim">Assemble des séances types pour créer un modèle de semaine réutilisable.</p>
+                <button onClick={() => setEditingWeek("new")} className="mt-4 rounded-lg bg-ok px-4 py-2 text-[13px] font-semibold text-[#06210a]">
+                  + Nouvelle semaine type
+                </button>
+              </div>
+            ) : filteredWeeks.length === 0 ? (
+              <p className="py-8 text-center text-[13px] text-dim">Aucune semaine trouvée.</p>
+            ) : (
+              <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+                {filteredWeeks.map((wk) => (
+                  <WeekTemplateCard
+                    key={wk.id}
+                    template={wk}
+                    sessionTemplates={templates.sessionTemplates}
+                    onEdit={() => setEditingWeek(wk)}
+                    onDelete={() =>
+                      updateTemplates((t) => {
+                        t.weekTemplates = t.weekTemplates.filter((w) => w.id !== wk.id);
+                      })
+                    }
+                  />
+                ))}
+              </div>
+            )}
+
+            {editingWeek !== null && (
+              <WeekTemplateModal
+                template={editingWeek === "new" ? null : editingWeek}
+                onClose={() => setEditingWeek(null)}
+              />
+            )}
+          </div>
+        );
+      })()}
 
       {/* ===== TAB : PROGRAMMES ===== */}
       {tab === "programs" && canEdit && (
@@ -436,44 +502,92 @@ function ExerciseCard({ ex, tagLabels, canEdit, isFav, onFav, onView, onEdit, on
   );
 }
 
-function SessionTemplateCard({ template, onEdit, onDelete }: {
-  template: SessionTemplate; onEdit: () => void; onDelete: () => void;
+function SessionTemplateCard({ template, expanded, onToggleExpand, onEdit, onDelete }: {
+  template: SessionTemplate;
+  expanded: boolean;
+  onToggleExpand: () => void;
+  onEdit: () => void;
+  onDelete: () => void;
 }) {
+  const totalSets = template.exercises.reduce((n, ex) => n + (ex.sets || 0), 0);
   return (
-    <div className="group rounded-2xl border border-line bg-surface p-4 transition hover:border-accent/40">
-      <div className="flex items-start justify-between gap-2">
-        <div className="flex items-center gap-2.5 min-w-0">
-          <span
-            className="h-4 w-4 shrink-0 rounded-full"
-            style={{ background: template.color }}
-          />
-          <h3 className="font-bold truncate">{template.name}</h3>
+    <div className="overflow-hidden rounded-2xl border border-line bg-surface shadow-sm transition hover:border-accent/30">
+      {/* Bandeau couleur en haut */}
+      <div className="h-1.5 w-full" style={{ background: template.color }} />
+
+      <div className="p-4">
+        {/* En-tête */}
+        <div className="flex items-start justify-between gap-2">
+          <button onClick={onToggleExpand} className="min-w-0 flex-1 text-left">
+            <h3 className="font-bold text-ink">{template.name}</h3>
+            {template.description && (
+              <p className="mt-0.5 line-clamp-1 text-[12px] text-dim">{template.description}</p>
+            )}
+          </button>
+          <div className="flex shrink-0 gap-1">
+            <button onClick={onEdit} className="grid h-8 w-8 place-items-center rounded-lg bg-surface2 text-sm hover:bg-line" aria-label="Modifier">✏️</button>
+            <button onClick={onDelete} className="grid h-8 w-8 place-items-center rounded-lg bg-surface2 text-sm hover:bg-danger/15" aria-label="Supprimer">🗑️</button>
+          </div>
         </div>
-        <div className="flex shrink-0 gap-1">
-          <button onClick={onEdit} className="grid h-8 w-8 place-items-center rounded-lg bg-surface2" aria-label="Modifier">✏️</button>
-          <button onClick={onDelete} className="grid h-8 w-8 place-items-center rounded-lg bg-surface2" aria-label="Supprimer">🗑️</button>
-        </div>
-      </div>
-      {template.description && (
-        <p className="mt-1.5 text-[13px] text-dim line-clamp-2">{template.description}</p>
-      )}
-      <p className="mt-2 text-[12px] text-dim">
-        {template.exercises.length} exercice{template.exercises.length !== 1 ? "s" : ""}
-      </p>
-      {template.exercises.length > 0 && (
-        <div className="mt-2 flex flex-wrap gap-1">
-          {template.exercises.slice(0, 4).map((ex) => (
-            <span key={ex.uid} className="rounded-full bg-surface2 px-2 py-0.5 text-[11px] text-dim">
-              {ex.name}
-            </span>
-          ))}
-          {template.exercises.length > 4 && (
-            <span className="rounded-full bg-surface2 px-2 py-0.5 text-[11px] text-dim">
-              +{template.exercises.length - 4}
-            </span>
+
+        {/* Stats rapides */}
+        <div className="mt-3 flex items-center gap-3">
+          <div className="flex items-center gap-1.5 rounded-lg bg-surface2 px-2.5 py-1.5">
+            <span className="text-[18px] font-black text-ink leading-none">{template.exercises.length}</span>
+            <span className="text-[10px] text-dim leading-tight">exo{template.exercises.length !== 1 ? "s" : ""}</span>
+          </div>
+          {totalSets > 0 && (
+            <div className="flex items-center gap-1.5 rounded-lg bg-surface2 px-2.5 py-1.5">
+              <span className="text-[18px] font-black text-ink leading-none">{totalSets}</span>
+              <span className="text-[10px] text-dim leading-tight">séries</span>
+            </div>
           )}
+          <button
+            onClick={onToggleExpand}
+            className="ml-auto text-[12px] font-semibold text-accent hover:underline"
+          >
+            {expanded ? "Réduire ▲" : "Détails ▼"}
+          </button>
         </div>
-      )}
+
+        {/* Liste exercices dépliable */}
+        {expanded && template.exercises.length > 0 && (
+          <div className="mt-3 space-y-1.5 border-t border-line pt-3">
+            {template.exercises.map((ex, i) => (
+              <div key={ex.uid} className="flex items-center gap-2.5">
+                <span
+                  className="grid h-5 w-5 shrink-0 place-items-center rounded-md text-[10px] font-bold text-white"
+                  style={{ background: template.color }}
+                >
+                  {i + 1}
+                </span>
+                <span className="min-w-0 flex-1 truncate text-[13px] font-semibold text-ink">{ex.name}</span>
+                <span className="shrink-0 text-[11px] text-dim">
+                  {ex.setsLabel ?? ex.sets}×{ex.repsLabel ?? ex.reps}
+                  {ex.weight > 0 && ` · ${ex.weight} kg`}
+                  {ex.rpeCoach ? ` · RPE ${ex.rpeCoach}` : ""}
+                </span>
+              </div>
+            ))}
+          </div>
+        )}
+
+        {/* Chips condensées (mode fermé) */}
+        {!expanded && template.exercises.length > 0 && (
+          <div className="mt-2 flex flex-wrap gap-1">
+            {template.exercises.slice(0, 3).map((ex) => (
+              <span key={ex.uid} className="rounded-full bg-surface2 px-2 py-0.5 text-[11px] text-dim">
+                {ex.name}
+              </span>
+            ))}
+            {template.exercises.length > 3 && (
+              <span className="rounded-full bg-surface2 px-2 py-0.5 text-[11px] text-dim">
+                +{template.exercises.length - 3}
+              </span>
+            )}
+          </div>
+        )}
+      </div>
     </div>
   );
 }
@@ -485,39 +599,58 @@ function WeekTemplateCard({ template, sessionTemplates, onEdit, onDelete }: {
   onDelete: () => void;
 }) {
   const activeDays = template.days.filter((d) => d.sessions.length > 0);
+  const totalSessions = template.days.reduce((n, d) => n + d.sessions.length, 0);
+
   return (
-    <div className="group rounded-2xl border border-line bg-surface p-4 transition hover:border-accent/40">
-      <div className="flex items-start justify-between gap-2">
-        <h3 className="font-bold">{template.name}</h3>
+    <div className="overflow-hidden rounded-2xl border border-line bg-surface shadow-sm transition hover:border-accent/30">
+      {/* En-tête */}
+      <div className="flex items-start justify-between gap-2 p-4 pb-3">
+        <div className="min-w-0">
+          <h3 className="font-bold text-ink">{template.name}</h3>
+          {template.description && (
+            <p className="mt-0.5 line-clamp-1 text-[12px] text-dim">{template.description}</p>
+          )}
+        </div>
         <div className="flex shrink-0 gap-1">
-          <button onClick={onEdit} className="grid h-8 w-8 place-items-center rounded-lg bg-surface2" aria-label="Modifier">✏️</button>
-          <button onClick={onDelete} className="grid h-8 w-8 place-items-center rounded-lg bg-surface2" aria-label="Supprimer">🗑️</button>
+          <button onClick={onEdit} className="grid h-8 w-8 place-items-center rounded-lg bg-surface2 text-sm hover:bg-line" aria-label="Modifier">✏️</button>
+          <button onClick={onDelete} className="grid h-8 w-8 place-items-center rounded-lg bg-surface2 text-sm hover:bg-danger/15" aria-label="Supprimer">🗑️</button>
         </div>
       </div>
-      {template.description && (
-        <p className="mt-1.5 text-[13px] text-dim line-clamp-2">{template.description}</p>
-      )}
 
-      {/* Mini-calendrier semaine */}
-      <div className="mt-3 grid grid-cols-7 gap-0.5">
+      {/* Grille jours */}
+      <div className="grid grid-cols-7 gap-px bg-line mx-4 rounded-xl overflow-hidden mb-3">
         {DAYS.map((dayName, dayIndex) => {
           const day = template.days.find((d) => d.dayIndex === dayIndex);
-          const hasSessions = (day?.sessions.length ?? 0) > 0;
-          const firstTpl = day?.sessions[0]
-            ? sessionTemplates.find((t) => t.id === day!.sessions[0].tplId)
-            : undefined;
+          const daySessions = day?.sessions ?? [];
+          const isRest = daySessions.length === 0;
           return (
-            <div key={dayIndex} className="flex flex-col items-center gap-0.5">
-              <span className="text-[10px] text-dim">{dayName}</span>
-              <div
-                className={`h-6 w-6 rounded-md ${hasSessions ? "text-white" : "bg-surface2"}`}
-                style={hasSessions ? { background: firstTpl?.color ?? "#666" } : {}}
-                title={hasSessions ? day!.sessions.map((s) => sessionTemplates.find((t) => t.id === s.tplId)?.name ?? "?").join(", ") : "Repos"}
-              >
-                {hasSessions && day!.sessions.length > 1 && (
-                  <span className="flex h-full w-full items-center justify-center text-[10px] font-bold">
-                    {day!.sessions.length}
-                  </span>
+            <div key={dayIndex} className="flex flex-col bg-surface2">
+              {/* Header jour */}
+              <div className={`py-1 text-center text-[10px] font-bold ${isRest ? "text-dim/50" : "text-dim"}`}>
+                {dayName}
+              </div>
+              {/* Séances */}
+              <div className="flex min-h-[48px] flex-col gap-0.5 p-1">
+                {isRest ? (
+                  <div className="flex flex-1 items-center justify-center">
+                    <span className="text-[9px] text-dim/30">—</span>
+                  </div>
+                ) : (
+                  daySessions.map((s, idx) => {
+                    const tpl = sessionTemplates.find((t) => t.id === s.tplId);
+                    return (
+                      <div
+                        key={idx}
+                        className="rounded px-1 py-0.5 text-center"
+                        style={{ background: tpl?.color ? tpl.color + "cc" : "#666" }}
+                        title={tpl?.name ?? "Séance supprimée"}
+                      >
+                        <span className="block truncate text-[9px] font-bold text-white leading-tight">
+                          {tpl?.name ?? "?"}
+                        </span>
+                      </div>
+                    );
+                  })
                 )}
               </div>
             </div>
@@ -525,9 +658,15 @@ function WeekTemplateCard({ template, sessionTemplates, onEdit, onDelete }: {
         })}
       </div>
 
-      <p className="mt-2 text-[12px] text-dim">
-        {activeDays.length} jour{activeDays.length !== 1 ? "s" : ""} d&apos;entraînement
-      </p>
+      {/* Footer stats */}
+      <div className="flex items-center gap-3 px-4 pb-3">
+        <span className="rounded-lg bg-surface2 px-2 py-1 text-[11px] font-semibold text-dim">
+          {activeDays.length}j d&apos;entraînement
+        </span>
+        <span className="rounded-lg bg-surface2 px-2 py-1 text-[11px] font-semibold text-dim">
+          {totalSessions} séance{totalSessions !== 1 ? "s" : ""}
+        </span>
+      </div>
     </div>
   );
 }
