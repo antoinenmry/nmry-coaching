@@ -109,6 +109,7 @@ export interface GoalEvent {
   name: string;     // nom de l'épreuve (ex : Squat, 100m nage libre…)
   planned: string;  // objectif prévu
   achieved: string; // réalisation effective
+  prDismissedWeight?: number; // poids pour lequel la bannière "nouveau record" a déjà été traitée → ne pas la re-proposer
 }
 
 export interface Goal {

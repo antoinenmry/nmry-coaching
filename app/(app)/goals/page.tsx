@@ -30,11 +30,10 @@ function EventRow({
   prProps,
 }: {
   event: GoalEvent;
-  onPatch: (field: keyof GoalEvent, value: string) => void;
+  onPatch: (patch: Partial<GoalEvent>) => void;
   onRemove: () => void;
   prProps?: PrProps;
 }) {
-  const [dismissedWeight, setDismissedWeight] = useState<number | null>(null);
   const [savedWeight, setSavedWeight] = useState<number | null>(null);
 
   const parsedWeight = prProps ? parseWeight(event.achieved) : null;
@@ -45,7 +44,9 @@ function EventRow({
     parsedWeight !== null &&
     matchedEx !== null &&
     (recordMax === undefined || parsedWeight > recordMax);
-  const showBanner = isPr && parsedWeight !== dismissedWeight && parsedWeight !== savedWeight;
+  // Décision (enregistrer / ignorer) PERSISTÉE sur l'épreuve (prDismissedWeight)
+  // → la bannière ne réapparaît plus à la réouverture de l'objectif.
+  const showBanner = isPr && parsedWeight !== event.prDismissedWeight;
   const showSaved = savedWeight !== null && parsedWeight === savedWeight && !isPr;
 
   return (
@@ -53,19 +54,19 @@ function EventRow({
       <div className="grid grid-cols-[1fr_1fr_1fr_24px] gap-1.5 items-center">
         <input
           value={event.name}
-          onChange={(ev) => onPatch("name", ev.target.value)}
+          onChange={(ev) => onPatch({ name: ev.target.value })}
           placeholder="Squat…"
           className="!text-[13px] !py-1.5"
         />
         <input
           value={event.planned}
-          onChange={(ev) => onPatch("planned", ev.target.value)}
+          onChange={(ev) => onPatch({ planned: ev.target.value })}
           placeholder="180 kg"
           className="!text-[13px] !py-1.5"
         />
         <input
           value={event.achieved}
-          onChange={(ev) => onPatch("achieved", ev.target.value)}
+          onChange={(ev) => onPatch({ achieved: ev.target.value })}
           placeholder="—"
           className={`!text-[13px] !py-1.5 ${showBanner ? "!border-accent/60" : ""}`}
         />
@@ -103,6 +104,7 @@ function EventRow({
                 if (prProps && matchedEx && parsedWeight !== null) {
                   prProps.onSaveRecord(matchedEx.id, matchedEx.name, parsedWeight);
                   setSavedWeight(parsedWeight);
+                  onPatch({ prDismissedWeight: parsedWeight });
                 }
               }}
               className="rounded-lg bg-accent px-3 py-1 text-[12px] font-semibold text-[#1a1500]"
@@ -111,7 +113,7 @@ function EventRow({
             </button>
             <button
               type="button"
-              onClick={() => setDismissedWeight(parsedWeight)}
+              onClick={() => { if (parsedWeight !== null) onPatch({ prDismissedWeight: parsedWeight }); }}
               className="rounded-lg bg-surface2 px-3 py-1 text-[12px] text-dim"
             >
               Ignorer
@@ -146,8 +148,8 @@ function EventsEditor({
   function removeEvent(id: string) {
     onChange(events.filter((e) => e.id !== id));
   }
-  function patchEvent(id: string, field: keyof GoalEvent, value: string) {
-    onChange(events.map((e) => (e.id === id ? { ...e, [field]: value } : e)));
+  function patchEvent(id: string, patch: Partial<GoalEvent>) {
+    onChange(events.map((e) => (e.id === id ? { ...e, ...patch } : e)));
   }
 
   return (
@@ -165,7 +167,7 @@ function EventsEditor({
             <EventRow
               key={e.id}
               event={e}
-              onPatch={(field, value) => patchEvent(e.id, field, value)}
+              onPatch={(patch) => patchEvent(e.id, patch)}
               onRemove={() => removeEvent(e.id)}
               prProps={prProps}
             />
