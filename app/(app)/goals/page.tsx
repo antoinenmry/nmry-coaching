@@ -3,8 +3,9 @@
 import { useMemo, useState } from "react";
 import { useData } from "@/components/DataProvider";
 import { countdownLabel, daysUntil, frenchDate } from "@/lib/dates";
-import type { Goal, GoalEvent } from "@/lib/types";
+import type { Goal, GoalEvent, LibraryExercise, RecordsData } from "@/lib/types";
 import EventsDisplay from "@/components/EventsDisplay";
+import { parseWeight, findMatchingExercise, getMaxRecord, saveStrengthRecord } from "@/lib/prDetection";
 
 const uid = () => Math.random().toString(36).slice(2, 9);
 
@@ -15,13 +16,129 @@ function sortRank(g: Goal): [number, number] {
   return [1, -n];
 }
 
+// ─── PR helpers ───────────────────────────────────────────────────────────────
+type PrProps = {
+  exercises: LibraryExercise[];
+  records: RecordsData;
+  onSaveRecord: (exId: string, exName: string, weight: number) => void;
+};
+
+function EventRow({
+  event,
+  onPatch,
+  onRemove,
+  prProps,
+}: {
+  event: GoalEvent;
+  onPatch: (field: keyof GoalEvent, value: string) => void;
+  onRemove: () => void;
+  prProps?: PrProps;
+}) {
+  const [dismissedWeight, setDismissedWeight] = useState<number | null>(null);
+  const [savedWeight, setSavedWeight] = useState<number | null>(null);
+
+  const parsedWeight = prProps ? parseWeight(event.achieved) : null;
+  const matchedEx = parsedWeight && prProps ? findMatchingExercise(event.name, prProps.exercises) : null;
+  const recordMax = matchedEx && prProps ? getMaxRecord(matchedEx.id, prProps.records) : undefined;
+
+  const isPr =
+    parsedWeight !== null &&
+    matchedEx !== null &&
+    (recordMax === undefined || parsedWeight > recordMax);
+  const showBanner = isPr && parsedWeight !== dismissedWeight && parsedWeight !== savedWeight;
+  const showSaved = savedWeight !== null && parsedWeight === savedWeight && !isPr;
+
+  return (
+    <div>
+      <div className="grid grid-cols-[1fr_1fr_1fr_24px] gap-1.5 items-center">
+        <input
+          value={event.name}
+          onChange={(ev) => onPatch("name", ev.target.value)}
+          placeholder="Squat…"
+          className="!text-[13px] !py-1.5"
+        />
+        <input
+          value={event.planned}
+          onChange={(ev) => onPatch("planned", ev.target.value)}
+          placeholder="180 kg"
+          className="!text-[13px] !py-1.5"
+        />
+        <input
+          value={event.achieved}
+          onChange={(ev) => onPatch("achieved", ev.target.value)}
+          placeholder="—"
+          className={`!text-[13px] !py-1.5 ${showBanner ? "!border-accent/60" : ""}`}
+        />
+        <button
+          onClick={onRemove}
+          className="grid h-6 w-6 place-items-center rounded-md bg-surface2 text-[12px] text-dim hover:bg-danger/20 hover:text-danger"
+          type="button"
+        >
+          ✕
+        </button>
+      </div>
+
+      {showBanner && matchedEx && parsedWeight !== null && (
+        <div className="mt-1.5 rounded-xl border border-accent/40 bg-accent/10 p-2.5">
+          <div className="flex items-center gap-2">
+            <span className="text-lg">🏆</span>
+            <div className="flex-1 min-w-0">
+              <span className="text-[13px] font-bold text-accent">
+                {recordMax === undefined ? "Premier record" : "Nouveau record"} — {matchedEx.name}
+              </span>
+              {recordMax !== undefined && (
+                <span className="ml-2 text-[12px] text-dim">
+                  {recordMax} kg → {parsedWeight} kg · +{Math.round((parsedWeight - recordMax) * 10) / 10} kg
+                </span>
+              )}
+              {recordMax === undefined && (
+                <span className="ml-2 text-[12px] text-dim">{parsedWeight} kg · premier enregistrement</span>
+              )}
+            </div>
+          </div>
+          <div className="mt-1.5 flex gap-2">
+            <button
+              type="button"
+              onClick={() => {
+                if (prProps && matchedEx && parsedWeight !== null) {
+                  prProps.onSaveRecord(matchedEx.id, matchedEx.name, parsedWeight);
+                  setSavedWeight(parsedWeight);
+                }
+              }}
+              className="rounded-lg bg-accent px-3 py-1 text-[12px] font-semibold text-[#1a1500]"
+            >
+              ✓ Enregistrer le record
+            </button>
+            <button
+              type="button"
+              onClick={() => setDismissedWeight(parsedWeight)}
+              className="rounded-lg bg-surface2 px-3 py-1 text-[12px] text-dim"
+            >
+              Ignorer
+            </button>
+          </div>
+        </div>
+      )}
+
+      {showSaved && (
+        <div className="mt-1.5 flex items-center gap-2 rounded-xl bg-ok/15 px-2.5 py-1.5 text-[12px] font-semibold text-ok">
+          <span>✅</span>
+          <span>Record enregistré — {savedWeight} kg{matchedEx ? ` (${matchedEx.name})` : ""}</span>
+        </div>
+      )}
+    </div>
+  );
+}
+
 // ─── Éditeur d'épreuves réutilisable ──────────────────────────────────────────
 function EventsEditor({
   events,
   onChange,
+  prProps,
 }: {
   events: GoalEvent[];
   onChange: (evts: GoalEvent[]) => void;
+  prProps?: PrProps;
 }) {
   function addEvent() {
     onChange([...events, { id: uid(), name: "", planned: "", achieved: "" }]);
@@ -45,33 +162,13 @@ function EventsEditor({
             <span />
           </div>
           {events.map((e) => (
-            <div key={e.id} className="grid grid-cols-[1fr_1fr_1fr_24px] gap-1.5 items-center">
-              <input
-                value={e.name}
-                onChange={(ev) => patchEvent(e.id, "name", ev.target.value)}
-                placeholder="Squat…"
-                className="!text-[13px] !py-1.5"
-              />
-              <input
-                value={e.planned}
-                onChange={(ev) => patchEvent(e.id, "planned", ev.target.value)}
-                placeholder="180 kg"
-                className="!text-[13px] !py-1.5"
-              />
-              <input
-                value={e.achieved}
-                onChange={(ev) => patchEvent(e.id, "achieved", ev.target.value)}
-                placeholder="—"
-                className="!text-[13px] !py-1.5"
-              />
-              <button
-                onClick={() => removeEvent(e.id)}
-                className="grid h-6 w-6 place-items-center rounded-md bg-surface2 text-[12px] text-dim hover:bg-danger/20 hover:text-danger"
-                type="button"
-              >
-                ✕
-              </button>
-            </div>
+            <EventRow
+              key={e.id}
+              event={e}
+              onPatch={(field, value) => patchEvent(e.id, field, value)}
+              onRemove={() => removeEvent(e.id)}
+              prProps={prProps}
+            />
           ))}
         </div>
       )}
@@ -88,7 +185,7 @@ function EventsEditor({
 
 // ─── Page principale ──────────────────────────────────────────────────────────
 export default function GoalsPage() {
-  const { state, update, loading } = useData();
+  const { state, update, loading, library } = useData();
   const [competition, setCompetition] = useState("");
   const [date, setDate] = useState("");
   const [place, setPlace] = useState("");
@@ -145,7 +242,16 @@ export default function GoalsPage() {
         {/* Épreuves */}
         <div className="mb-3">
           <span className="mb-1.5 block text-[13px] text-dim">Épreuves</span>
-          <EventsEditor events={events} onChange={setEvents} />
+          <EventsEditor
+            events={events}
+            onChange={setEvents}
+            prProps={{
+              exercises: library.exercises,
+              records: state.records,
+              onSaveRecord: (exId, exName, weight) =>
+                update((d) => saveStrengthRecord(d.records, exId, exName, weight, 1)),
+            }}
+          />
         </div>
 
         <label className="mb-4 block">
@@ -208,7 +314,7 @@ export default function GoalsPage() {
 
 // ─── Modale d'édition ─────────────────────────────────────────────────────────
 function EditGoalModal({ goal, onClose }: { goal: Goal; onClose: () => void }) {
-  const { update } = useData();
+  const { update, state, library } = useData();
   const [competition, setCompetition] = useState(goal.competition);
   const [date, setDate] = useState(goal.date);
   const [place, setPlace] = useState(goal.place);
@@ -257,7 +363,16 @@ function EditGoalModal({ goal, onClose }: { goal: Goal; onClose: () => void }) {
         {/* Épreuves */}
         <div className="mb-3">
           <span className="mb-1.5 block text-[13px] text-dim">Épreuves</span>
-          <EventsEditor events={events} onChange={setEvents} />
+          <EventsEditor
+            events={events}
+            onChange={setEvents}
+            prProps={{
+              exercises: library.exercises,
+              records: state.records,
+              onSaveRecord: (exId, exName, weight) =>
+                update((d) => saveStrengthRecord(d.records, exId, exName, weight, 1)),
+            }}
+          />
         </div>
 
         <label className="mb-4 block">

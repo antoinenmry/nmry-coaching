@@ -5,6 +5,7 @@ import { useData } from "./DataProvider";
 import ExercisePicker, { type InlineExercise } from "./ExercisePicker";
 import { exerciseInstanceFromLibrary, SESSION_COLORS } from "@/lib/data";
 import type { ExerciseInstance, Role } from "@/lib/types";
+import { getMaxRecord, saveStrengthRecord } from "@/lib/prDetection";
 
 const EMOJIS = ["😫", "😕", "😐", "🙂", "🤩"]; // ressenti 1 → 5
 
@@ -170,6 +171,15 @@ export default function SessionEditor({
   const [picking, setPicking] = useState(false);
 
   const videoById = Object.fromEntries(library.exercises.map((e) => [e.id, e.video]));
+
+  const recordsByExId = useMemo(() => {
+    const map = new Map<string, number>();
+    state.records.strength.forEach((er) => {
+      if (er.entries.length > 0)
+        map.set(er.exId, Math.max(...er.entries.map((e) => e.weight)));
+    });
+    return map;
+  }, [state.records.strength]);
 
   // IDs des options marquées "allure" (isPace) dans les catégories de filtre
   const paceOptionIds = useMemo(() => {
@@ -363,6 +373,10 @@ export default function SessionEditor({
               onPatch={(patch) => patchEx(ex.uid, patch)}
               onRemove={() => removeExercise(ex.uid)}
               onMove={(dir) => moveExercise(ex.uid, dir)}
+              recordMax={recordsByExId.get(ex.exId)}
+              onSaveRecord={(weight, reps) =>
+                update((d) => saveStrengthRecord(d.records, ex.exId, ex.name, weight, reps))
+              }
             />
           ))}
           {session.exercises.length === 0 && (
@@ -594,6 +608,8 @@ function ExerciseBlock({
   onPatch,
   onRemove,
   onMove,
+  recordMax,
+  onSaveRecord,
 }: {
   ex: ExerciseInstance;
   index: number;
@@ -604,7 +620,24 @@ function ExerciseBlock({
   onPatch: (patch: Partial<ExerciseInstance>) => void;
   onRemove: () => void;
   onMove: (dir: -1 | 1) => void;
+  recordMax?: number;
+  onSaveRecord: (weight: number, reps: number) => void;
 }) {
+  const [dismissedWeight, setDismissedWeight] = useState<number | null>(null);
+  const [savedWeight, setSavedWeight] = useState<number | null>(null);
+
+  const workLogs = (ex.setLogs ?? []).filter((l) => l.kind !== "warmup");
+  const maxLogWeight = workLogs.length > 0 ? Math.max(...workLogs.map((l) => l.w)) : 0;
+  const effectiveWeight = Math.max(ex.weightClient ?? 0, maxLogWeight);
+
+  const isPr =
+    !isPace &&
+    !isCoach &&
+    effectiveWeight > 0 &&
+    (recordMax === undefined || effectiveWeight > recordMax);
+  const showBanner = isPr && effectiveWeight !== dismissedWeight && effectiveWeight !== savedWeight;
+  const showSaved = savedWeight !== null && effectiveWeight === savedWeight && !isPr;
+
   return (
     <div className="rounded-xl border border-line bg-surface2 p-3">
       {/* En-tête : nom + contrôles */}
@@ -741,10 +774,55 @@ function ExerciseBlock({
                   onChange={(e) => onPatch({ weightClient: e.target.value !== "" ? +e.target.value : undefined })}
                   className="flex-1"
                 />
+                {showBanner && <span className="shrink-0 text-lg" title="Nouveau record !">🏆</span>}
                 <span className="shrink-0 rounded-lg bg-surface px-2.5 py-1.5 text-[13px] font-semibold text-dim">kg</span>
               </div>
             )}
           </div>
+
+          {/* Bannière PR */}
+          {showBanner && (
+            <div className="mt-2 rounded-xl border border-accent/40 bg-accent/10 p-3">
+              <div className="flex items-start gap-2">
+                <span className="text-xl">🏆</span>
+                <div className="flex-1">
+                  <p className="text-sm font-bold text-accent">
+                    {recordMax === undefined ? "Premier record !" : "Nouveau record !"}
+                  </p>
+                  <p className="mt-0.5 text-[12px] text-dim">
+                    {recordMax !== undefined
+                      ? `${recordMax} kg → ${effectiveWeight} kg · +${Math.round((effectiveWeight - recordMax) * 10) / 10} kg`
+                      : `${effectiveWeight} kg · premier enregistrement`}
+                  </p>
+                </div>
+              </div>
+              <div className="mt-2 flex gap-2">
+                <button
+                  type="button"
+                  onClick={() => {
+                    onSaveRecord(effectiveWeight, ex.reps || 1);
+                    setSavedWeight(effectiveWeight);
+                  }}
+                  className="rounded-lg bg-accent px-3 py-1.5 text-[13px] font-semibold text-[#1a1500]"
+                >
+                  ✓ Enregistrer le record
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setDismissedWeight(effectiveWeight)}
+                  className="rounded-lg bg-surface2 px-3 py-1.5 text-[13px] text-dim"
+                >
+                  Ignorer
+                </button>
+              </div>
+            </div>
+          )}
+          {showSaved && (
+            <div className="mt-2 flex items-center gap-2 rounded-xl bg-ok/15 px-3 py-2 text-[13px] font-semibold text-ok">
+              <span>✅</span>
+              <span>Record enregistré — {savedWeight} kg</span>
+            </div>
+          )}
         </>
       )}
 
