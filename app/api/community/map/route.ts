@@ -22,6 +22,7 @@ interface MapMember {
   lat: number;
   lng: number;
   sports: string[];
+  photo?: string; // URL Storage uniquement (les base64 legacy sont ignorées pour rester léger)
 }
 
 export async function GET() {
@@ -33,7 +34,7 @@ export async function GET() {
   const { data, error } = await admin
     .from("app_state")
     .select(
-      "name:data->profile->>name, consent:data->profile->mapConsent, location:data->profile->location, sports:data->profile->sports",
+      "name:data->profile->>name, consent:data->profile->mapConsent, location:data->profile->location, sports:data->profile->sports, photo:data->profile->>photo",
     );
 
   if (error) {
@@ -46,6 +47,7 @@ export async function GET() {
     consent: boolean | null;
     location: { label?: string; lat?: number; lng?: number } | null;
     sports: string[] | null;
+    photo: string | null;
   };
 
   const members: MapMember[] = ((data as Row[] | null) ?? [])
@@ -53,12 +55,15 @@ export async function GET() {
     .map((r) => {
       const firstName = (r.name ?? "").trim().split(/\s+/)[0] || "Membre";
       const city = (r.location?.label ?? "").split(",")[0].trim() || "—";
+      // On ne renvoie la photo que si c'est une URL (Storage) — jamais une base64 legacy (trop lourde).
+      const photo = r.photo && /^https?:\/\//.test(r.photo) ? r.photo : undefined;
       return {
         firstName,
         city,
         lat: round1(r.location!.lat!),
         lng: round1(r.location!.lng!),
         sports: Array.isArray(r.sports) ? r.sports : [],
+        ...(photo ? { photo } : {}),
       };
     });
 

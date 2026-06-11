@@ -10,6 +10,7 @@ interface MapMember {
   lat: number;
   lng: number;
   sports: string[];
+  photo?: string;
 }
 
 // Couleur accent (violet NMRY) pour les pastilles de ville.
@@ -148,12 +149,20 @@ export default function CommunityMap() {
           <div className="space-y-2">
             {members.map((m, i) => (
               <div key={i} className="flex items-center gap-3 rounded-xl border border-line bg-surface p-3">
-                <div
-                  className="grid h-9 w-9 shrink-0 place-items-center rounded-full text-[13px] font-bold text-white"
-                  style={{ background: PIN }}
-                >
-                  {m.firstName.slice(0, 1).toUpperCase()}
-                </div>
+                {m.photo ? (
+                  <img
+                    src={m.photo}
+                    alt={m.firstName}
+                    className="h-9 w-9 shrink-0 rounded-full object-cover"
+                  />
+                ) : (
+                  <div
+                    className="grid h-9 w-9 shrink-0 place-items-center rounded-full text-[13px] font-bold text-white"
+                    style={{ background: PIN }}
+                  >
+                    {m.firstName.slice(0, 1).toUpperCase()}
+                  </div>
+                )}
                 <div className="min-w-0 flex-1">
                   <p className="text-[13px] font-semibold text-ink">{m.firstName}</p>
                   <p className="flex items-center gap-1 text-[11px] text-dim">📍 {m.city}</p>
