@@ -64,6 +64,44 @@ function isActive(f: Followup): boolean {
   return !f.dateEnd || f.dateEnd >= today;
 }
 
+// ─── Médias chat (compression + limites) ────────────────────────────────────────
+const MAX_IMAGE_DIM = 1600;        // px (plus grand côté) — suffisant pour du plein écran mobile
+const IMAGE_QUALITY = 0.8;         // qualité JPEG après recompression
+const MAX_VIDEO_BYTES = 50 * 1024 * 1024; // 50 Mo (pas de compression vidéo côté client)
+const fmtMo = (b: number) => `${(b / 1024 / 1024).toFixed(0)} Mo`;
+
+/**
+ * Recompresse une image côté navigateur : redimensionne à MAX_IMAGE_DIM et
+ * réencode en JPEG. Une photo de smartphone (~8 Mo) descend en général sous 800 Ko.
+ * Respecte l'orientation EXIF. Renvoie le fichier d'origine si compression inutile
+ * ou impossible (GIF animé, erreur de décodage…).
+ */
+async function compressImage(file: File): Promise<File> {
+  if (!file.type.startsWith("image/") || file.type === "image/gif") return file;
+  try {
+    const bitmap = await createImageBitmap(file, { imageOrientation: "from-image" });
+    let { width, height } = bitmap;
+    const longest = Math.max(width, height);
+    if (longest > MAX_IMAGE_DIM) {
+      const scale = MAX_IMAGE_DIM / longest;
+      width = Math.round(width * scale);
+      height = Math.round(height * scale);
+    }
+    const canvas = document.createElement("canvas");
+    canvas.width = width;
+    canvas.height = height;
+    const ctx = canvas.getContext("2d");
+    if (!ctx) return file;
+    ctx.drawImage(bitmap, 0, 0, width, height);
+    bitmap.close?.();
+    const blob = await new Promise<Blob | null>((r) => canvas.toBlob(r, "image/jpeg", IMAGE_QUALITY));
+    if (!blob || blob.size >= file.size) return file; // ne jamais alourdir
+    return new File([blob], file.name.replace(/\.\w+$/, "") + ".jpg", { type: "image/jpeg" });
+  } catch {
+    return file;
+  }
+}
+
 // ─── Avatar ───────────────────────────────────────────────────────────────────
 const AVATAR_PALETTE = ["#ef4444","#f97316","#eab308","#22c55e","#06b6d4","#3b82f6","#a855f7","#ec4899"];
 function avatarBg(name: string) {
@@ -420,8 +458,9 @@ function MessagesTab() {
   }, [messages.length]);
 
   // Envoie un message (texte, vocal ou media) via l'API chat, puis recharge la conversation.
-  async function postMessage(payload: { text?: string; audioUrl?: string; isVoice?: boolean; isUrgent?: boolean; attachmentUrl?: string; attachmentType?: string; attachmentPath?: string }) {
-    if (!convClientId || !me) return;
+  // Renvoie true si l'enregistrement a réussi (utile pour nettoyer un média orphelin).
+  async function postMessage(payload: { text?: string; audioUrl?: string; isVoice?: boolean; isUrgent?: boolean; attachmentUrl?: string; attachmentType?: string; attachmentPath?: string }): Promise<boolean> {
+    if (!convClientId || !me) return false;
     try {
       const res = await fetch("/api/chat", {
         method: "POST",
@@ -431,7 +470,7 @@ function MessagesTab() {
       if (!res.ok) {
         setNotifyDebug("⚠️ Envoi impossible (HTTP " + res.status + ")");
         setTimeout(() => setNotifyDebug(null), 6000);
-        return;
+        return false;
       }
       // Message urgent d'un sportif → email d'alerte au coach (en plus du push)
       if (payload.isUrgent && !isElevated) {
@@ -442,9 +481,11 @@ function MessagesTab() {
         }).catch(() => {});
       }
       await loadMessages(convClientId);
+      return true;
     } catch (e) {
       setNotifyDebug("⚠️ Erreur réseau : " + (e as Error).message);
       setTimeout(() => setNotifyDebug(null), 6000);
+      return false;
     }
   }
 
@@ -492,28 +533,59 @@ function MessagesTab() {
     if (timerRef.current) clearInterval(timerRef.current);
   }
 
-  // ── Upload media ──────────────────────────────────────────────────────────
+  // ── Upload média (direct navigateur → Supabase Storage) ─────────────────────
+  // ⚡ On NE passe PAS par une route serverless : Vercel plafonne le corps des
+  //    requêtes à ~4,5 Mo, ce qui tuerait l'envoi de vidéos. L'upload direct
+  //    contourne cette limite et fait un saut réseau de moins.
+  function flashError(msg: string) {
+    setNotifyDebug(msg);
+    setTimeout(() => setNotifyDebug(null), 6000);
+  }
+
   async function handleFileChange(e: React.ChangeEvent<HTMLInputElement>) {
-    const file = e.target.files?.[0];
-    e.target.value = "";
-    if (!file || !convClientId || !me) return;
+    const original = e.target.files?.[0];
+    e.target.value = ""; // permet de re-sélectionner le même fichier
+    if (!original || !convClientId || !me) return;
+
+    const isImage = original.type.startsWith("image/");
+    const isVideo = original.type.startsWith("video/");
+    if (!isImage && !isVideo) {
+      flashError("⚠️ Format non supporté (photo ou vidéo uniquement).");
+      return;
+    }
+    // Les vidéos ne sont pas compressables côté client → limite stricte avant upload.
+    if (isVideo && original.size > MAX_VIDEO_BYTES) {
+      flashError(`⚠️ Vidéo trop lourde (${fmtMo(original.size)}, max ${fmtMo(MAX_VIDEO_BYTES)}). Réduis la durée ou la qualité.`);
+      return;
+    }
+
     setUploading(true);
     try {
-      const form = new FormData();
-      form.append("file", file);
-      form.append("clientId", convClientId);
-      const res = await fetch("/api/chat/upload", { method: "POST", body: form });
-      if (!res.ok) {
-        const err = await res.json().catch(() => ({}));
-        setNotifyDebug("⚠️ Upload échoué : " + (err?.error ?? res.status));
-        setTimeout(() => setNotifyDebug(null), 6000);
+      const file = isImage ? await compressImage(original) : original;
+      const ext = isImage ? "jpg" : (file.name.split(".").pop()?.toLowerCase() || "mp4");
+      const path = `chat/${convClientId}/${Date.now()}-${Math.random().toString(36).slice(2, 8)}.${ext}`;
+
+      const supabase = createClient();
+      const { error: upErr } = await supabase.storage
+        .from("chat-attachments")
+        .upload(path, file, { contentType: file.type, upsert: false });
+      if (upErr) {
+        flashError("⚠️ Upload échoué : " + upErr.message);
         return;
       }
-      const { url, path, type } = await res.json();
-      await postMessage({ attachmentUrl: url, attachmentType: type, attachmentPath: path });
+
+      const { data: { publicUrl } } = supabase.storage.from("chat-attachments").getPublicUrl(path);
+      const ok = await postMessage({
+        attachmentUrl: publicUrl,
+        attachmentType: isImage ? "image" : "video",
+        attachmentPath: path,
+      });
+      // Si l'enregistrement du message échoue, on nettoie le fichier orphelin.
+      if (!ok) {
+        await supabase.storage.from("chat-attachments").remove([path]).catch(() => {});
+      }
     } catch (err) {
-      setNotifyDebug("⚠️ Erreur réseau : " + (err as Error).message);
-      setTimeout(() => setNotifyDebug(null), 6000);
+      flashError("⚠️ Erreur : " + (err as Error).message);
     } finally {
       setUploading(false);
     }

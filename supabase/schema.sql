@@ -223,10 +223,29 @@ create index if not exists chat_messages_client_idx on public.chat_messages (cli
 create index if not exists chat_messages_coach_idx  on public.chat_messages (coach_id, created_at);
 
 -- ── Storage bucket chat-attachments ──────────────────────────────────────────
--- Bucket public (URLs lisibles sans auth, chemins non devinables).
-insert into storage.buckets (id, name, public)
-values ('chat-attachments', 'chat-attachments', true)
-on conflict (id) do nothing;
+-- Bucket public en lecture (URLs lisibles sans auth, chemins non devinables).
+-- Limite à 50 Mo par fichier (défense côté serveur, en plus du garde-fou client).
+insert into storage.buckets (id, name, public, file_size_limit)
+values ('chat-attachments', 'chat-attachments', true, 52428800)
+on conflict (id) do update set file_size_limit = excluded.file_size_limit, public = excluded.public;
+
+-- Upload direct depuis le navigateur (utilisateur authentifié uniquement).
+-- L'autorisation fine (qui peut écrire dans quelle conversation) est portée par
+-- l'insertion du message dans chat_messages (RLS chat_self/chat_coach).
+drop policy if exists chat_attach_insert on storage.objects;
+create policy chat_attach_insert on storage.objects for insert to authenticated
+  with check (bucket_id = 'chat-attachments');
+
+-- Lecture publique (bucket public) — explicite pour clarté.
+drop policy if exists chat_attach_read on storage.objects;
+create policy chat_attach_read on storage.objects for select
+  using (bucket_id = 'chat-attachments');
+
+-- Suppression depuis le navigateur (nettoyage des fichiers orphelins).
+-- La suppression liée à un message passe, elle, par le service role (admin) côté serveur.
+drop policy if exists chat_attach_delete on storage.objects;
+create policy chat_attach_delete on storage.objects for delete to authenticated
+  using (bucket_id = 'chat-attachments');
 
 alter table public.chat_messages enable row level security;
 
