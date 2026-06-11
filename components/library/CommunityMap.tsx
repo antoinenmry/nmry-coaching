@@ -43,10 +43,13 @@ export default function CommunityMap() {
       const leaflet = (await import("leaflet")).default;
       if (cancelled || !mapDiv.current || mapObj.current) return;
       Lref.current = leaflet;
-      const map = leaflet.map(mapDiv.current, { attributionControl: true }).setView([46.6, 2.4], 5);
+      const map = leaflet.map(mapDiv.current, { zoomControl: false, attributionControl: true }).setView([46.6, 2.4], 5);
+      // Localisation FR : retire le préfixe "Leaflet" et traduit les boutons de zoom.
+      map.attributionControl.setPrefix(false);
+      leaflet.control.zoom({ zoomInTitle: "Zoomer", zoomOutTitle: "Dézoomer" }).addTo(map);
       leaflet
         .tileLayer("https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png", {
-          attribution: "&copy; OpenStreetMap &copy; CARTO",
+          attribution: "&copy; OpenStreetMap, &copy; CARTO",
           maxZoom: 19,
         })
         .addTo(map);
@@ -85,15 +88,20 @@ export default function CommunityMap() {
       const [lat, lng] = key.split(",").map(Number);
       bounds.push([lat, lng]);
       const count = arr.length;
-      const size = count > 1 ? 38 : 30;
-      const icon = L.divIcon({
-        className: "",
-        html: `<div style="width:${size}px;height:${size}px;display:flex;align-items:center;justify-content:center;border-radius:50%;background:${PIN};color:#fff;font-weight:600;font-size:13px;border:2px solid #0e0e10;box-shadow:0 0 0 4px rgba(83,74,183,0.25)">${count}</div>`,
-        iconSize: [size, size],
-        iconAnchor: [size / 2, size / 2],
-      });
+      const size = count > 1 ? 46 : 38;
       const city = arr[0].city;
       const names = arr.map((m) => m.firstName).join(", ");
+      // Pastille = cercle (compteur) + étiquette ville intégrée → très lisible sur la carte.
+      const icon = L.divIcon({
+        className: "",
+        html:
+          `<div style="display:flex;flex-direction:column;align-items:center;width:140px">` +
+          `<div style="width:${size}px;height:${size}px;display:flex;align-items:center;justify-content:center;border-radius:50%;background:${PIN};color:#fff;font-weight:700;font-size:16px;border:3px solid #0e0e10;box-shadow:0 2px 8px rgba(0,0,0,0.5),0 0 0 5px rgba(83,74,183,0.22)">${count}</div>` +
+          `<div style="margin-top:5px;background:#0e0e10;color:#fff;font-size:11px;font-weight:600;padding:2px 9px;border-radius:99px;border:1px solid ${PIN};white-space:nowrap;box-shadow:0 2px 6px rgba(0,0,0,0.5)">${city}</div>` +
+          `</div>`,
+        iconSize: [140, size + 28],
+        iconAnchor: [70, size / 2],
+      });
       L.marker([lat, lng], { icon })
         .addTo(layer)
         .bindPopup(`<strong>${city}</strong><br>${names}`);
@@ -117,8 +125,8 @@ export default function CommunityMap() {
       </div>
 
       {/* Carte */}
-      <div className="overflow-hidden rounded-2xl border border-line">
-        <div ref={mapDiv} style={{ height: 300, width: "100%", background: "#14141a" }} />
+      <div className="overflow-hidden rounded-2xl border border-line shadow-sm">
+        <div ref={mapDiv} style={{ height: 440, width: "100%", background: "#14141a" }} />
       </div>
 
       {/* États */}
