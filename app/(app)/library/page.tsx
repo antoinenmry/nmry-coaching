@@ -2,11 +2,14 @@
 
 import { useEffect, useMemo, useState } from "react";
 import { useData } from "@/components/DataProvider";
-import ExerciseModal from "@/components/library/ExerciseModal";
-import FiltersModal from "@/components/library/FiltersModal";
-import SessionTemplateModal from "@/components/library/SessionTemplateModal";
-import WeekTemplateModal from "@/components/library/WeekTemplateModal";
-import ProgramModal from "@/components/library/ProgramModal";
+import dynamic from "next/dynamic";
+
+// Modales chargées à la demande (à l'ouverture) → bundle initial de /library allégé.
+const ExerciseModal = dynamic(() => import("@/components/library/ExerciseModal"));
+const FiltersModal = dynamic(() => import("@/components/library/FiltersModal"));
+const SessionTemplateModal = dynamic(() => import("@/components/library/SessionTemplateModal"));
+const WeekTemplateModal = dynamic(() => import("@/components/library/WeekTemplateModal"));
+const ProgramModal = dynamic(() => import("@/components/library/ProgramModal"));
 import type { LibraryExercise, SessionTemplate, WeekTemplate, Program, Challenge, ChallengeConditionType, AppState, SessionInstance } from "@/lib/types";
 
 type Tab = "exercises" | "sessions" | "weeks" | "programs" | "challenges";

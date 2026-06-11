@@ -1,0 +1,7 @@
+14:  urgentMessages: ChatMessage[];
+45:          urgentMessages: (state.messages ?? []).filter(m => m.isUrgent && !m.isRead),
+63:  const allUrgent = data.flatMap(cd =>
+64:    cd.urgentMessages.map(m => ({
+112:      {allUrgent.length > 0 && (
+115:            🚨 {allUrgent.length} message{allUrgent.length > 1 ? "s" : ""} urgent{allUrgent.length > 1 ? "s" : ""} non lu{allUrgent.length > 1 ? "s" : ""}
+118:            {allUrgent.map(m => (

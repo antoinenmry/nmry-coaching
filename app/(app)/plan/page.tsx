@@ -1,12 +1,15 @@
 "use client";
 
 import { useEffect, useMemo, useRef, useState } from "react";
+import dynamic from "next/dynamic";
 import { useData } from "@/components/DataProvider";
 import SessionEditor from "@/components/SessionEditor";
 import ExerciseMultiSelect from "@/components/ExerciseMultiSelect";
-import GoalInfoModal from "@/components/GoalInfoModal";
-import InjectProgramModal from "@/components/plan/InjectProgramModal";
-import PlaceSessionModal from "@/components/plan/PlaceSessionModal";
+
+// Modales chargées à la demande (à l'ouverture) → bundle initial de /plan allégé.
+const GoalInfoModal = dynamic(() => import("@/components/GoalInfoModal"));
+const InjectProgramModal = dynamic(() => import("@/components/plan/InjectProgramModal"));
+const PlaceSessionModal = dynamic(() => import("@/components/plan/PlaceSessionModal"));
 import { AUTH_ENABLED } from "@/lib/config";
 import { SESSION_COLORS, newSession, exerciseInstanceFromLibrary } from "@/lib/data";
 import { countdownLabel } from "@/lib/dates";

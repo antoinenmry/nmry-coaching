@@ -410,7 +410,6 @@ export interface AppState {
   sessions: SessionInstance[]; // toutes les séances (date = null si dans la banque)
   goals: Goal[];
   followups: Followup[];
-  messages: ChatMessage[];     // chat coach ↔ sportif (stocké côté sportif)
   notes: BlockNote[];          // bloc-notes partagé sportif ↔ coach
   library: ExerciseLibrary;
   records: RecordsData;
@@ -474,7 +473,6 @@ export const emptyState = (): AppState => ({
   sessions: [],
   goals: [],
   followups: [],
-  messages: [],
   notes: [],
   library: defaultLibrary(),
   records: emptyRecords(),
