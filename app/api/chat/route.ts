@@ -74,7 +74,7 @@ export async function GET(req: NextRequest) {
   //    via GET /api/chat/audio?id=… → payload du chat très allégé.
   let query = admin
     .from("chat_messages")
-    .select("id,coach_id,client_id,sender_id,sender_name,body,is_voice,is_urgent,type,is_read,created_at,edited_at")
+    .select("id,coach_id,client_id,sender_id,sender_name,body,is_voice,is_urgent,type,is_read,created_at,edited_at,attachment_url,attachment_type,attachment_path")
     .eq("client_id", clientId)
     .order("created_at", { ascending: false })
     .limit(PAGE_SIZE + 1);
