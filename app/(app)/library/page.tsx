@@ -526,52 +526,108 @@ function Chip({ active, label, count, onClick }: {
   );
 }
 
+function youtubeId(url: string): string | null {
+  const m = url.match(/(?:v=|youtu\.be\/|embed\/)([a-zA-Z0-9_-]{11})/);
+  return m?.[1] ?? null;
+}
+
+function VideoModal({ url, onClose }: { url: string; onClose: () => void }) {
+  const id = youtubeId(url);
+  return (
+    <div
+      className="fixed inset-0 z-50 flex items-center justify-center bg-black/75 p-4"
+      onClick={(e) => e.target === e.currentTarget && onClose()}
+    >
+      <div className="w-full max-w-lg">
+        <div className="mb-2 flex justify-end">
+          <button
+            onClick={onClose}
+            className="grid h-9 w-9 place-items-center rounded-lg bg-white/10 text-white hover:bg-white/20"
+          >✕</button>
+        </div>
+        {id ? (
+          <div className="overflow-hidden rounded-2xl" style={{ aspectRatio: "16/9" }}>
+            <iframe
+              src={`https://www.youtube.com/embed/${id}?autoplay=1&rel=0`}
+              allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
+              allowFullScreen
+              className="h-full w-full"
+            />
+          </div>
+        ) : (
+          <div className="rounded-2xl bg-surface p-6 text-center">
+            <p className="mb-3 text-dim">Lien non-YouTube — ouverture externe</p>
+            <a href={url} target="_blank" rel="noreferrer"
+              className="rounded-xl bg-accent px-4 py-2 font-semibold text-[#1a1500]">
+              Ouvrir la vidéo ↗
+            </a>
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}
+
 function ExerciseCard({ ex, tagLabels, canEdit, isFav, onFav, onView, onEdit, onDelete }: {
   ex: LibraryExercise; tagLabels: string[]; canEdit: boolean;
   isFav: boolean; onFav: () => void;
   onView: () => void; onEdit: () => void; onDelete: () => void;
 }) {
+  const [videoOpen, setVideoOpen] = useState(false);
+
   return (
-    <div
-      className="group cursor-pointer rounded-2xl border border-line bg-surface p-4 transition hover:border-accent/40"
-      onClick={canEdit ? onEdit : onView}
-    >
-      <div className="flex items-start justify-between gap-2">
-        <h3 className="font-bold transition-colors group-hover:text-accent">{ex.name}</h3>
-        <div className="flex shrink-0 items-center gap-1">
-          {/* Étoile favori — visible par tous */}
-          <button
-            onClick={(e) => { e.stopPropagation(); onFav(); }}
-            className="grid h-8 w-8 place-items-center rounded-lg bg-surface2 text-base transition hover:scale-110"
-            aria-label={isFav ? "Retirer des favoris" : "Ajouter aux favoris"}
-            title={isFav ? "Retirer des favoris" : "Ajouter aux favoris"}
-          >
-            {isFav ? "⭐" : "☆"}
-          </button>
-          {canEdit ? (
-            <>
-              <button onClick={(e) => { e.stopPropagation(); onEdit(); }}
-                className="grid h-8 w-8 place-items-center rounded-lg bg-surface2" aria-label="Modifier">✏️</button>
-              <button onClick={(e) => { e.stopPropagation(); onDelete(); }}
-                className="grid h-8 w-8 place-items-center rounded-lg bg-surface2" aria-label="Supprimer">🗑️</button>
-            </>
-          ) : (
-            <span className="ml-1 text-[12px] text-dim">Voir →</span>
+    <>
+      <div
+        className="group cursor-pointer rounded-2xl border border-line bg-surface p-4 transition hover:border-accent/40"
+        onClick={canEdit ? onEdit : onView}
+      >
+        <div className="flex items-start justify-between gap-2">
+          <h3 className="font-bold transition-colors group-hover:text-accent">{ex.name}</h3>
+          <div className="flex shrink-0 items-center gap-1">
+            <button
+              onClick={(e) => { e.stopPropagation(); onFav(); }}
+              className="grid h-8 w-8 place-items-center rounded-lg bg-surface2 text-base transition hover:scale-110"
+              aria-label={isFav ? "Retirer des favoris" : "Ajouter aux favoris"}
+              title={isFav ? "Retirer des favoris" : "Ajouter aux favoris"}
+            >
+              {isFav ? "⭐" : "☆"}
+            </button>
+            {canEdit ? (
+              <>
+                <button onClick={(e) => { e.stopPropagation(); onEdit(); }}
+                  className="grid h-8 w-8 place-items-center rounded-lg bg-surface2" aria-label="Modifier">✏️</button>
+                <button onClick={(e) => { e.stopPropagation(); onDelete(); }}
+                  className="grid h-8 w-8 place-items-center rounded-lg bg-surface2" aria-label="Supprimer">🗑️</button>
+              </>
+            ) : (
+              <span className="ml-1 text-[12px] text-dim">Voir →</span>
+            )}
+          </div>
+        </div>
+        {tagLabels.length > 0 && (
+          <div className="mt-2 flex flex-wrap gap-1.5">
+            {tagLabels.map((t) => (
+              <span key={t} className="rounded-full bg-surface2 px-2 py-0.5 text-[11px] text-dim">{t}</span>
+            ))}
+          </div>
+        )}
+        <div className="mt-2 flex flex-wrap items-center gap-3">
+          {ex.video && (
+            <button
+              onClick={(e) => { e.stopPropagation(); setVideoOpen(true); }}
+              className="flex items-center gap-1 rounded-lg bg-accent2/15 px-2.5 py-1 text-[12px] font-semibold text-accent2 transition hover:bg-accent2/25"
+            >
+              ▶ Vidéo
+            </button>
           )}
+          {ex.comment && <span className="truncate text-[12px] italic text-dim">💬 {ex.comment}</span>}
         </div>
       </div>
-      {tagLabels.length > 0 && (
-        <div className="mt-2 flex flex-wrap gap-1.5">
-          {tagLabels.map((t) => (
-            <span key={t} className="rounded-full bg-surface2 px-2 py-0.5 text-[11px] text-dim">{t}</span>
-          ))}
-        </div>
+
+      {videoOpen && ex.video && (
+        <VideoModal url={ex.video} onClose={() => setVideoOpen(false)} />
       )}
-      <div className="mt-2 flex flex-wrap items-center gap-3">
-        {ex.video && <span className="text-sm text-accent2">▶ Vidéo</span>}
-        {ex.comment && <span className="truncate text-[12px] italic text-dim">💬 {ex.comment}</span>}
-      </div>
-    </div>
+    </>
   );
 }
 
