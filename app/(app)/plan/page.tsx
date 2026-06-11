@@ -18,7 +18,10 @@ const MONTHS = ["Janvier","Février","Mars","Avril","Mai","Juin","Juillet","Aoû
 const DOW = ["Lun","Mar","Mer","Jeu","Ven","Sam","Dim"];
 const pad = (n: number) => String(n).padStart(2, "0");
 const ymd = (d: Date) => `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`;
-const shortName = (n: string) => n.split("(")[0].trim();
+const shortName = (n: string) => {
+  const beforeParen = n.split("(")[0].trim();
+  return beforeParen.length >= 4 ? beforeParen : n;
+};
 const EMOJIS = ["😫", "😕", "😐", "🙂", "🤩"];
 const emojiOf = (n: number) => (n >= 1 && n <= 5 ? EMOJIS[n - 1] + " " : "");
 
