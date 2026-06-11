@@ -247,6 +247,32 @@ drop policy if exists chat_attach_delete on storage.objects;
 create policy chat_attach_delete on storage.objects for delete to authenticated
   using (bucket_id = 'chat-attachments');
 
+-- ── Storage bucket avatars ────────────────────────────────────────────────────
+-- Photos de profil (compressées à ~512px côté client). Bucket distinct du chat
+-- pour ne PAS subir une éventuelle auto-suppression J+30 des médias de chat.
+-- Limite à 5 Mo par fichier (largement suffisant après compression).
+insert into storage.buckets (id, name, public, file_size_limit)
+values ('avatars', 'avatars', true, 5242880)
+on conflict (id) do update set file_size_limit = excluded.file_size_limit, public = excluded.public;
+
+-- Upload / remplacement / suppression depuis le navigateur (authentifié).
+-- upsert = true côté client → on autorise insert ET update.
+drop policy if exists avatars_insert on storage.objects;
+create policy avatars_insert on storage.objects for insert to authenticated
+  with check (bucket_id = 'avatars');
+
+drop policy if exists avatars_update on storage.objects;
+create policy avatars_update on storage.objects for update to authenticated
+  using (bucket_id = 'avatars');
+
+drop policy if exists avatars_read on storage.objects;
+create policy avatars_read on storage.objects for select
+  using (bucket_id = 'avatars');
+
+drop policy if exists avatars_delete on storage.objects;
+create policy avatars_delete on storage.objects for delete to authenticated
+  using (bucket_id = 'avatars');
+
 alter table public.chat_messages enable row level security;
 
 -- Le sportif accède à sa propre conversation

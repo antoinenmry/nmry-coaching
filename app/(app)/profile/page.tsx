@@ -2,6 +2,7 @@
 
 import { useRef, useState, useEffect } from "react";
 import { useData } from "@/components/DataProvider";
+import { createClient } from "@/lib/supabase/client";
 
 const SPORTS = [
   "Strongman", "Hybrid", "Powerlifting", "Running",
@@ -100,9 +101,10 @@ function LocationPicker({
 
 // ─── Page profil ──────────────────────────────────────────────────────────────
 export default function ProfilePage() {
-  const { state, update, loading } = useData();
+  const { state, update, loading, me, activeUserId } = useData();
   const p = state.profile;
   const fileRef = useRef<HTMLInputElement>(null);
+  const [photoBusy, setPhotoBusy] = useState(false);
 
   const set = (key: keyof typeof p) => (
     e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement>
@@ -122,38 +124,77 @@ export default function ProfilePage() {
         : [...sports, sport];
     });
 
-  // Compresse la photo à l'upload : redimensionne (max 512px) + JPEG qualité 0.72.
-  // Une photo passe ainsi de ~1-3 Mo à ~20-40 Ko → app_state léger + chat rapide.
+  // Photo de profil : compressée (max 512px, JPEG 0.72) puis stockée dans
+  // Supabase Storage (bucket `avatars`). Seule l'URL est conservée dans
+  // app_state → le blob reste léger (avant : base64 de ~20-40 Ko embarqué).
+  // Repli base64 si l'upload échoue (mode local hors-ligne, réseau).
   const MAX_DIM = 512;
-  const handlePhoto = (e: React.ChangeEvent<HTMLInputElement>) => {
+
+  // Extrait le chemin interne au bucket depuis une URL publique Storage.
+  // (ex: …/object/public/avatars/<uid>/<ts>.jpg → "<uid>/<ts>.jpg")
+  const avatarPath = (url: string): string | null =>
+    url.includes("/avatars/") ? url.split("/avatars/")[1] : null;
+
+  const handlePhoto = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
+    e.target.value = ""; // permet de re-sélectionner le même fichier
     if (!file) return;
-    const reader = new FileReader();
-    reader.onload = () => {
-      const dataUrl = reader.result as string;
-      const img = new Image();
-      img.onload = () => {
-        const scale = Math.min(1, MAX_DIM / Math.max(img.width, img.height));
-        const w = Math.round(img.width * scale);
-        const h = Math.round(img.height * scale);
-        const canvas = document.createElement("canvas");
-        canvas.width = w;
-        canvas.height = h;
-        const ctx = canvas.getContext("2d");
-        if (!ctx) { update((d) => { d.profile.photo = dataUrl; }); return; }
-        ctx.drawImage(img, 0, 0, w, h);
-        const compressed = canvas.toDataURL("image/jpeg", 0.72);
-        // Garde le plus petit des deux (sécurité si la compression n'aide pas).
-        const best = compressed.length < dataUrl.length ? compressed : dataUrl;
-        update((d) => { d.profile.photo = best; });
-      };
-      img.onerror = () => { update((d) => { d.profile.photo = dataUrl; }); };
-      img.src = dataUrl;
-    };
-    reader.readAsDataURL(file);
+
+    setPhotoBusy(true);
+    try {
+      // 1) Compression côté client (orientation EXIF respectée)
+      const bitmap = await createImageBitmap(file, { imageOrientation: "from-image" });
+      const scale = Math.min(1, MAX_DIM / Math.max(bitmap.width, bitmap.height));
+      const w = Math.round(bitmap.width * scale);
+      const h = Math.round(bitmap.height * scale);
+      const canvas = document.createElement("canvas");
+      canvas.width = w;
+      canvas.height = h;
+      const ctx = canvas.getContext("2d");
+      if (!ctx) { setPhotoBusy(false); return; }
+      ctx.drawImage(bitmap, 0, 0, w, h);
+      bitmap.close?.();
+      const blob = await new Promise<Blob | null>((r) => canvas.toBlob(r, "image/jpeg", 0.72));
+      if (!blob) { setPhotoBusy(false); return; }
+
+      const previous = p.photo;
+      const userId = activeUserId ?? me?.id ?? null;
+
+      // 2) Upload direct vers Storage (URL en base, pas de base64 dans le blob)
+      let storedUrl: string | null = null;
+      if (userId) {
+        const supabase = createClient();
+        const path = `${userId}/${Date.now()}.jpg`;
+        const { error } = await supabase.storage
+          .from("avatars")
+          .upload(path, blob, { contentType: "image/jpeg", upsert: true });
+        if (!error) {
+          storedUrl = supabase.storage.from("avatars").getPublicUrl(path).data.publicUrl;
+          // Nettoyage de l'ancien fichier Storage (si c'en était un)
+          const old = avatarPath(previous);
+          if (old) supabase.storage.from("avatars").remove([old]).catch(() => {});
+        }
+      }
+
+      // 3) Écrit l'URL ; repli base64 si l'upload n'a pas abouti
+      if (storedUrl) {
+        update((d) => { d.profile.photo = storedUrl!; });
+      } else {
+        update((d) => { d.profile.photo = canvas.toDataURL("image/jpeg", 0.72); });
+      }
+    } catch {
+      // Décodage impossible : on conserve la photo actuelle.
+    } finally {
+      setPhotoBusy(false);
+    }
   };
 
-  const removePhoto = () => update((d) => { d.profile.photo = ""; });
+  const removePhoto = () => {
+    const old = p.photo;
+    update((d) => { d.profile.photo = ""; });
+    const path = avatarPath(old);
+    if (path) createClient().storage.from("avatars").remove([path]).catch(() => {});
+  };
 
   if (loading) return <p className="py-10 text-center text-dim">Chargement…</p>;
 
@@ -175,10 +216,13 @@ export default function ProfilePage() {
           <div className="flex shrink-0 flex-col items-center gap-1">
             <button
               onClick={() => fileRef.current?.click()}
-              className="relative flex h-16 w-16 items-center justify-center overflow-hidden rounded-full border-2 border-dashed border-line bg-surface2 transition hover:border-accent"
+              disabled={photoBusy}
+              className="relative flex h-16 w-16 items-center justify-center overflow-hidden rounded-full border-2 border-dashed border-line bg-surface2 transition hover:border-accent disabled:opacity-60"
               title="Changer la photo"
             >
-              {p.photo ? (
+              {photoBusy ? (
+                <span className="text-xl animate-pulse">⏳</span>
+              ) : p.photo ? (
                 <img src={p.photo} alt="photo" className="h-full w-full object-cover" />
               ) : (
                 <span className="text-2xl">📷</span>

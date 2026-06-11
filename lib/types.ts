@@ -91,7 +91,7 @@ export interface SessionInstance {
 
 export interface UserProfileData {
   name: string;
-  photo: string;      // base64 data URL ou ""
+  photo: string;      // URL Supabase Storage (bucket avatars) ; base64 legacy ou "" possibles
   birthDate: string;  // "YYYY-MM-DD" ou ""
   gender: string;     // "homme" | "femme" | ""
   height: string;     // cm (conservé pour rétrocompat / migration métriques)
