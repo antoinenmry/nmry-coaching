@@ -133,13 +133,16 @@ export interface ChatMessage {
   text: string;
   isUrgent: boolean;
   isVoice: boolean;
-  audioUrl?: string;    // base64 data URL audio/webm
-  createdAt: string;    // ISO timestamp
-  editedAt?: string;    // ISO timestamp si modifié après envoi
-  senderId: string;     // user id de l'expéditeur
-  senderName?: string;  // dénormalisé pour affichage
+  audioUrl?: string;          // base64 data URL audio/webm
+  createdAt: string;          // ISO timestamp
+  editedAt?: string;          // ISO timestamp si modifié après envoi
+  senderId: string;           // user id de l'expéditeur
+  senderName?: string;        // dénormalisé pour affichage
   isRead: boolean;
   type?: "broadcast" | "plan_update"; // undefined = message normal
+  attachmentUrl?: string;     // Supabase Storage public URL (image ou vidéo)
+  attachmentType?: "image" | "video";
+  attachmentPath?: string;    // chemin Storage pour la suppression
 }
 
 /** Une note du bloc-notes partagé sportif ↔ coach (stocké dans app_state du sportif). */

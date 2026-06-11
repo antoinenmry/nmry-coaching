@@ -18,6 +18,9 @@ export interface ChatRow {
   is_read: boolean;
   created_at: string;
   edited_at: string | null;
+  attachment_url: string | null;
+  attachment_type: string | null;
+  attachment_path: string | null;
 }
 
 /** Convertit une ligne SQL en ChatMessage (forme utilisée par le front). */
@@ -34,6 +37,9 @@ export function rowToMessage(r: ChatRow): ChatMessage {
     senderName: r.sender_name ?? undefined,
     isRead: r.is_read,
     type: (r.type as ChatMessage["type"]) ?? undefined,
+    attachmentUrl: r.attachment_url ?? undefined,
+    attachmentType: (r.attachment_type as ChatMessage["attachmentType"]) ?? undefined,
+    attachmentPath: r.attachment_path ?? undefined,
   };
 }
 
@@ -47,6 +53,9 @@ export interface InsertChatArgs {
   isVoice?: boolean;
   isUrgent?: boolean;
   type?: "broadcast" | "plan_update" | null;
+  attachmentUrl?: string;
+  attachmentType?: "image" | "video";
+  attachmentPath?: string;
 }
 
 /** Insère un message dans la conversation (coach_id, client_id). */
@@ -64,6 +73,9 @@ export async function insertChatMessage(admin: Admin, args: InsertChatArgs): Pro
       is_urgent: args.isUrgent ?? false,
       type: args.type ?? null,
       is_read: false,
+      attachment_url: args.attachmentUrl ?? null,
+      attachment_type: args.attachmentType ?? null,
+      attachment_path: args.attachmentPath ?? null,
     })
     .select()
     .single();

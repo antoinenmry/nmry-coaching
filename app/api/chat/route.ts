@@ -130,7 +130,10 @@ export async function POST(req: NextRequest) {
   const audioUrl: string | undefined = body?.audioUrl;
   const isVoice = !!body?.isVoice;
   const isUrgent = !!body?.isUrgent;
-  if (!text.trim() && !audioUrl) {
+  const attachmentUrl: string | undefined = body?.attachmentUrl;
+  const attachmentType: "image" | "video" | undefined = body?.attachmentType;
+  const attachmentPath: string | undefined = body?.attachmentPath;
+  if (!text.trim() && !audioUrl && !attachmentUrl) {
     return NextResponse.json({ error: "Message vide" }, { status: 400 });
   }
 
@@ -165,6 +168,9 @@ export async function POST(req: NextRequest) {
     audioUrl,
     isVoice,
     isUrgent,
+    attachmentUrl,
+    attachmentType,
+    attachmentPath,
   });
   if (!row) return NextResponse.json({ error: "Erreur d'enregistrement" }, { status: 500 });
 

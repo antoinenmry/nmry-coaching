@@ -13,10 +13,12 @@ async function loadOwn(id: string, userId: string) {
   const { data } = await admin.from("chat_messages").select("*").eq("id", id).maybeSingle();
   const row = data as ChatRow | null;
   if (!row) return { admin, row: null, allowed: false };
-  // Auteur, ou admin
   const { data: me } = await admin.from("profiles").select("role").eq("id", userId).maybeSingle();
-  const isAdmin = (me as { role?: string } | null)?.role === "admin";
-  return { admin, row, allowed: row.sender_id === userId || isAdmin };
+  const role = (me as { role?: string } | null)?.role;
+  const isAdmin = role === "admin";
+  // Coach peut supprimer tout message de ses propres conversations
+  const isCoachOfConv = role === "coach" && row.coach_id === userId;
+  return { admin, row, allowed: row.sender_id === userId || isAdmin || isCoachOfConv };
 }
 
 export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
@@ -53,6 +55,11 @@ export async function DELETE(_req: NextRequest, { params }: { params: Promise<{ 
   if (!row) return NextResponse.json({ error: "Introuvable" }, { status: 404 });
   if (!allowed) return NextResponse.json({ error: "Forbidden" }, { status: 403 });
 
+  // Supprime le fichier Storage si le message avait une pièce jointe
+  const attachPath = (row as { attachment_path?: string | null }).attachment_path;
+  if (attachPath) {
+    await admin.storage.from("chat-attachments").remove([attachPath]).catch(() => {});
+  }
   await admin.from("chat_messages").delete().eq("id", id);
   return NextResponse.json({ ok: true });
 }

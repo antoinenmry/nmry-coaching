@@ -213,11 +213,20 @@ create table if not exists public.chat_messages (
   type        text,                       -- null=normal, 'broadcast', 'plan_update'
   is_read     boolean not null default false,
   created_at  timestamptz not null default now(),
-  edited_at   timestamptz
+  edited_at       timestamptz,
+  attachment_url  text,           -- Supabase Storage public URL (image/vidéo)
+  attachment_type text,           -- 'image' | 'video'
+  attachment_path text            -- chemin Storage pour la suppression serveur
 );
 
 create index if not exists chat_messages_client_idx on public.chat_messages (client_id, created_at);
 create index if not exists chat_messages_coach_idx  on public.chat_messages (coach_id, created_at);
+
+-- ── Storage bucket chat-attachments ──────────────────────────────────────────
+-- Bucket public (URLs lisibles sans auth, chemins non devinables).
+insert into storage.buckets (id, name, public)
+values ('chat-attachments', 'chat-attachments', true)
+on conflict (id) do nothing;
 
 alter table public.chat_messages enable row level security;
 

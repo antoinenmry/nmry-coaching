@@ -36,6 +36,9 @@ function rowToChatMessage(r: Record<string, unknown>): ChatMessage {
     senderName: (r.sender_name as string) ?? undefined,
     isRead: !!r.is_read,
     type: (r.type as ChatMessage["type"]) ?? undefined,
+    attachmentUrl: (r.attachment_url as string) ?? undefined,
+    attachmentType: (r.attachment_type as ChatMessage["attachmentType"]) ?? undefined,
+    attachmentPath: (r.attachment_path as string) ?? undefined,
   };
 }
 
@@ -406,6 +409,9 @@ function MessagesTab() {
   const chunksRef = useRef<Blob[]>([]);
   const timerRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const bottomRef = useRef<HTMLDivElement>(null);
+  const fileInputRef = useRef<HTMLInputElement>(null);
+  const [uploading, setUploading] = useState(false);
+  const [lightboxUrl, setLightboxUrl] = useState<string | null>(null);
 
   useEffect(() => {
     // En remontant l'historique, on conserve la position (pas de scroll vers le bas).
@@ -413,8 +419,8 @@ function MessagesTab() {
     bottomRef.current?.scrollIntoView({ behavior: "smooth" });
   }, [messages.length]);
 
-  // Envoie un message (texte ou vocal) via l'API chat, puis recharge la conversation.
-  async function postMessage(payload: { text?: string; audioUrl?: string; isVoice?: boolean; isUrgent?: boolean }) {
+  // Envoie un message (texte, vocal ou media) via l'API chat, puis recharge la conversation.
+  async function postMessage(payload: { text?: string; audioUrl?: string; isVoice?: boolean; isUrgent?: boolean; attachmentUrl?: string; attachmentType?: string; attachmentPath?: string }) {
     if (!convClientId || !me) return;
     try {
       const res = await fetch("/api/chat", {
@@ -484,6 +490,33 @@ function MessagesTab() {
     mrRef.current?.stop();
     setRecording(false);
     if (timerRef.current) clearInterval(timerRef.current);
+  }
+
+  // ── Upload media ──────────────────────────────────────────────────────────
+  async function handleFileChange(e: React.ChangeEvent<HTMLInputElement>) {
+    const file = e.target.files?.[0];
+    e.target.value = "";
+    if (!file || !convClientId || !me) return;
+    setUploading(true);
+    try {
+      const form = new FormData();
+      form.append("file", file);
+      form.append("clientId", convClientId);
+      const res = await fetch("/api/chat/upload", { method: "POST", body: form });
+      if (!res.ok) {
+        const err = await res.json().catch(() => ({}));
+        setNotifyDebug("⚠️ Upload échoué : " + (err?.error ?? res.status));
+        setTimeout(() => setNotifyDebug(null), 6000);
+        return;
+      }
+      const { url, path, type } = await res.json();
+      await postMessage({ attachmentUrl: url, attachmentType: type, attachmentPath: path });
+    } catch (err) {
+      setNotifyDebug("⚠️ Erreur réseau : " + (err as Error).message);
+      setTimeout(() => setNotifyDebug(null), 6000);
+    } finally {
+      setUploading(false);
+    }
   }
 
   // ── Edit / Delete ──────────────────────────────────────────────────────────
@@ -643,6 +676,27 @@ function MessagesTab() {
                   </div>
                 ) : msg.isVoice ? (
                   <VoicePlayer audioUrl={msg.audioUrl} messageId={msg.id} isMe={isMe} />
+                ) : msg.attachmentUrl ? (
+                  <div>
+                    {msg.attachmentType === "image" ? (
+                      <img
+                        src={msg.attachmentUrl}
+                        alt="photo"
+                        className="max-w-[240px] rounded-xl cursor-pointer"
+                        style={{ maxHeight: 280, objectFit: "cover" }}
+                        onClick={() => setLightboxUrl(msg.attachmentUrl!)}
+                      />
+                    ) : (
+                      <video
+                        src={msg.attachmentUrl}
+                        controls
+                        playsInline
+                        className="max-w-[240px] rounded-xl"
+                        style={{ maxHeight: 280 }}
+                      />
+                    )}
+                    {msg.text && <p className={`mt-1.5 whitespace-pre-wrap text-sm ${isMe ? "text-[#1a1500]" : "text-ink"}`}>{msg.text}</p>}
+                  </div>
                 ) : (
                   <p className={`whitespace-pre-wrap text-sm ${msg.isUrgent ? "text-white" : isMe ? "text-[#1a1500]" : "text-ink"}`}>{msg.text}</p>
                 )}
@@ -686,22 +740,37 @@ function MessagesTab() {
             </button>
           </div>
         ) : (
-          <div className="flex gap-2">
-            <textarea
-              value={text}
-              onChange={e => setText(e.target.value)}
-              onKeyDown={e => { if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); send(); } }}
-              placeholder="Écris ton message…"
-              rows={2}
-              className="flex-1 resize-none rounded-xl border border-line bg-surface2 px-3 py-2 text-sm outline-none focus:border-accent"
-            />
-            <div className="flex shrink-0 flex-col gap-1.5">
-              <button onClick={startRecording} title="Message vocal"
-                className="grid h-10 w-10 place-items-center rounded-xl border border-line bg-surface2">🎤</button>
-              <button onClick={send} disabled={!text.trim()}
-                className="grid h-10 w-10 place-items-center rounded-xl bg-accent text-[#1a1500] text-lg font-bold disabled:opacity-40">↑</button>
+          <>
+            <div className="flex gap-2">
+              <textarea
+                value={text}
+                onChange={e => setText(e.target.value)}
+                onKeyDown={e => { if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); send(); } }}
+                placeholder="Écris ton message…"
+                rows={2}
+                className="flex-1 resize-none rounded-xl border border-line bg-surface2 px-3 py-2 text-sm outline-none focus:border-accent"
+              />
+              <div className="flex shrink-0 flex-col gap-1.5">
+                <button onClick={startRecording} title="Message vocal"
+                  className="grid h-10 w-10 place-items-center rounded-xl border border-line bg-surface2">🎤</button>
+                <button
+                  onClick={() => fileInputRef.current?.click()}
+                  disabled={uploading}
+                  title="Envoyer une photo ou vidéo"
+                  className="grid h-10 w-10 place-items-center rounded-xl border border-line bg-surface2 text-lg disabled:opacity-40"
+                >{uploading ? "⏳" : "📎"}</button>
+                <button onClick={send} disabled={!text.trim()}
+                  className="grid h-10 w-10 place-items-center rounded-xl bg-accent text-[#1a1500] text-lg font-bold disabled:opacity-40">↑</button>
+              </div>
             </div>
-          </div>
+            <input
+              ref={fileInputRef}
+              type="file"
+              accept="image/*,video/*"
+              className="hidden"
+              onChange={handleFileChange}
+            />
+          </>
         )}
         <button
           onClick={() => setIsUrgent(u => !u)}
@@ -719,6 +788,25 @@ function MessagesTab() {
       {/* Diagnostic notif (disparaît après 8s) */}
       {notifyDebug && (
         <p className="rounded-lg bg-surface2 px-3 py-2 text-[12px] leading-snug text-dim">{notifyDebug}</p>
+      )}
+
+      {/* Lightbox image */}
+      {lightboxUrl && (
+        <div
+          className="fixed inset-0 z-50 flex items-center justify-center bg-black/90 p-4"
+          onClick={() => setLightboxUrl(null)}
+        >
+          <button
+            onClick={() => setLightboxUrl(null)}
+            className="absolute right-4 top-4 grid h-10 w-10 place-items-center rounded-full bg-white/15 text-white text-lg"
+          >✕</button>
+          <img
+            src={lightboxUrl}
+            alt="photo"
+            className="max-h-[90vh] max-w-full rounded-2xl object-contain"
+            onClick={e => e.stopPropagation()}
+          />
+        </div>
       )}
     </div>
   );
