@@ -1,2 +1,0 @@
-=PartnersModal=
-components/PartnersModal.tsx
