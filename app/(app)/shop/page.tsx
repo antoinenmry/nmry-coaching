@@ -139,7 +139,7 @@ function ParrainageTab({ isCoach }: { isCoach: boolean }) {
 
   function openNew() { setForm(EMPTY_PARTNER); setEditingId("new"); }
   function openEdit(p: PartnerLink) {
-    setForm({ name: p.name, url: p.url, code: p.code ?? "", discount: p.discount ?? "", comment: p.comment ?? "" });
+    setForm({ name: p.name, url: p.url, code: p.code ?? "", discount: p.discount ?? "", comment: p.comment ?? "", color: p.color });
     setEditingId(p.id);
   }
   function cancel() { setEditingId(null); }
@@ -155,6 +155,7 @@ function ParrainageTab({ isCoach }: { isCoach: boolean }) {
         code: form.code?.trim() || undefined,
         discount: form.discount?.trim() || undefined,
         comment: form.comment?.trim() || undefined,
+        color: form.color || undefined,
       };
       if (editingId === "new") { lib.partnerLinks = [...links, entry]; }
       else { lib.partnerLinks = links.map((l) => l.id === editingId ? entry : l); }
@@ -185,7 +186,7 @@ function ParrainageTab({ isCoach }: { isCoach: boolean }) {
             </div>
           );
         }
-        const color = avatarColor(p.name);
+        const color = p.color ?? avatarColor(p.name);
         return (
           <div key={p.id} className="overflow-hidden rounded-2xl border border-line shadow-sm">
             {/* Bannière gradient */}
@@ -280,32 +281,46 @@ function ParrainageTab({ isCoach }: { isCoach: boolean }) {
    ONGLET PLANS — vitrine de vente reliée aux programmes de la bibliothèque
 ══════════════════════════════════════════════════════════════════════════ */
 
-type PublishForm = { price: string; description: string };
+type PublishForm = {
+  price: string;
+  description: string;
+  color: string;
+  difficulty: number;   // 1-5
+  goal: string;
+  distance: string;
+};
+
+const EMPTY_PUBLISH_FORM: PublishForm = { price: "", description: "", color: "", difficulty: 0, goal: "", distance: "" };
 
 function PlanTab({ isCoach }: { isCoach: boolean }) {
   const { library, updateLibrary, templates } = useData();
   const plans = library.trainingPlans ?? [];
   const programs = templates.programs ?? [];
 
-  // Programmes pas encore publiés (disponibles à la mise en vente)
   const publishedProgramIds = new Set(plans.map((p) => p.programId));
   const unpublished = programs.filter((p) => !publishedProgramIds.has(p.id));
 
-  // État du formulaire de publication / édition
-  const [editingId, setEditingId] = useState<string | null>(null);   // trainingPlan.id en édition
+  const [editingId, setEditingId] = useState<string | null>(null);
   const [publishingProgramId, setPublishingProgramId] = useState<string | null>(null);
-  const [form, setForm] = useState<PublishForm>({ price: "", description: "" });
+  const [form, setForm] = useState<PublishForm>(EMPTY_PUBLISH_FORM);
 
   function startPublish(programId: string) {
     const prog = programs.find((p) => p.id === programId);
     setPublishingProgramId(programId);
     setEditingId(null);
-    setForm({ price: "", description: prog?.description ?? "" });
+    setForm({ ...EMPTY_PUBLISH_FORM, description: prog?.description ?? "" });
   }
   function startEdit(plan: TrainingPlan) {
     setEditingId(plan.id);
     setPublishingProgramId(null);
-    setForm({ price: plan.price, description: plan.description });
+    setForm({
+      price: plan.price,
+      description: plan.description,
+      color: plan.color ?? "",
+      difficulty: plan.difficulty ?? 0,
+      goal: plan.goal ?? "",
+      distance: plan.distance ?? "",
+    });
   }
   function cancel() { setEditingId(null); setPublishingProgramId(null); }
 
@@ -325,7 +340,11 @@ function PlanTab({ isCoach }: { isCoach: boolean }) {
         sessionsTotal,
         price: form.price.trim(),
         description: form.description.trim(),
-        visible: false, // masqué par défaut → le coach l'active quand prêt
+        color: form.color || undefined,
+        difficulty: form.difficulty || undefined,
+        goal: form.goal.trim() || undefined,
+        distance: form.distance.trim() || undefined,
+        visible: false,
       }];
     });
     cancel();
@@ -334,7 +353,15 @@ function PlanTab({ isCoach }: { isCoach: boolean }) {
   function saveEdit() {
     updateLibrary((lib) => {
       lib.trainingPlans = (lib.trainingPlans ?? []).map((p) =>
-        p.id === editingId ? { ...p, price: form.price.trim(), description: form.description.trim() } : p);
+        p.id === editingId ? {
+          ...p,
+          price: form.price.trim(),
+          description: form.description.trim(),
+          color: form.color || undefined,
+          difficulty: form.difficulty || undefined,
+          goal: form.goal.trim() || undefined,
+          distance: form.distance.trim() || undefined,
+        } : p);
     });
     cancel();
   }
@@ -475,23 +502,72 @@ function PlanCard({ plan, coach }: {
   return (
     <div className={`overflow-hidden rounded-2xl border shadow-sm transition ${dimmed ? "border-line opacity-60" : "border-accent/30"} bg-surface2`}>
       {/* Header coloré */}
-      <div className="relative overflow-hidden bg-gradient-to-br from-accent/30 to-accent/10 p-5">
-        <div className="pointer-events-none absolute -right-8 -top-8 h-32 w-32 rounded-full bg-accent/10" />
-        <div className="relative flex items-start justify-between gap-3">
-          <div className="min-w-0 flex-1">
-            <div className="mb-1 flex flex-wrap items-center gap-2">
-              <span className="rounded-full bg-accent/20 px-2.5 py-0.5 text-[11px] font-bold text-accent">{plan.sport}</span>
-              <span className="rounded-full border border-line bg-surface/50 px-2.5 py-0.5 text-[11px] font-semibold text-dim">{plan.level}</span>
+      {plan.color ? (
+        <div
+          className="relative overflow-hidden p-5"
+          style={{ background: `linear-gradient(135deg, ${plan.color}cc 0%, ${plan.color}66 100%)` }}
+        >
+          <div className="pointer-events-none absolute -right-8 -top-8 h-32 w-32 rounded-full bg-white/10" />
+          <div className="relative flex items-start justify-between gap-3">
+            <div className="min-w-0 flex-1">
+              <div className="mb-1 flex flex-wrap items-center gap-2">
+                <span className="rounded-full bg-white/20 px-2.5 py-0.5 text-[11px] font-bold text-white">{plan.sport}</span>
+                <span className="rounded-full bg-white/15 px-2.5 py-0.5 text-[11px] font-semibold text-white/80">{plan.level}</span>
+              </div>
+              <p className="font-bold text-white">{plan.name}</p>
+              {(plan.goal || plan.distance) && (
+                <div className="mt-1.5 flex flex-wrap gap-1.5">
+                  {plan.goal && <span className="rounded-full bg-white/20 px-2 py-0.5 text-[11px] text-white/90">🎯 {plan.goal}</span>}
+                  {plan.distance && <span className="rounded-full bg-white/20 px-2 py-0.5 text-[11px] text-white/90">📏 {plan.distance}</span>}
+                </div>
+              )}
             </div>
-            <p className="font-bold text-ink">{plan.name}</p>
+            <div className="flex shrink-0 flex-col items-end gap-1.5">
+              {plan.price && (
+                <div className="rounded-xl bg-white/20 px-3 py-1.5 text-center backdrop-blur-sm">
+                  <p className="text-[16px] font-black text-white">{plan.price}</p>
+                </div>
+              )}
+              {plan.difficulty ? (
+                <p className="text-[14px]">
+                  {"💧".repeat(plan.difficulty)}{"🩶".repeat(5 - plan.difficulty)}
+                </p>
+              ) : null}
+            </div>
           </div>
-          {plan.price && (
-            <div className="shrink-0 rounded-xl bg-surface/80 px-3 py-1.5 text-center backdrop-blur-sm">
-              <p className="text-[16px] font-black text-ink">{plan.price}</p>
-            </div>
-          )}
         </div>
-      </div>
+      ) : (
+        <div className="relative overflow-hidden bg-gradient-to-br from-accent/30 to-accent/10 p-5">
+          <div className="pointer-events-none absolute -right-8 -top-8 h-32 w-32 rounded-full bg-accent/10" />
+          <div className="relative flex items-start justify-between gap-3">
+            <div className="min-w-0 flex-1">
+              <div className="mb-1 flex flex-wrap items-center gap-2">
+                <span className="rounded-full bg-accent/20 px-2.5 py-0.5 text-[11px] font-bold text-accent">{plan.sport}</span>
+                <span className="rounded-full border border-line bg-surface/50 px-2.5 py-0.5 text-[11px] font-semibold text-dim">{plan.level}</span>
+              </div>
+              <p className="font-bold text-ink">{plan.name}</p>
+              {(plan.goal || plan.distance) && (
+                <div className="mt-1.5 flex flex-wrap gap-1.5">
+                  {plan.goal && <span className="rounded-full bg-surface/70 px-2 py-0.5 text-[11px] text-dim">🎯 {plan.goal}</span>}
+                  {plan.distance && <span className="rounded-full bg-surface/70 px-2 py-0.5 text-[11px] text-dim">📏 {plan.distance}</span>}
+                </div>
+              )}
+            </div>
+            <div className="flex shrink-0 flex-col items-end gap-1.5">
+              {plan.price && (
+                <div className="rounded-xl bg-surface/80 px-3 py-1.5 text-center backdrop-blur-sm">
+                  <p className="text-[16px] font-black text-ink">{plan.price}</p>
+                </div>
+              )}
+              {plan.difficulty ? (
+                <p className="text-[14px]">
+                  {"💧".repeat(plan.difficulty)}{"🩶".repeat(5 - plan.difficulty)}
+                </p>
+              ) : null}
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* Corps */}
       <div className="space-y-3 p-4">
@@ -759,6 +835,29 @@ function FormFooter({ onSave, onCancel, canSave, isNew }: { onSave: () => void; 
   );
 }
 
+function ColorPicker({ value, onChange }: { value?: string; onChange: (c: string) => void }) {
+  return (
+    <div>
+      <label className="mb-1 block text-[12px] font-semibold text-dim">Couleur de la bannière</label>
+      <div className="flex flex-wrap gap-2">
+        {PALETTE.map((c) => (
+          <button
+            key={c}
+            type="button"
+            onClick={() => onChange(value === c ? "" : c)}
+            className="h-7 w-7 rounded-lg border-2 transition"
+            style={{ background: c, borderColor: value === c ? "white" : "transparent", outline: value === c ? `2px solid ${c}` : "none" }}
+            title={c}
+          />
+        ))}
+        {value && !PALETTE.includes(value) && (
+          <div className="h-7 w-7 rounded-lg border-2 border-white" style={{ background: value }} />
+        )}
+      </div>
+    </div>
+  );
+}
+
 function PartnerForm({ form, setForm, onSave, onCancel, isNew }: {
   form: Omit<PartnerLink, "id">;
   setForm: React.Dispatch<React.SetStateAction<Omit<PartnerLink, "id">>>;
@@ -775,6 +874,7 @@ function PartnerForm({ form, setForm, onSave, onCancel, isNew }: {
         <Field label="Code promo"><input value={form.code} onChange={f("code")} placeholder="ex: NMRY10" className={`${inputCls} font-mono uppercase`} /></Field>
         <Field label="Remise"><input value={form.discount} onChange={f("discount")} placeholder="ex: -10% sur tout" className={inputCls} /></Field>
       </div>
+      <ColorPicker value={form.color} onChange={(c) => setForm((prev) => ({ ...prev, color: c || undefined }))} />
       <Field label="Commentaire (infos partenariat…)">
         <textarea value={form.comment} onChange={f("comment")} placeholder="Partenaire depuis 2024, qualité premium…" rows={3} className={`${inputCls} resize-none`} />
       </Field>
@@ -793,7 +893,37 @@ function PlanForm({ form, setForm, onSave, onCancel, title, isPublish }: {
   return (
     <div className="space-y-3 p-4">
       <p className="text-[11px] font-bold uppercase tracking-widest text-accent">{title}</p>
-      <Field label="Prix"><input autoFocus value={form.price} onChange={f("price")} placeholder="ex: 49 €" className={inputCls} /></Field>
+      <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+        <Field label="Prix"><input autoFocus value={form.price} onChange={f("price")} placeholder="ex: 49 €" className={inputCls} /></Field>
+        <Field label="Distance (discrète)"><input value={form.distance} onChange={f("distance")} placeholder="ex: 10 km" className={inputCls} /></Field>
+      </div>
+      <Field label="Objectif (discret)"><input value={form.goal} onChange={f("goal")} placeholder="ex: Terminer un 10km" className={inputCls} /></Field>
+
+      {/* Difficulté : gourdes 💧 */}
+      <div>
+        <label className="mb-1 block text-[12px] font-semibold text-dim">Difficulté</label>
+        <div className="flex gap-1">
+          {[1, 2, 3, 4, 5].map((d) => (
+            <button
+              key={d}
+              type="button"
+              onClick={() => setForm((prev) => ({ ...prev, difficulty: prev.difficulty === d ? 0 : d }))}
+              className="flex-1 rounded-lg border border-line bg-surface py-2 text-[18px] transition hover:border-accent/40"
+              title={`Niveau ${d}`}
+            >
+              {d <= (form.difficulty ?? 0) ? "💧" : "🩶"}
+            </button>
+          ))}
+        </div>
+        {form.difficulty ? (
+          <p className="mt-1 text-[11px] text-dim">Niveau {form.difficulty}/5</p>
+        ) : (
+          <p className="mt-1 text-[11px] text-dim">Aucune difficulté renseignée</p>
+        )}
+      </div>
+
+      <ColorPicker value={form.color} onChange={(c) => setForm((prev) => ({ ...prev, color: c }))} />
+
       <Field label="Description (argumentaire de vente)">
         <textarea value={form.description} onChange={f("description")} placeholder="À qui s'adresse ce plan, objectifs, ce qu'il contient…" rows={3} className={`${inputCls} resize-none`} />
       </Field>

@@ -29,14 +29,76 @@ export default function LibraryPage() {
   const [editingSession, setEditingSession] = useState<SessionTemplate | null | "new">(null);
   const [sessionSearch, setSessionSearch] = useState("");
   const [sessionColorFilter, setSessionColorFilter] = useState<string | null>(null);
+  const [sessionSportFilter, setSessionSportFilter] = useState<string | null>(null);
   const [expandedSession, setExpandedSession] = useState<string | null>(null);
 
   // --- Onglet Semaines types ---
   const [editingWeek, setEditingWeek] = useState<WeekTemplate | null | "new">(null);
   const [weekSearch, setWeekSearch] = useState("");
+  const [weekSportFilter, setWeekSportFilter] = useState<string | null>(null);
 
   // --- Onglet Programmes ---
   const [editingProgram, setEditingProgram] = useState<Program | null | "new">(null);
+  const [programSearch, setProgramSearch] = useState("");
+  const [programSportFilter, setProgramSportFilter] = useState<string | null>(null);
+
+  // ── Dérivation dynamique des sports depuis lib.categories ────────────────
+  // Cherche la catégorie "Sport" (insensible à la casse) dans les catégories de la bibliothèque.
+  // Si elle existe, les exercices peuvent y être tagués → on dérive les sports de chaque template.
+  const sportCategory = useMemo(
+    () => lib.categories.find((c) => /sport/i.test(c.name)) ?? null,
+    [lib.categories],
+  );
+
+  const exById = useMemo(
+    () => new Map(lib.exercises.map((e) => [e.id, e])),
+    [lib.exercises],
+  );
+
+  // Sports (labels) couverts par une séance type
+  const sessionSports = useMemo(() => {
+    if (!sportCategory) return new Map<string, string[]>();
+    return new Map(
+      templates.sessionTemplates.map((tpl) => {
+        const labels = new Set<string>();
+        for (const ex of tpl.exercises) {
+          const libEx = exById.get(ex.exId);
+          if (!libEx) continue;
+          for (const optId of libEx.tags[sportCategory.id] ?? []) {
+            const opt = sportCategory.options.find((o) => o.id === optId);
+            if (opt) labels.add(opt.label);
+          }
+        }
+        return [tpl.id, [...labels]] as [string, string[]];
+      }),
+    );
+  }, [sportCategory, templates.sessionTemplates, exById]);
+
+  // Sports couverts par une semaine type (union des séances)
+  const weekSports = useMemo(() => {
+    if (!sportCategory) return new Map<string, string[]>();
+    const sessById = new Map(templates.sessionTemplates.map((s) => [s.id, s]));
+    return new Map(
+      templates.weekTemplates.map((wk) => {
+        const labels = new Set<string>();
+        for (const day of wk.days) {
+          for (const ref of day.sessions) {
+            const tpl = sessById.get(ref.tplId);
+            if (!tpl) continue;
+            for (const ex of tpl.exercises) {
+              const libEx = exById.get(ex.exId);
+              if (!libEx) continue;
+              for (const optId of libEx.tags[sportCategory.id] ?? []) {
+                const opt = sportCategory.options.find((o) => o.id === optId);
+                if (opt) labels.add(opt.label);
+              }
+            }
+          }
+        }
+        return [wk.id, [...labels]] as [string, string[]];
+      }),
+    );
+  }, [sportCategory, templates.weekTemplates, templates.sessionTemplates, exById]);
 
   // Exercices filtrés
   const filtered = useMemo(() => {
@@ -203,10 +265,15 @@ export default function LibraryPage() {
       {/* ===== TAB : SÉANCES TYPES ===== */}
       {tab === "sessions" && canEdit && (() => {
         const colors = [...new Set(templates.sessionTemplates.map((s) => s.color))];
+        // Sports disponibles parmi les séances existantes
+        const availSports = sportCategory
+          ? [...new Set(templates.sessionTemplates.flatMap((s) => sessionSports.get(s.id) ?? []))]
+          : [];
         const filtered = templates.sessionTemplates.filter((s) => {
           const matchSearch = !sessionSearch || s.name.toLowerCase().includes(sessionSearch.toLowerCase());
           const matchColor = !sessionColorFilter || s.color === sessionColorFilter;
-          return matchSearch && matchColor;
+          const matchSport = !sessionSportFilter || (sessionSports.get(s.id) ?? []).includes(sessionSportFilter);
+          return matchSearch && matchColor && matchSport;
         });
         return (
           <div>
@@ -227,29 +294,42 @@ export default function LibraryPage() {
                     + Nouvelle
                   </button>
                 </div>
-                {colors.length > 1 && (
+                {(colors.length > 1 || availSports.length > 0) && (
                   <div className="flex flex-wrap gap-1.5">
-                    <button
-                      onClick={() => setSessionColorFilter(null)}
-                      className={`rounded-full px-3 py-1 text-[12px] font-semibold transition ${!sessionColorFilter ? "bg-accent text-[#1a1500]" : "bg-surface2 text-dim hover:text-ink"}`}
-                    >
-                      Toutes
-                    </button>
-                    {colors.map((c) => {
-                      const names = templates.sessionTemplates.filter((s) => s.color === c).map((s) => s.name).join(", ");
-                      return (
+                    {/* Filtre couleur */}
+                    {colors.length > 1 && (
+                      <>
                         <button
-                          key={c}
-                          onClick={() => setSessionColorFilter(sessionColorFilter === c ? null : c)}
-                          title={names}
-                          className={`flex items-center gap-1.5 rounded-full px-3 py-1 text-[12px] font-semibold transition ${sessionColorFilter === c ? "ring-2 ring-offset-1" : "bg-surface2 hover:bg-surface"}`}
-                          style={sessionColorFilter === c ? { background: c + "33", color: c } : {}}
+                          onClick={() => setSessionColorFilter(null)}
+                          className={`rounded-full px-3 py-1 text-[12px] font-semibold transition ${!sessionColorFilter ? "bg-accent text-[#1a1500]" : "bg-surface2 text-dim hover:text-ink"}`}
                         >
-                          <span className="h-2.5 w-2.5 rounded-full shrink-0" style={{ background: c }} />
-                          {templates.sessionTemplates.filter((s) => s.color === c).length}
+                          Toutes
                         </button>
-                      );
-                    })}
+                        {colors.map((c) => (
+                          <button
+                            key={c}
+                            onClick={() => setSessionColorFilter(sessionColorFilter === c ? null : c)}
+                            title={templates.sessionTemplates.filter((s) => s.color === c).map((s) => s.name).join(", ")}
+                            className={`flex items-center gap-1.5 rounded-full px-3 py-1 text-[12px] font-semibold transition ${sessionColorFilter === c ? "ring-2 ring-offset-1" : "bg-surface2 hover:bg-surface"}`}
+                            style={sessionColorFilter === c ? { background: c + "33", color: c } : {}}
+                          >
+                            <span className="h-2.5 w-2.5 shrink-0 rounded-full" style={{ background: c }} />
+                            {templates.sessionTemplates.filter((s) => s.color === c).length}
+                          </button>
+                        ))}
+                        {availSports.length > 0 && <span className="self-center text-dim/40">·</span>}
+                      </>
+                    )}
+                    {/* Filtre sport (dynamique depuis lib.categories) */}
+                    {availSports.map((sport) => (
+                      <button
+                        key={sport}
+                        onClick={() => setSessionSportFilter(sessionSportFilter === sport ? null : sport)}
+                        className={`rounded-full px-3 py-1 text-[12px] font-semibold transition ${sessionSportFilter === sport ? "bg-accent text-[#1a1500]" : "bg-surface2 text-dim hover:text-ink"}`}
+                      >
+                        {sport}
+                      </button>
+                    ))}
                   </div>
                 )}
               </div>
@@ -303,25 +383,45 @@ export default function LibraryPage() {
 
       {/* ===== TAB : SEMAINES TYPES ===== */}
       {tab === "weeks" && canEdit && (() => {
-        const filteredWeeks = templates.weekTemplates.filter((w) =>
-          !weekSearch || w.name.toLowerCase().includes(weekSearch.toLowerCase())
-        );
+        const availWeekSports = sportCategory
+          ? [...new Set(templates.weekTemplates.flatMap((w) => weekSports.get(w.id) ?? []))]
+          : [];
+        const filteredWeeks = templates.weekTemplates.filter((w) => {
+          const matchSearch = !weekSearch || w.name.toLowerCase().includes(weekSearch.toLowerCase());
+          const matchSport = !weekSportFilter || (weekSports.get(w.id) ?? []).includes(weekSportFilter);
+          return matchSearch && matchSport;
+        });
         return (
           <div>
             {templates.weekTemplates.length > 0 && (
-              <div className="mb-4 flex items-center gap-2">
-                <input
-                  value={weekSearch}
-                  onChange={(e) => setWeekSearch(e.target.value)}
-                  placeholder="Rechercher une semaine…"
-                  className="flex-1"
-                />
-                <button
-                  onClick={() => setEditingWeek("new")}
-                  className="shrink-0 rounded-lg bg-ok px-3 py-2 text-[13px] font-semibold text-[#06210a]"
-                >
-                  + Nouvelle
-                </button>
+              <div className="mb-4 space-y-2">
+                <div className="flex items-center gap-2">
+                  <input
+                    value={weekSearch}
+                    onChange={(e) => setWeekSearch(e.target.value)}
+                    placeholder="Rechercher une semaine…"
+                    className="flex-1"
+                  />
+                  <button
+                    onClick={() => setEditingWeek("new")}
+                    className="shrink-0 rounded-lg bg-ok px-3 py-2 text-[13px] font-semibold text-[#06210a]"
+                  >
+                    + Nouvelle
+                  </button>
+                </div>
+                {availWeekSports.length > 0 && (
+                  <div className="flex flex-wrap gap-1.5">
+                    {availWeekSports.map((sport) => (
+                      <button
+                        key={sport}
+                        onClick={() => setWeekSportFilter(weekSportFilter === sport ? null : sport)}
+                        className={`rounded-full px-3 py-1 text-[12px] font-semibold transition ${weekSportFilter === sport ? "bg-accent text-[#1a1500]" : "bg-surface2 text-dim hover:text-ink"}`}
+                      >
+                        {sport}
+                      </button>
+                    ))}
+                  </div>
+                )}
               </div>
             )}
 
@@ -364,28 +464,61 @@ export default function LibraryPage() {
       })()}
 
       {/* ===== TAB : PROGRAMMES ===== */}
-      {tab === "programs" && canEdit && (
+      {tab === "programs" && canEdit && (() => {
+        const allPrograms = templates.programs ?? [];
+        const programSports = [...new Set(allPrograms.map((p) => p.sport).filter(Boolean))];
+        const filteredPrograms = allPrograms.filter((p) => {
+          const matchSearch = !programSearch || p.name.toLowerCase().includes(programSearch.toLowerCase());
+          const matchSport = !programSportFilter || p.sport === programSportFilter;
+          return matchSearch && matchSport;
+        });
+        return (
         <div>
-          <div className="mb-4 flex items-center justify-between">
-            <p className="text-[13px] text-dim">
-              {(templates.programs ?? []).length} programme{(templates.programs ?? []).length !== 1 ? "s" : ""}
-            </p>
-            <button
-              onClick={() => setEditingProgram("new")}
-              className="rounded-lg bg-ok px-3 py-2 text-[13px] font-semibold text-[#06210a]"
-            >
-              + Nouveau programme
-            </button>
-          </div>
+          {allPrograms.length > 0 && (
+            <div className="mb-4 space-y-2">
+              <div className="flex items-center gap-2">
+                <input
+                  value={programSearch}
+                  onChange={(e) => setProgramSearch(e.target.value)}
+                  placeholder="Rechercher un programme…"
+                  className="flex-1"
+                />
+                <button
+                  onClick={() => setEditingProgram("new")}
+                  className="shrink-0 rounded-lg bg-ok px-3 py-2 text-[13px] font-semibold text-[#06210a]"
+                >
+                  + Nouveau
+                </button>
+              </div>
+              {programSports.length > 1 && (
+                <div className="flex flex-wrap gap-1.5">
+                  {programSports.map((sport) => (
+                    <button
+                      key={sport}
+                      onClick={() => setProgramSportFilter(programSportFilter === sport ? null : sport)}
+                      className={`rounded-full px-3 py-1 text-[12px] font-semibold transition ${programSportFilter === sport ? "bg-accent text-[#1a1500]" : "bg-surface2 text-dim hover:text-ink"}`}
+                    >
+                      {sport}
+                    </button>
+                  ))}
+                </div>
+              )}
+            </div>
+          )}
 
-          {(templates.programs ?? []).length === 0 ? (
+          {allPrograms.length === 0 ? (
             <div className="py-10 text-center">
               <p className="text-dim">Aucun programme pour l&apos;instant.</p>
               <p className="mt-1 text-[13px] text-dim">Enchaîne des semaines types pour créer un programme complet, prêt à vendre ou à injecter.</p>
+              <button onClick={() => setEditingProgram("new")} className="mt-4 rounded-lg bg-ok px-4 py-2 text-[13px] font-semibold text-[#06210a]">
+                + Nouveau programme
+              </button>
             </div>
+          ) : filteredPrograms.length === 0 ? (
+            <p className="py-8 text-center text-[13px] text-dim">Aucun programme trouvé.</p>
           ) : (
             <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
-              {(templates.programs ?? []).map((prog) => (
+              {filteredPrograms.map((prog) => (
                 <ProgramCard
                   key={prog.id}
                   program={prog}
@@ -408,7 +541,8 @@ export default function LibraryPage() {
             />
           )}
         </div>
-      )}
+        );
+      })()}
     </div>
   );
 }

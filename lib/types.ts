@@ -186,6 +186,7 @@ export interface PartnerLink {
   code?: string;
   discount?: string;
   comment?: string;  // note libre du coach (infos partenariat, conditions…)
+  color?: string;    // couleur hex de la bannière (ex: "#ef4444")
 }
 
 /** Produit de la boutique merch (ex: NMRY Hoodie). */
@@ -228,6 +229,10 @@ export interface TrainingPlan {
   price: string;              // texte libre, ex: "49 €"
   description: string;        // description marketing
   visible: boolean;           // activé / désactivé pour les sportifs
+  color?: string;             // couleur hex de la bannière
+  difficulty?: number;        // 1-5 (nb de gourdes 💧 remplies)
+  goal?: string;              // ex: "Terminer un 10km", "Passer sous les 45 min"
+  distance?: string;          // ex: "10 km", "Semi-marathon"
 }
 
 export interface ExerciseLibrary {
