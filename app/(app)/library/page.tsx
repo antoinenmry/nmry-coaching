@@ -192,7 +192,7 @@ export default function LibraryPage() {
             <TabButton active={tab === "programs"} onClick={() => setTab("programs")} label="Programmes" count={(templates.programs ?? []).length} />
           </>
         )}
-        {(canEdit || (lib.challenges ?? []).length > 0) && (
+        {(canEdit || lib.challengesVisible) && (
           <TabButton active={tab === "challenges"} onClick={() => setTab("challenges")} label="Défis" count={(lib.challenges ?? []).length} />
         )}
       </div>
