@@ -623,7 +623,6 @@ function ExerciseBlock({
   recordMax?: number;
   onSaveRecord: (weight: number, reps: number) => void;
 }) {
-  const [dismissedWeight, setDismissedWeight] = useState<number | null>(null);
   const [savedWeight, setSavedWeight] = useState<number | null>(null);
 
   const workLogs = (ex.setLogs ?? []).filter((l) => l.kind !== "warmup");
@@ -635,7 +634,9 @@ function ExerciseBlock({
     !isCoach &&
     effectiveWeight > 0 &&
     (recordMax === undefined || effectiveWeight > recordMax);
-  const showBanner = isPr && effectiveWeight !== dismissedWeight && effectiveWeight !== savedWeight;
+  // La décision (enregistrer / ignorer) est PERSISTÉE sur l'exercice (prDismissedWeight)
+  // → la bannière ne réapparaît plus à la réouverture de la séance.
+  const showBanner = isPr && effectiveWeight !== ex.prDismissedWeight;
   const showSaved = savedWeight !== null && effectiveWeight === savedWeight && !isPr;
 
   return (
@@ -802,6 +803,7 @@ function ExerciseBlock({
                   onClick={() => {
                     onSaveRecord(effectiveWeight, ex.reps || 1);
                     setSavedWeight(effectiveWeight);
+                    onPatch({ prDismissedWeight: effectiveWeight });
                   }}
                   className="rounded-lg bg-accent px-3 py-1.5 text-[13px] font-semibold text-[#1a1500]"
                 >
@@ -809,7 +811,7 @@ function ExerciseBlock({
                 </button>
                 <button
                   type="button"
-                  onClick={() => setDismissedWeight(effectiveWeight)}
+                  onClick={() => onPatch({ prDismissedWeight: effectiveWeight })}
                   className="rounded-lg bg-surface2 px-3 py-1.5 text-[13px] text-dim"
                 >
                   Ignorer

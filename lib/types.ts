@@ -74,6 +74,7 @@ export interface ExerciseInstance {
   setsLabel?: string; // surcharge d'affichage pour sets (ex: "3-4")
   repsLabel?: string; // surcharge d'affichage pour reps (ex: "8-12")
   setLogs?: { w: number; r: number; kind?: "warmup" | "fail" }[]; // log par série — w=poids, r=reps, kind: échauffement 🔥 / échec ❌ (undefined = série de travail)
+  prDismissedWeight?: number; // poids pour lequel la bannière "nouveau record" a déjà été traitée (enregistrée ou ignorée) → ne pas la re-proposer
 }
 
 /** Une séance. `date` = null tant qu'elle est dans la banque « À placer ». */
