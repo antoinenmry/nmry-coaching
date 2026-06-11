@@ -411,11 +411,12 @@ function SetLogsSection({
 
   const logs = ex.setLogs ?? [];
   const targetSets = ex.sets || 0;
-  const filled = logs.filter((l) => l.w > 0 || l.r > 0).length;
+  // Séries de travail = ni échauffement ni échec ; échec compte comme série de travail réalisée
+  const workSetsFilled = logs.filter((l) => l.kind !== "warmup" && (l.w > 0 || l.r > 0)).length;
+  const workSetsTotal = logs.filter((l) => l.kind !== "warmup").length;
 
   function ensureRows() {
     if (!open) {
-      // Auto-init rows égal à targetSets si vide
       if (logs.length === 0 && targetSets > 0) {
         onPatch({ setLogs: Array.from({ length: targetSets }, () => ({ w: 0, r: 0 })) });
       }
@@ -425,10 +426,17 @@ function SetLogsSection({
     }
   }
 
-  function patchLog(i: number, patch: Partial<{ w: number; r: number; hard: boolean }>) {
+  function patchLog(i: number, patch: Partial<{ w: number; r: number; kind: "warmup" | "fail" | undefined }>) {
     const next = [...logs];
     next[i] = { ...next[i], ...patch };
     onPatch({ setLogs: next });
+  }
+
+  // Cycle au tap : travail → échauffement → échec → travail
+  function cycleKind(i: number) {
+    const cur = logs[i]?.kind;
+    const next = cur === undefined ? "warmup" : cur === "warmup" ? "fail" : undefined;
+    patchLog(i, { kind: next });
   }
 
   function addRow() {
@@ -437,6 +445,15 @@ function SetLogsSection({
 
   function removeRow(i: number) {
     onPatch({ setLogs: logs.filter((_, idx) => idx !== i) });
+  }
+
+  // Numéro de série de travail (les échauffements ne sont pas numérotés)
+  function workNumber(idx: number) {
+    let n = 0;
+    for (let k = 0; k <= idx; k++) {
+      if (logs[k]?.kind !== "warmup") n++;
+    }
+    return n;
   }
 
   return (
@@ -449,9 +466,9 @@ function SetLogsSection({
       >
         <span className="text-[12px] text-dim">{open ? "▼" : "▶"}</span>
         <span className="flex-1 text-[13px] font-semibold text-ink">Détail des séries réalisées</span>
-        {filled > 0 ? (
+        {workSetsFilled > 0 ? (
           <span className="rounded-full bg-ok/20 px-2.5 py-0.5 text-[11px] font-bold text-ok">
-            {filled}/{Math.max(logs.length, targetSets)} loggées
+            {workSetsFilled}/{Math.max(workSetsTotal, targetSets)} loggées
           </span>
         ) : (
           <span className="text-[11px] text-dim">
@@ -474,26 +491,32 @@ function SetLogsSection({
 
           {logs.map((log, i) => {
             const hasData = log.w > 0 || log.r > 0;
+            const isWarm = log.kind === "warmup";
+            const isFail = log.kind === "fail";
+            const rowBg = isWarm ? "bg-accent/8" : isFail ? "bg-danger/8" : "";
+            const inputAccent = isWarm ? "border-accent/40 bg-accent/5" : isFail ? "border-danger/40 bg-danger/5" : "";
             return (
               <div
                 key={i}
-                className={`grid grid-cols-[28px_1fr_1fr_36px] items-center gap-1 border-t border-line/50 px-3 py-1.5 ${log.hard ? "bg-danger/8" : ""}`}
+                className={`grid grid-cols-[28px_1fr_1fr_36px] items-center gap-1 border-t border-line/50 px-3 py-1.5 ${rowBg}`}
               >
-                {/* Numéro + hard toggle */}
+                {/* Badge cyclable : travail → 🔥 échauffement → ❌ échec */}
                 <button
                   type="button"
                   disabled={isCoach}
-                  onClick={() => !isCoach && patchLog(i, { hard: !log.hard })}
-                  title={log.hard ? "Retirer 'difficile'" : "Marquer comme difficile"}
+                  onClick={() => !isCoach && cycleKind(i)}
+                  title={isWarm ? "Échauffement (taper → échec)" : isFail ? "Échec (taper → série de travail)" : "Série de travail (taper → échauffement)"}
                   className={`grid h-6 w-6 place-items-center rounded-md text-[11px] font-bold transition ${
-                    log.hard
-                      ? "bg-danger text-white"
-                      : hasData
-                        ? "bg-ok/20 text-ok"
-                        : "bg-surface text-dim"
+                    isWarm
+                      ? "bg-accent/20 text-accent"
+                      : isFail
+                        ? "bg-danger text-white"
+                        : hasData
+                          ? "bg-ok/20 text-ok"
+                          : "bg-surface text-dim"
                   } ${!isCoach ? "cursor-pointer hover:opacity-80" : "cursor-default"}`}
                 >
-                  {log.hard ? "🔴" : `S${i + 1}`}
+                  {isWarm ? "🔥" : isFail ? "❌" : `S${workNumber(i)}`}
                 </button>
 
                 {/* Poids réalisé */}
@@ -506,7 +529,7 @@ function SetLogsSection({
                   value={log.w || ""}
                   disabled={isCoach}
                   onChange={(e) => patchLog(i, { w: +e.target.value || 0 })}
-                  className={`text-sm ${log.hard ? "border-danger/40 bg-danger/5" : ""}`}
+                  className={`text-sm ${inputAccent}`}
                 />
 
                 {/* Reps réalisées */}
@@ -519,7 +542,7 @@ function SetLogsSection({
                   value={log.r || ""}
                   disabled={isCoach}
                   onChange={(e) => patchLog(i, { r: +e.target.value || 0 })}
-                  className={`text-sm ${log.hard ? "border-danger/40 bg-danger/5" : ""}`}
+                  className={`text-sm ${inputAccent}`}
                 />
 
                 {/* Supprimer */}
@@ -543,6 +566,13 @@ function SetLogsSection({
             >
               + Ajouter une série
             </button>
+          )}
+
+          {/* Légende du cycle de tap (client) */}
+          {!isCoach && logs.length > 0 && (
+            <p className="border-t border-line px-3 py-2 text-[11px] text-dim">
+              Tape sur le numéro : <span className="font-semibold text-ink">S1</span> travail → <span className="font-semibold text-accent">🔥</span> échauffement → <span className="font-semibold text-danger">❌</span> échec
+            </p>
           )}
 
           {logs.length === 0 && isCoach && (

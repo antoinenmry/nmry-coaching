@@ -73,7 +73,7 @@ export interface ExerciseInstance {
   failed?: boolean; // true si le sportif a marqué l'exercice comme raté
   setsLabel?: string; // surcharge d'affichage pour sets (ex: "3-4")
   repsLabel?: string; // surcharge d'affichage pour reps (ex: "8-12")
-  setLogs?: { w: number; r: number; hard?: boolean }[]; // log par série — w=poids réalisé, r=reps réalisées, hard=série difficile
+  setLogs?: { w: number; r: number; kind?: "warmup" | "fail" }[]; // log par série — w=poids, r=reps, kind: échauffement 🔥 / échec ❌ (undefined = série de travail)
 }
 
 /** Une séance. `date` = null tant qu'elle est dans la banque « À placer ». */
