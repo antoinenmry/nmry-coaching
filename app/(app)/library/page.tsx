@@ -1,13 +1,13 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { useData } from "@/components/DataProvider";
 import ExerciseModal from "@/components/library/ExerciseModal";
 import FiltersModal from "@/components/library/FiltersModal";
 import SessionTemplateModal from "@/components/library/SessionTemplateModal";
 import WeekTemplateModal from "@/components/library/WeekTemplateModal";
 import ProgramModal from "@/components/library/ProgramModal";
-import type { LibraryExercise, SessionTemplate, WeekTemplate, Program, Challenge, ChallengeConditionType } from "@/lib/types";
+import type { LibraryExercise, SessionTemplate, WeekTemplate, Program, Challenge, ChallengeConditionType, AppState, SessionInstance } from "@/lib/types";
 
 type Tab = "exercises" | "sessions" | "weeks" | "programs" | "challenges";
 
@@ -20,6 +20,59 @@ const CONDITION_LABELS: Record<ChallengeConditionType, string> = {
   streak_weeks: "Semaines consécutives",
   goal_achieved: "Objectifs réalisés",
 };
+
+const PRESET_COLORS = [
+  "#534AB7", // violet
+  "#1D9E75", // teal
+  "#BA7517", // amber
+  "#D85A30", // coral
+  "#D4537E", // rose
+  "#378ADD", // bleu
+  "#639922", // vert
+  "#E24B4A", // rouge
+];
+
+function isoWeekKey(dateStr: string): string {
+  const d = new Date(dateStr + "T12:00:00");
+  const jan1 = new Date(d.getFullYear(), 0, 1);
+  const week = Math.ceil(((d.getTime() - jan1.getTime()) / 86400000 + jan1.getDay() + 1) / 7);
+  return `${d.getFullYear()}-${week}`;
+}
+
+function computeStreakWeeks(sessions: SessionInstance[]): number {
+  const doneDates = sessions.filter((s) => s.done && s.date).map((s) => s.date!);
+  if (!doneDates.length) return 0;
+  const weeks = new Set(doneDates.map(isoWeekKey));
+  let streak = 0;
+  const cursor = new Date();
+  while (true) {
+    if (weeks.has(isoWeekKey(cursor.toISOString().slice(0, 10)))) {
+      streak++;
+      cursor.setDate(cursor.getDate() - 7);
+    } else break;
+  }
+  return streak;
+}
+
+function computeChallengeProgress(ch: Challenge, state: AppState): { current: number; target: number; pct: number } {
+  const target = ch.condition.value;
+  let current = 0;
+  switch (ch.condition.type) {
+    case "session_count":
+      current = state.sessions.filter((s) => s.done).length;
+      break;
+    case "pr_count":
+      current = state.records.strength.reduce((n, ex) => n + ex.entries.length, 0);
+      break;
+    case "streak_weeks":
+      current = computeStreakWeeks(state.sessions);
+      break;
+    case "goal_achieved":
+      current = state.goals.filter((g) => (g.events ?? []).some((e) => e.achieved.trim())).length;
+      break;
+  }
+  return { current, target, pct: target > 0 ? Math.min(100, Math.round((current / target) * 100)) : 0 };
+}
 
 const DAYS = ["Lun", "Mar", "Mer", "Jeu", "Ven", "Sam", "Dim"];
 
@@ -58,7 +111,30 @@ export default function LibraryPage() {
   const [cDesc, setCDesc] = useState("");
   const [cCondType, setCCondType] = useState<ChallengeConditionType>("session_count");
   const [cCondValue, setCCondValue] = useState("10");
+  const [cColor, setCColor] = useState(PRESET_COLORS[0]);
   const [editingChallengeId, setEditingChallengeId] = useState<string | null>(null);
+
+  // Auto-unlock : dès que l'onglet Défis est ouvert, on vérifie et on enregistre les badges débloqués
+  useEffect(() => {
+    if (tab !== "challenges") return;
+    const challenges = lib.challenges ?? [];
+    if (!challenges.length) return;
+    const unlockedIds = new Set((state.badges ?? []).map((b) => b.challengeId));
+    const toUnlock = challenges.filter((ch) => {
+      if (unlockedIds.has(ch.id)) return false;
+      return computeChallengeProgress(ch, state).pct >= 100;
+    });
+    if (!toUnlock.length) return;
+    update((d) => {
+      if (!d.badges) d.badges = [];
+      toUnlock.forEach((ch) => {
+        if (!d.badges!.find((b) => b.challengeId === ch.id)) {
+          d.badges!.push({ challengeId: ch.id, unlockedAt: today() });
+        }
+      });
+    });
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [tab]);
 
 
   // Exercices filtrés
@@ -104,8 +180,10 @@ export default function LibraryPage() {
             <TabButton active={tab === "sessions"} onClick={() => setTab("sessions")} label="Séances types" count={templates.sessionTemplates.length} />
             <TabButton active={tab === "weeks"} onClick={() => setTab("weeks")} label="Semaines types" count={templates.weekTemplates.length} />
             <TabButton active={tab === "programs"} onClick={() => setTab("programs")} label="Programmes" count={(templates.programs ?? []).length} />
-            <TabButton active={tab === "challenges"} onClick={() => setTab("challenges")} label="Défis" count={(lib.challenges ?? []).length} />
           </>
+        )}
+        {(canEdit || (lib.challenges ?? []).length > 0) && (
+          <TabButton active={tab === "challenges"} onClick={() => setTab("challenges")} label="Défis" count={(lib.challenges ?? []).length} />
         )}
       </div>
 
@@ -503,121 +581,245 @@ export default function LibraryPage() {
       })()}
 
       {/* ===== TAB : DÉFIS ===== */}
-      {tab === "challenges" && canEdit && (() => {
+      {tab === "challenges" && (() => {
         const challenges = lib.challenges ?? [];
+        const unlockedIds = new Set((state.badges ?? []).map((b) => b.challengeId));
 
-        function saveChallenge() {
-          if (!cTitle.trim()) return;
-          const val = parseInt(cCondValue) || 1;
-          if (editingChallengeId) {
-            updateLibrary((lib) => {
-              const ch = (lib.challenges ?? []).find((c) => c.id === editingChallengeId);
-              if (ch) Object.assign(ch, { icon: cIcon, title: cTitle.trim(), description: cDesc.trim(), condition: { type: cCondType, value: val } });
-            });
-            setEditingChallengeId(null);
-          } else {
-            const newChallenge: Challenge = { id: uid(), icon: cIcon, title: cTitle.trim(), description: cDesc.trim(), condition: { type: cCondType, value: val } };
-            updateLibrary((lib) => { lib.challenges = [...(lib.challenges ?? []), newChallenge]; });
+        if (canEdit) {
+          // ---- Vue coach : formulaire + gestion ----
+          function saveChallenge() {
+            if (!cTitle.trim()) return;
+            const val = parseInt(cCondValue) || 1;
+            if (editingChallengeId) {
+              updateLibrary((lib) => {
+                const ch = (lib.challenges ?? []).find((c) => c.id === editingChallengeId);
+                if (ch) Object.assign(ch, { icon: cIcon, title: cTitle.trim(), description: cDesc.trim(), condition: { type: cCondType, value: val }, color: cColor });
+              });
+              setEditingChallengeId(null);
+            } else {
+              const newChallenge: Challenge = { id: uid(), icon: cIcon, title: cTitle.trim(), description: cDesc.trim(), condition: { type: cCondType, value: val }, color: cColor };
+              updateLibrary((lib) => { lib.challenges = [...(lib.challenges ?? []), newChallenge]; });
+            }
+            setCIcon("🏆"); setCTitle(""); setCDesc(""); setCCondType("session_count"); setCCondValue("10"); setCColor(PRESET_COLORS[0]);
           }
-          setCIcon("🏆"); setCTitle(""); setCDesc(""); setCCondType("session_count"); setCCondValue("10");
+
+          function startEdit(ch: Challenge) {
+            setEditingChallengeId(ch.id);
+            setCIcon(ch.icon); setCTitle(ch.title); setCDesc(ch.description);
+            setCCondType(ch.condition.type); setCCondValue(String(ch.condition.value));
+            setCColor(ch.color ?? PRESET_COLORS[0]);
+          }
+
+          function cancelEdit() {
+            setEditingChallengeId(null);
+            setCIcon("🏆"); setCTitle(""); setCDesc(""); setCCondType("session_count"); setCCondValue("10"); setCColor(PRESET_COLORS[0]);
+          }
+
+          return (
+            <div>
+              <section className="mb-5 rounded-2xl border border-line bg-surface p-4">
+                <h3 className="mb-3 font-bold">{editingChallengeId ? "Modifier le défi" : "Nouveau défi"}</h3>
+                <div className="mb-3 grid grid-cols-[56px_1fr] gap-3">
+                  <label className="block">
+                    <span className="mb-1.5 block text-[13px] text-dim">Icône</span>
+                    <input value={cIcon} onChange={(e) => setCIcon(e.target.value)} className="text-center text-lg" maxLength={4} />
+                  </label>
+                  <label className="block">
+                    <span className="mb-1.5 block text-[13px] text-dim">Titre</span>
+                    <input value={cTitle} onChange={(e) => setCTitle(e.target.value)} placeholder="Ex : Premier pas" />
+                  </label>
+                </div>
+                <label className="mb-3 block">
+                  <span className="mb-1.5 block text-[13px] text-dim">Description</span>
+                  <input value={cDesc} onChange={(e) => setCDesc(e.target.value)} placeholder="Ce que le sportif doit accomplir…" />
+                </label>
+                <div className="mb-3 grid grid-cols-[1fr_80px] gap-3">
+                  <label className="block">
+                    <span className="mb-1.5 block text-[13px] text-dim">Condition</span>
+                    <select value={cCondType} onChange={(e) => setCCondType(e.target.value as ChallengeConditionType)} className="w-full">
+                      {(Object.entries(CONDITION_LABELS) as [ChallengeConditionType, string][]).map(([k, v]) => (
+                        <option key={k} value={k}>{v}</option>
+                      ))}
+                    </select>
+                  </label>
+                  <label className="block">
+                    <span className="mb-1.5 block text-[13px] text-dim">Valeur</span>
+                    <input type="number" min="1" value={cCondValue} onChange={(e) => setCCondValue(e.target.value)} className="text-center" />
+                  </label>
+                </div>
+                {/* Sélecteur de couleur */}
+                <div className="mb-4">
+                  <span className="mb-1.5 block text-[13px] text-dim">Couleur du badge</span>
+                  <div className="flex flex-wrap gap-2">
+                    {PRESET_COLORS.map((hex) => (
+                      <button
+                        key={hex}
+                        type="button"
+                        onClick={() => setCColor(hex)}
+                        className="h-8 w-8 rounded-full transition-transform hover:scale-110"
+                        style={{ background: hex, outline: cColor === hex ? `3px solid ${hex}` : "none", outlineOffset: "2px", transform: cColor === hex ? "scale(1.15)" : undefined }}
+                        aria-label={hex}
+                      />
+                    ))}
+                    {/* Aperçu */}
+                    <div className="ml-auto flex items-center gap-2 rounded-xl px-3 py-1.5" style={{ background: cColor + "20", border: `1px solid ${cColor}50` }}>
+                      <span className="text-xl">{cIcon || "🏆"}</span>
+                      <span className="text-[13px] font-semibold" style={{ color: cColor }}>{cTitle || "Aperçu"}</span>
+                    </div>
+                  </div>
+                </div>
+                <div className="flex gap-2">
+                  <button onClick={saveChallenge} disabled={!cTitle.trim()} className="flex-1 rounded-xl bg-accent py-2.5 font-semibold text-[#1a1500] disabled:opacity-40">
+                    {editingChallengeId ? "Enregistrer" : "+ Créer le défi"}
+                  </button>
+                  {editingChallengeId && (
+                    <button onClick={cancelEdit} className="rounded-xl bg-surface2 px-4 py-2.5 font-semibold text-dim">Annuler</button>
+                  )}
+                </div>
+              </section>
+
+              {challenges.length === 0 ? (
+                <p className="py-10 text-center text-dim">Aucun défi créé pour l&apos;instant.</p>
+              ) : (
+                <div className="space-y-2.5">
+                  {challenges.map((ch) => {
+                    const color = ch.color ?? PRESET_COLORS[0];
+                    return (
+                      <div key={ch.id} className={`rounded-xl border bg-surface p-3.5 transition ${editingChallengeId === ch.id ? "border-accent/50" : "border-line"}`}>
+                        <div className="flex items-center gap-3">
+                          <div className="grid h-11 w-11 shrink-0 place-items-center rounded-xl text-2xl" style={{ background: color + "20" }}>
+                            {ch.icon}
+                          </div>
+                          <div className="min-w-0 flex-1">
+                            <p className="font-semibold" style={{ color }}>{ch.title}</p>
+                            {ch.description && <p className="truncate text-[12px] text-dim">{ch.description}</p>}
+                            <p className="mt-0.5 text-[11px] text-dim">
+                              {CONDITION_LABELS[ch.condition.type]} — <strong>{ch.condition.value}</strong>
+                            </p>
+                          </div>
+                          <div className="flex shrink-0 gap-1">
+                            <button onClick={() => startEdit(ch)} className="grid h-8 w-8 place-items-center rounded-lg bg-surface2 text-sm hover:bg-line" aria-label="Modifier">✏️</button>
+                            <button onClick={() => updateLibrary((lib) => { lib.challenges = (lib.challenges ?? []).filter((c) => c.id !== ch.id); })} className="grid h-8 w-8 place-items-center rounded-lg bg-surface2 text-sm hover:bg-danger/15" aria-label="Supprimer">🗑️</button>
+                          </div>
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+              )}
+            </div>
+          );
         }
 
-        function startEdit(ch: Challenge) {
-          setEditingChallengeId(ch.id);
-          setCIcon(ch.icon); setCTitle(ch.title); setCDesc(ch.description);
-          setCCondType(ch.condition.type); setCCondValue(String(ch.condition.value));
+        // ---- Vue client : badges visuels ----
+        if (challenges.length === 0) {
+          return <p className="py-10 text-center text-dim">Aucun défi disponible pour l&apos;instant.</p>;
         }
 
-        function cancelEdit() {
-          setEditingChallengeId(null);
-          setCIcon("🏆"); setCTitle(""); setCDesc(""); setCCondType("session_count"); setCCondValue("10");
-        }
+        const newlyUnlocked = challenges.filter((ch) => {
+          const badge = (state.badges ?? []).find((b) => b.challengeId === ch.id);
+          return badge && badge.unlockedAt === today();
+        });
 
         return (
           <div>
-            {/* Formulaire création / édition */}
-            <section className="mb-5 rounded-2xl border border-line bg-surface p-4">
-              <h3 className="mb-3 font-bold">{editingChallengeId ? "Modifier le défi" : "Nouveau défi"}</h3>
-              <div className="mb-3 grid grid-cols-[56px_1fr] gap-3">
-                <label className="block">
-                  <span className="mb-1.5 block text-[13px] text-dim">Icône</span>
-                  <input value={cIcon} onChange={(e) => setCIcon(e.target.value)} className="text-center text-lg" maxLength={4} />
-                </label>
-                <label className="block">
-                  <span className="mb-1.5 block text-[13px] text-dim">Titre</span>
-                  <input value={cTitle} onChange={(e) => setCTitle(e.target.value)} placeholder="Ex : Premier pas" />
-                </label>
-              </div>
-              <label className="mb-3 block">
-                <span className="mb-1.5 block text-[13px] text-dim">Description</span>
-                <input value={cDesc} onChange={(e) => setCDesc(e.target.value)} placeholder="Ce que le sportif doit accomplir…" />
-              </label>
-              <div className="mb-4 grid grid-cols-[1fr_80px] gap-3">
-                <label className="block">
-                  <span className="mb-1.5 block text-[13px] text-dim">Condition</span>
-                  <select value={cCondType} onChange={(e) => setCCondType(e.target.value as ChallengeConditionType)} className="w-full">
-                    {(Object.entries(CONDITION_LABELS) as [ChallengeConditionType, string][]).map(([k, v]) => (
-                      <option key={k} value={k}>{v}</option>
-                    ))}
-                  </select>
-                </label>
-                <label className="block">
-                  <span className="mb-1.5 block text-[13px] text-dim">Valeur</span>
-                  <input type="number" min="1" value={cCondValue} onChange={(e) => setCCondValue(e.target.value)} className="text-center" />
-                </label>
-              </div>
-              <div className="flex gap-2">
-                <button
-                  onClick={saveChallenge}
-                  disabled={!cTitle.trim()}
-                  className="flex-1 rounded-xl bg-accent py-2.5 font-semibold text-[#1a1500] disabled:opacity-40"
-                >
-                  {editingChallengeId ? "Enregistrer" : "+ Créer le défi"}
-                </button>
-                {editingChallengeId && (
-                  <button onClick={cancelEdit} className="rounded-xl bg-surface2 px-4 py-2.5 font-semibold text-dim">
-                    Annuler
-                  </button>
-                )}
-              </div>
-            </section>
-
-            {/* Liste des défis */}
-            {challenges.length === 0 ? (
-              <p className="py-10 text-center text-dim">Aucun défi créé pour l&apos;instant.</p>
-            ) : (
-              <div className="space-y-2.5">
-                {challenges.map((ch) => (
-                  <div key={ch.id} className={`rounded-xl border bg-surface p-3.5 transition ${editingChallengeId === ch.id ? "border-accent/50" : "border-line"}`}>
-                    <div className="flex items-center gap-3">
-                      <span className="text-2xl">{ch.icon}</span>
-                      <div className="min-w-0 flex-1">
-                        <p className="font-semibold">{ch.title}</p>
-                        {ch.description && <p className="truncate text-[12px] text-dim">{ch.description}</p>}
-                        <p className="mt-0.5 text-[11px] text-dim">
-                          {CONDITION_LABELS[ch.condition.type]} — <strong>{ch.condition.value}</strong>
-                        </p>
-                      </div>
-                      <div className="flex shrink-0 gap-1">
-                        <button
-                          onClick={() => startEdit(ch)}
-                          className="grid h-8 w-8 place-items-center rounded-lg bg-surface2 text-sm hover:bg-line"
-                          aria-label="Modifier"
-                        >✏️</button>
-                        <button
-                          onClick={() => updateLibrary((lib) => { lib.challenges = (lib.challenges ?? []).filter((c) => c.id !== ch.id); })}
-                          className="grid h-8 w-8 place-items-center rounded-lg bg-surface2 text-sm hover:bg-danger/15"
-                          aria-label="Supprimer"
-                        >🗑️</button>
-                      </div>
-                    </div>
-                  </div>
-                ))}
+            {/* Bannière de félicitations si nouveau badge aujourd'hui */}
+            {newlyUnlocked.length > 0 && (
+              <div className="mb-4 rounded-2xl border border-ok/40 bg-ok/10 p-4 text-center">
+                <p className="text-2xl mb-1">🎉</p>
+                <p className="font-bold text-ok">
+                  {newlyUnlocked.length === 1
+                    ? `Badge débloqué : ${newlyUnlocked[0].title} !`
+                    : `${newlyUnlocked.length} badges débloqués aujourd'hui !`}
+                </p>
               </div>
             )}
+
+            <div className="grid grid-cols-2 gap-3">
+              {challenges.map((ch) => {
+                const prog = computeChallengeProgress(ch, state);
+                const unlocked = unlockedIds.has(ch.id);
+                const unlockedAt = (state.badges ?? []).find((b) => b.challengeId === ch.id)?.unlockedAt;
+                return <BadgeCard key={ch.id} ch={ch} prog={prog} unlocked={unlocked} unlockedAt={unlockedAt ?? null} />;
+              })}
+            </div>
           </div>
         );
       })()}
+    </div>
+  );
+}
+
+// ---- Badge components ----
+
+function CircularGauge({ pct, color, children }: { pct: number; color: string; children: React.ReactNode }) {
+  const r = 38;
+  const circ = 2 * Math.PI * r;
+  const offset = circ * (1 - pct / 100);
+  return (
+    <div style={{ position: "relative", width: 88, height: 88, margin: "0 auto 10px" }}>
+      <svg width="88" height="88" style={{ position: "absolute", inset: 0 }}>
+        <circle cx="44" cy="44" r={r} fill="none" stroke="currentColor" strokeWidth="5" className="text-surface2" />
+        {pct > 0 && (
+          <circle
+            cx="44" cy="44" r={r} fill="none"
+            stroke={color} strokeWidth="5"
+            strokeDasharray={circ} strokeDashoffset={offset}
+            strokeLinecap="round"
+            transform="rotate(-90 44 44)"
+          />
+        )}
+      </svg>
+      <div style={{ position: "absolute", inset: 0, display: "flex", alignItems: "center", justifyContent: "center" }}>
+        {children}
+      </div>
+    </div>
+  );
+}
+
+function BadgeCard({ ch, prog, unlocked, unlockedAt }: {
+  ch: Challenge;
+  prog: { current: number; target: number; pct: number };
+  unlocked: boolean;
+  unlockedAt: string | null;
+}) {
+  const color = ch.color ?? PRESET_COLORS[0];
+  const locked = prog.pct === 0 && !unlocked;
+
+  return (
+    <div
+      className="rounded-2xl p-4 text-center transition"
+      style={{
+        border: unlocked ? `1.5px solid ${color}60` : "0.5px solid var(--color-border-tertiary, #e5e5e5)",
+        background: unlocked ? `${color}12` : undefined,
+        opacity: locked ? 0.55 : 1,
+      }}
+    >
+      <CircularGauge pct={unlocked ? 100 : prog.pct} color={color}>
+        <span style={{ fontSize: 30, filter: locked ? "grayscale(1)" : "none" }}>
+          {locked ? "🔒" : ch.icon}
+        </span>
+      </CircularGauge>
+
+      <p className="text-[13px] font-bold leading-tight mb-1" style={{ color: unlocked ? color : undefined }}>
+        {ch.title}
+      </p>
+
+      {unlocked ? (
+        <p className="text-[11px] text-dim">
+          Débloqué{unlockedAt ? ` le ${new Date(unlockedAt + "T12:00:00").toLocaleDateString("fr-FR", { day: "numeric", month: "short" })}` : ""}
+        </p>
+      ) : (
+        <>
+          <p className="text-[12px] font-semibold" style={{ color }}>
+            {prog.current}<span className="text-dim font-normal">/{prog.target}</span>
+          </p>
+          <div className="mt-2 h-1.5 w-full rounded-full bg-surface2 overflow-hidden">
+            <div className="h-full rounded-full transition-all" style={{ width: `${prog.pct}%`, background: color }} />
+          </div>
+          <p className="mt-1 text-[10px] text-dim">{CONDITION_LABELS[ch.condition.type]}</p>
+        </>
+      )}
     </div>
   );
 }

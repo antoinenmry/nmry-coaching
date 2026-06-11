@@ -250,6 +250,7 @@ export interface Challenge {
   title: string;
   description: string;
   condition: { type: ChallengeConditionType; value: number };
+  color?: string;  // hex, ex: "#534AB7"
 }
 
 export interface UnlockedBadge {
