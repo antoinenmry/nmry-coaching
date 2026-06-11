@@ -7,9 +7,19 @@ import FiltersModal from "@/components/library/FiltersModal";
 import SessionTemplateModal from "@/components/library/SessionTemplateModal";
 import WeekTemplateModal from "@/components/library/WeekTemplateModal";
 import ProgramModal from "@/components/library/ProgramModal";
-import type { LibraryExercise, SessionTemplate, WeekTemplate, Program } from "@/lib/types";
+import type { LibraryExercise, SessionTemplate, WeekTemplate, Program, Challenge, ChallengeConditionType } from "@/lib/types";
 
-type Tab = "exercises" | "sessions" | "weeks" | "programs";
+type Tab = "exercises" | "sessions" | "weeks" | "programs" | "challenges";
+
+const uid = () => Math.random().toString(36).slice(2, 9);
+const today = () => new Date().toISOString().slice(0, 10);
+
+const CONDITION_LABELS: Record<ChallengeConditionType, string> = {
+  session_count: "Séances validées",
+  pr_count: "Records enregistrés",
+  streak_weeks: "Semaines consécutives",
+  goal_achieved: "Objectifs réalisés",
+};
 
 const DAYS = ["Lun", "Mar", "Mer", "Jeu", "Ven", "Sam", "Dim"];
 
@@ -41,6 +51,14 @@ export default function LibraryPage() {
   const [editingProgram, setEditingProgram] = useState<Program | null | "new">(null);
   const [programSearch, setProgramSearch] = useState("");
   const [programSportFilter, setProgramSportFilter] = useState<string | null>(null);
+
+  // --- Onglet Défis ---
+  const [cIcon, setCIcon] = useState("🏆");
+  const [cTitle, setCTitle] = useState("");
+  const [cDesc, setCDesc] = useState("");
+  const [cCondType, setCCondType] = useState<ChallengeConditionType>("session_count");
+  const [cCondValue, setCCondValue] = useState("10");
+  const [editingChallengeId, setEditingChallengeId] = useState<string | null>(null);
 
 
   // Exercices filtrés
@@ -86,6 +104,7 @@ export default function LibraryPage() {
             <TabButton active={tab === "sessions"} onClick={() => setTab("sessions")} label="Séances types" count={templates.sessionTemplates.length} />
             <TabButton active={tab === "weeks"} onClick={() => setTab("weeks")} label="Semaines types" count={templates.weekTemplates.length} />
             <TabButton active={tab === "programs"} onClick={() => setTab("programs")} label="Programmes" count={(templates.programs ?? []).length} />
+            <TabButton active={tab === "challenges"} onClick={() => setTab("challenges")} label="Défis" count={(lib.challenges ?? []).length} />
           </>
         )}
       </div>
@@ -480,6 +499,123 @@ export default function LibraryPage() {
             />
           )}
         </div>
+        );
+      })()}
+
+      {/* ===== TAB : DÉFIS ===== */}
+      {tab === "challenges" && canEdit && (() => {
+        const challenges = lib.challenges ?? [];
+
+        function saveChallenge() {
+          if (!cTitle.trim()) return;
+          const val = parseInt(cCondValue) || 1;
+          if (editingChallengeId) {
+            updateLibrary((lib) => {
+              const ch = (lib.challenges ?? []).find((c) => c.id === editingChallengeId);
+              if (ch) Object.assign(ch, { icon: cIcon, title: cTitle.trim(), description: cDesc.trim(), condition: { type: cCondType, value: val } });
+            });
+            setEditingChallengeId(null);
+          } else {
+            const newChallenge: Challenge = { id: uid(), icon: cIcon, title: cTitle.trim(), description: cDesc.trim(), condition: { type: cCondType, value: val } };
+            updateLibrary((lib) => { lib.challenges = [...(lib.challenges ?? []), newChallenge]; });
+          }
+          setCIcon("🏆"); setCTitle(""); setCDesc(""); setCCondType("session_count"); setCCondValue("10");
+        }
+
+        function startEdit(ch: Challenge) {
+          setEditingChallengeId(ch.id);
+          setCIcon(ch.icon); setCTitle(ch.title); setCDesc(ch.description);
+          setCCondType(ch.condition.type); setCCondValue(String(ch.condition.value));
+        }
+
+        function cancelEdit() {
+          setEditingChallengeId(null);
+          setCIcon("🏆"); setCTitle(""); setCDesc(""); setCCondType("session_count"); setCCondValue("10");
+        }
+
+        return (
+          <div>
+            {/* Formulaire création / édition */}
+            <section className="mb-5 rounded-2xl border border-line bg-surface p-4">
+              <h3 className="mb-3 font-bold">{editingChallengeId ? "Modifier le défi" : "Nouveau défi"}</h3>
+              <div className="mb-3 grid grid-cols-[56px_1fr] gap-3">
+                <label className="block">
+                  <span className="mb-1.5 block text-[13px] text-dim">Icône</span>
+                  <input value={cIcon} onChange={(e) => setCIcon(e.target.value)} className="text-center text-lg" maxLength={4} />
+                </label>
+                <label className="block">
+                  <span className="mb-1.5 block text-[13px] text-dim">Titre</span>
+                  <input value={cTitle} onChange={(e) => setCTitle(e.target.value)} placeholder="Ex : Premier pas" />
+                </label>
+              </div>
+              <label className="mb-3 block">
+                <span className="mb-1.5 block text-[13px] text-dim">Description</span>
+                <input value={cDesc} onChange={(e) => setCDesc(e.target.value)} placeholder="Ce que le sportif doit accomplir…" />
+              </label>
+              <div className="mb-4 grid grid-cols-[1fr_80px] gap-3">
+                <label className="block">
+                  <span className="mb-1.5 block text-[13px] text-dim">Condition</span>
+                  <select value={cCondType} onChange={(e) => setCCondType(e.target.value as ChallengeConditionType)} className="w-full">
+                    {(Object.entries(CONDITION_LABELS) as [ChallengeConditionType, string][]).map(([k, v]) => (
+                      <option key={k} value={k}>{v}</option>
+                    ))}
+                  </select>
+                </label>
+                <label className="block">
+                  <span className="mb-1.5 block text-[13px] text-dim">Valeur</span>
+                  <input type="number" min="1" value={cCondValue} onChange={(e) => setCCondValue(e.target.value)} className="text-center" />
+                </label>
+              </div>
+              <div className="flex gap-2">
+                <button
+                  onClick={saveChallenge}
+                  disabled={!cTitle.trim()}
+                  className="flex-1 rounded-xl bg-accent py-2.5 font-semibold text-[#1a1500] disabled:opacity-40"
+                >
+                  {editingChallengeId ? "Enregistrer" : "+ Créer le défi"}
+                </button>
+                {editingChallengeId && (
+                  <button onClick={cancelEdit} className="rounded-xl bg-surface2 px-4 py-2.5 font-semibold text-dim">
+                    Annuler
+                  </button>
+                )}
+              </div>
+            </section>
+
+            {/* Liste des défis */}
+            {challenges.length === 0 ? (
+              <p className="py-10 text-center text-dim">Aucun défi créé pour l&apos;instant.</p>
+            ) : (
+              <div className="space-y-2.5">
+                {challenges.map((ch) => (
+                  <div key={ch.id} className={`rounded-xl border bg-surface p-3.5 transition ${editingChallengeId === ch.id ? "border-accent/50" : "border-line"}`}>
+                    <div className="flex items-center gap-3">
+                      <span className="text-2xl">{ch.icon}</span>
+                      <div className="min-w-0 flex-1">
+                        <p className="font-semibold">{ch.title}</p>
+                        {ch.description && <p className="truncate text-[12px] text-dim">{ch.description}</p>}
+                        <p className="mt-0.5 text-[11px] text-dim">
+                          {CONDITION_LABELS[ch.condition.type]} — <strong>{ch.condition.value}</strong>
+                        </p>
+                      </div>
+                      <div className="flex shrink-0 gap-1">
+                        <button
+                          onClick={() => startEdit(ch)}
+                          className="grid h-8 w-8 place-items-center rounded-lg bg-surface2 text-sm hover:bg-line"
+                          aria-label="Modifier"
+                        >✏️</button>
+                        <button
+                          onClick={() => updateLibrary((lib) => { lib.challenges = (lib.challenges ?? []).filter((c) => c.id !== ch.id); })}
+                          className="grid h-8 w-8 place-items-center rounded-lg bg-surface2 text-sm hover:bg-danger/15"
+                          aria-label="Supprimer"
+                        >🗑️</button>
+                      </div>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
         );
       })()}
     </div>

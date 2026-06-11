@@ -236,6 +236,27 @@ export interface TrainingPlan {
   distance?: string;          // ex: "10 km", "Semi-marathon"
 }
 
+// ---- Défis & Badges ----
+
+export type ChallengeConditionType =
+  | "session_count"    // X séances validées
+  | "pr_count"         // X records enregistrés
+  | "streak_weeks"     // X semaines consécutives avec ≥1 séance validée
+  | "goal_achieved";   // X objectifs avec au moins une épreuve "Réalisé" renseignée
+
+export interface Challenge {
+  id: string;
+  icon: string;
+  title: string;
+  description: string;
+  condition: { type: ChallengeConditionType; value: number };
+}
+
+export interface UnlockedBadge {
+  challengeId: string;
+  unlockedAt: string;  // YYYY-MM-DD
+}
+
 export interface ExerciseLibrary {
   categories: FilterCategory[];
   exercises: LibraryExercise[];
@@ -244,6 +265,8 @@ export interface ExerciseLibrary {
   shopItems?: ShopItem[];
   trainingPlans?: TrainingPlan[];
   shopTabsVisible?: { merch?: boolean; plan?: boolean; shop: boolean };
+  challenges?: Challenge[];
+  challengesVisible?: boolean;  // true = carte visible côté client sur l'accueil
 }
 
 // ---- Templates (Séances types & Semaines types) — visibles coach/admin seulement ----
@@ -389,6 +412,7 @@ export interface AppState {
   records: RecordsData;
   preferences: UserPreferences;
   metrics?: Metric[];          // métriques corporelles personnalisables
+  badges?: UnlockedBadge[];    // badges débloqués par le sportif
 }
 
 // Bibliothèque de départ (catégories muscu modifiables/supprimables).
