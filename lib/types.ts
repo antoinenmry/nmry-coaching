@@ -102,6 +102,7 @@ export interface UserProfileData {
   dietComment?: string; // commentaire / retour du sportif sur sa diète
   instagram?: string;   // @username ou URL complète
   location?: { label: string; lat: number; lng: number };
+  mapConsent?: boolean; // true = accepte d'apparaître sur la carte communauté (ville uniquement). Off par défaut.
 }
 
 export interface GoalEvent {
@@ -273,6 +274,7 @@ export interface ExerciseLibrary {
   shopTabsVisible?: { merch?: boolean; plan?: boolean; shop: boolean };
   challenges?: Challenge[];
   challengesVisible?: boolean;  // true = carte visible côté client sur l'accueil
+  mapVisible?: boolean;         // true = onglet "Ma carte" visible côté sportif (off par défaut → coach/admin seulement)
 }
 
 // ---- Templates (Séances types & Semaines types) — visibles coach/admin seulement ----

@@ -10,9 +10,14 @@ const FiltersModal = dynamic(() => import("@/components/library/FiltersModal"));
 const SessionTemplateModal = dynamic(() => import("@/components/library/SessionTemplateModal"));
 const WeekTemplateModal = dynamic(() => import("@/components/library/WeekTemplateModal"));
 const ProgramModal = dynamic(() => import("@/components/library/ProgramModal"));
+// Carte communauté : Leaflet chargé à la demande (ssr:false) → zéro impact bundle global.
+const CommunityMap = dynamic(() => import("@/components/library/CommunityMap"), {
+  ssr: false,
+  loading: () => <p className="py-10 text-center text-dim">Chargement de la carte…</p>,
+});
 import type { LibraryExercise, SessionTemplate, WeekTemplate, Program, Challenge, ChallengeConditionType, AppState, SessionInstance } from "@/lib/types";
 
-type Tab = "exercises" | "sessions" | "weeks" | "programs" | "challenges";
+type Tab = "exercises" | "sessions" | "weeks" | "programs" | "challenges" | "map";
 
 const uid = () => Math.random().toString(36).slice(2, 9);
 const today = () => new Date().toISOString().slice(0, 10);
@@ -194,6 +199,9 @@ export default function LibraryPage() {
         )}
         {(canEdit || lib.challengesVisible) && (
           <TabButton active={tab === "challenges"} onClick={() => setTab("challenges")} label="Défis" count={(lib.challenges ?? []).length} />
+        )}
+        {(canEdit || lib.mapVisible) && (
+          <TabButton active={tab === "map"} onClick={() => setTab("map")} label="Ma carte" />
         )}
       </div>
 
@@ -760,6 +768,22 @@ export default function LibraryPage() {
           </div>
         );
       })()}
+
+      {/* ===== TAB : MA CARTE ===== */}
+      {tab === "map" && (canEdit || lib.mapVisible) && (
+        <div>
+          {canEdit && (
+            <div className="mb-3 flex items-start gap-2 rounded-xl border border-amber-500/30 bg-amber-500/5 px-3 py-2.5">
+              <span className="text-base">🚧</span>
+              <p className="text-[12px] text-dim">
+                Carte de la communauté. <strong className="text-ink">Masquée aux sportifs</strong> pour
+                l&apos;instant — seuls ceux qui ont coché « Visible sur la carte » dans leur profil y apparaissent.
+              </p>
+            </div>
+          )}
+          <CommunityMap />
+        </div>
+      )}
     </div>
   );
 }
@@ -841,7 +865,7 @@ function BadgeCard({ ch, prog, unlocked, unlockedAt }: {
 // ---- Sub-components ----
 
 function TabButton({ active, onClick, label, count }: {
-  active: boolean; onClick: () => void; label: string; count: number;
+  active: boolean; onClick: () => void; label: string; count?: number;
 }) {
   return (
     <button
@@ -851,7 +875,9 @@ function TabButton({ active, onClick, label, count }: {
       }`}
     >
       {label}
-      <span className={`ml-1 text-[11px] ${active ? "text-dim" : "text-dim/60"}`}>({count})</span>
+      {count !== undefined && (
+        <span className={`ml-1 text-[11px] ${active ? "text-dim" : "text-dim/60"}`}>({count})</span>
+      )}
     </button>
   );
 }

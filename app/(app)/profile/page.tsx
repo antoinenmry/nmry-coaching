@@ -297,6 +297,20 @@ export default function ProfilePage() {
                 {p.location.lat.toFixed(4)}, {p.location.lng.toFixed(4)}
               </p>
             )}
+            {/* Consentement carte communauté */}
+            <button
+              type="button"
+              onClick={() => update((d) => { d.profile.mapConsent = !d.profile.mapConsent; })}
+              className="mt-2 flex w-full items-center gap-2.5 rounded-xl border border-line bg-surface2 px-3 py-2.5 text-left transition hover:border-accent/40"
+            >
+              <span className={`grid h-5 w-5 shrink-0 place-items-center rounded-md border-2 text-[12px] font-bold transition ${p.mapConsent ? "border-accent bg-accent text-[#1a1500]" : "border-dim text-transparent"}`}>
+                ✓
+              </span>
+              <span className="min-w-0 flex-1">
+                <span className="block text-[13px] font-semibold text-ink">Visible sur la carte</span>
+                <span className="block text-[11px] text-dim">Carte de la communauté · ta ville uniquement</span>
+              </span>
+            </button>
           </div>
         </div>
 
