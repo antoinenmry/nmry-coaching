@@ -398,6 +398,162 @@ export default function SessionEditor({
   );
 }
 
+function SetLogsSection({
+  ex,
+  isCoach,
+  onPatch,
+}: {
+  ex: ExerciseInstance;
+  isCoach: boolean;
+  onPatch: (patch: Partial<ExerciseInstance>) => void;
+}) {
+  const [open, setOpen] = useState(false);
+
+  const logs = ex.setLogs ?? [];
+  const targetSets = ex.sets || 0;
+  const filled = logs.filter((l) => l.w > 0 || l.r > 0).length;
+
+  function ensureRows() {
+    if (!open) {
+      // Auto-init rows égal à targetSets si vide
+      if (logs.length === 0 && targetSets > 0) {
+        onPatch({ setLogs: Array.from({ length: targetSets }, () => ({ w: 0, r: 0 })) });
+      }
+      setOpen(true);
+    } else {
+      setOpen(false);
+    }
+  }
+
+  function patchLog(i: number, patch: Partial<{ w: number; r: number; hard: boolean }>) {
+    const next = [...logs];
+    next[i] = { ...next[i], ...patch };
+    onPatch({ setLogs: next });
+  }
+
+  function addRow() {
+    onPatch({ setLogs: [...logs, { w: 0, r: 0 }] });
+  }
+
+  function removeRow(i: number) {
+    onPatch({ setLogs: logs.filter((_, idx) => idx !== i) });
+  }
+
+  return (
+    <div className="mt-2.5 overflow-hidden rounded-xl border border-line">
+      {/* Toggle */}
+      <button
+        type="button"
+        onClick={ensureRows}
+        className="flex w-full items-center gap-2 px-3 py-2.5 text-left hover:bg-surface"
+      >
+        <span className="text-[12px] text-dim">{open ? "▼" : "▶"}</span>
+        <span className="flex-1 text-[13px] font-semibold text-ink">Détail des séries réalisées</span>
+        {filled > 0 ? (
+          <span className="rounded-full bg-ok/20 px-2.5 py-0.5 text-[11px] font-bold text-ok">
+            {filled}/{Math.max(logs.length, targetSets)} loggées
+          </span>
+        ) : (
+          <span className="text-[11px] text-dim">
+            {targetSets > 0 ? `0 / ${targetSets}` : "vide"}
+          </span>
+        )}
+      </button>
+
+      {open && (
+        <div className="border-t border-line">
+          {/* En-têtes colonnes */}
+          {logs.length > 0 && (
+            <div className="grid grid-cols-[28px_1fr_1fr_36px] gap-1 px-3 py-1.5 text-[10px] font-bold uppercase tracking-wide text-dim">
+              <span></span>
+              <span>{ex.weight > 0 ? "Poids (kg)" : "Poids"}</span>
+              <span>Reps</span>
+              <span></span>
+            </div>
+          )}
+
+          {logs.map((log, i) => {
+            const hasData = log.w > 0 || log.r > 0;
+            return (
+              <div
+                key={i}
+                className={`grid grid-cols-[28px_1fr_1fr_36px] items-center gap-1 border-t border-line/50 px-3 py-1.5 ${log.hard ? "bg-danger/8" : ""}`}
+              >
+                {/* Numéro + hard toggle */}
+                <button
+                  type="button"
+                  disabled={isCoach}
+                  onClick={() => !isCoach && patchLog(i, { hard: !log.hard })}
+                  title={log.hard ? "Retirer 'difficile'" : "Marquer comme difficile"}
+                  className={`grid h-6 w-6 place-items-center rounded-md text-[11px] font-bold transition ${
+                    log.hard
+                      ? "bg-danger text-white"
+                      : hasData
+                        ? "bg-ok/20 text-ok"
+                        : "bg-surface text-dim"
+                  } ${!isCoach ? "cursor-pointer hover:opacity-80" : "cursor-default"}`}
+                >
+                  {log.hard ? "🔴" : `S${i + 1}`}
+                </button>
+
+                {/* Poids réalisé */}
+                <input
+                  type="number"
+                  inputMode="decimal"
+                  min={0}
+                  step={0.5}
+                  placeholder={ex.weight > 0 ? String(ex.weight) : "—"}
+                  value={log.w || ""}
+                  disabled={isCoach}
+                  onChange={(e) => patchLog(i, { w: +e.target.value || 0 })}
+                  className={`text-sm ${log.hard ? "border-danger/40 bg-danger/5" : ""}`}
+                />
+
+                {/* Reps réalisées */}
+                <input
+                  type="number"
+                  inputMode="numeric"
+                  min={0}
+                  step={1}
+                  placeholder={ex.reps > 0 ? String(ex.reps) : "—"}
+                  value={log.r || ""}
+                  disabled={isCoach}
+                  onChange={(e) => patchLog(i, { r: +e.target.value || 0 })}
+                  className={`text-sm ${log.hard ? "border-danger/40 bg-danger/5" : ""}`}
+                />
+
+                {/* Supprimer */}
+                {!isCoach ? (
+                  <button
+                    type="button"
+                    onClick={() => removeRow(i)}
+                    className="grid h-8 w-8 place-items-center rounded-lg text-[12px] text-dim hover:text-danger"
+                  >✕</button>
+                ) : <div />}
+              </div>
+            );
+          })}
+
+          {/* Ajouter une série */}
+          {!isCoach && (
+            <button
+              type="button"
+              onClick={addRow}
+              className="flex w-full items-center justify-center gap-1.5 border-t border-dashed border-line px-3 py-2 text-[12px] text-dim hover:text-ink"
+            >
+              + Ajouter une série
+            </button>
+          )}
+
+          {logs.length === 0 && isCoach && (
+            <p className="px-3 py-3 text-center text-[12px] text-dim">Aucun détail logué par le sportif.</p>
+          )}
+        </div>
+      )}
+    </div>
+  );
+}
+
 function ExerciseBlock({
   ex,
   index,
@@ -421,6 +577,7 @@ function ExerciseBlock({
 }) {
   return (
     <div className="rounded-xl border border-line bg-surface2 p-3">
+      {/* En-tête : nom + contrôles */}
       <div className="mb-2.5 flex items-center justify-between gap-2">
         <div className="min-w-0 flex-1">
           <span className="font-bold">{ex.name}</span>
@@ -430,38 +587,24 @@ function ExerciseBlock({
         </div>
         {isCoach && (
           <div className="flex shrink-0 items-center gap-0.5">
-            <button
-              type="button"
-              onClick={() => onMove(-1)}
-              disabled={index === 0}
-              className="grid h-7 w-7 place-items-center rounded text-dim disabled:opacity-20 hover:text-ink"
-              aria-label="Monter"
-            >▲</button>
-            <button
-              type="button"
-              onClick={() => onMove(1)}
-              disabled={index === total - 1}
-              className="grid h-7 w-7 place-items-center rounded text-dim disabled:opacity-20 hover:text-ink"
-              aria-label="Descendre"
-            >▼</button>
-            <button
-              onClick={onRemove}
-              className="ml-0.5 rounded-lg bg-surface px-2.5 py-1 text-[13px] text-dim hover:text-danger"
-            >✕</button>
+            <button type="button" onClick={() => onMove(-1)} disabled={index === 0}
+              className="grid h-7 w-7 place-items-center rounded text-dim disabled:opacity-20 hover:text-ink" aria-label="Monter">▲</button>
+            <button type="button" onClick={() => onMove(1)} disabled={index === total - 1}
+              className="grid h-7 w-7 place-items-center rounded text-dim disabled:opacity-20 hover:text-ink" aria-label="Descendre">▼</button>
+            <button onClick={onRemove}
+              className="ml-0.5 rounded-lg bg-surface px-2.5 py-1 text-[13px] text-dim hover:text-danger">✕</button>
           </div>
         )}
       </div>
 
-      {/* Prescription — éditable coach / lecture seule client */}
+      {/* Prescription coach — 3 colonnes inline */}
       {isCoach ? (
         <>
-          <div className="grid grid-cols-2 gap-2.5">
+          <div className="grid grid-cols-3 gap-2">
             <label className="block">
               <span className="mb-1 block text-[13px] text-dim">Séries</span>
               <input
-                type="text"
-                inputMode="numeric"
-                placeholder="3 ou 2-4"
+                type="text" inputMode="numeric" placeholder="3 ou 2-4"
                 value={ex.setsLabel ?? (ex.sets || "")}
                 onChange={(e) => {
                   const raw = e.target.value;
@@ -473,9 +616,7 @@ function ExerciseBlock({
             <label className="block">
               <span className="mb-1 block text-[13px] text-dim">Répétitions</span>
               <input
-                type="text"
-                inputMode="numeric"
-                placeholder="10 ou 8-12"
+                type="text" inputMode="numeric" placeholder="10 ou 8-12"
                 value={ex.repsLabel ?? (ex.reps || "")}
                 onChange={(e) => {
                   const raw = e.target.value;
@@ -484,22 +625,34 @@ function ExerciseBlock({
                 }}
               />
             </label>
+            <label className="block">
+              <span className="mb-1 block text-[13px] text-dim">{isPace ? "Allure" : "Poids (kg)"}</span>
+              {isPace ? (
+                <PaceInput value={ex.weight} onChange={(v) => onPatch({ weight: v })} />
+              ) : (
+                <input type="number" min={0} step={1} placeholder="0"
+                  value={ex.weight || ""}
+                  onChange={(e) => onPatch({ weight: +e.target.value || 0 })}
+                />
+              )}
+            </label>
           </div>
-          <div className="mt-2.5">
-            <span className="mb-1 block text-[13px] text-dim">{isPace ? "Allure prescrite (min/km)" : "Poids prescrit (kg)"}</span>
-            {isPace ? (
-              <PaceInput value={ex.weight} onChange={(v) => onPatch({ weight: v })} />
-            ) : (
-              <input
-                type="number"
-                min={0}
-                step={1}
-                placeholder="0"
-                value={ex.weight || ""}
-                onChange={(e) => onPatch({ weight: +e.target.value || 0 })}
-              />
-            )}
+
+          {/* RPE coach compact */}
+          <div className="mt-2 flex items-center gap-2">
+            <span className="shrink-0 text-[12px] text-dim">RPE coach</span>
+            <input
+              type="text" inputMode="decimal" placeholder="ex : 7, 7/8, ~8"
+              value={ex.rpeCoach ?? ""}
+              onChange={(e) => onPatch({ rpeCoach: e.target.value })}
+              className="flex-1"
+            />
+            {ex.rpeCoach ? (
+              <span className="shrink-0 rounded-lg bg-accent/15 px-2.5 py-1 text-sm font-bold text-accent">{ex.rpeCoach}</span>
+            ) : null}
           </div>
+          <RpeGauge value={ex.rpeCoach} />
+
           {(ex.weightClient ?? 0) > 0 && (
             <div className="mt-1.5 flex items-center gap-2 rounded-lg bg-ok/10 px-3 py-1.5">
               <span className="text-[12px] text-dim">Réalisé par le sportif :</span>
@@ -508,25 +661,7 @@ function ExerciseBlock({
               </span>
             </div>
           )}
-          <div className="mt-2.5">
-            <span className="mb-1 block text-[13px] text-dim">RPE coach (0 – 10)</span>
-            <div className="flex items-center gap-2">
-              <input
-                type="text"
-                inputMode="decimal"
-                placeholder="ex : 7, 7/8, ~8"
-                value={ex.rpeCoach ?? ""}
-                onChange={(e) => onPatch({ rpeCoach: e.target.value })}
-                className="flex-1"
-              />
-              {ex.rpeCoach ? (
-                <span className="shrink-0 rounded-lg bg-accent/15 px-2.5 py-1 text-sm font-bold text-accent">
-                  {ex.rpeCoach}
-                </span>
-              ) : null}
-            </div>
-            <RpeGauge value={ex.rpeCoach} />
-          </div>
+
           <label className="mt-2.5 block">
             <span className="mb-1 block text-[13px] text-dim">Commentaire coach</span>
             <textarea
@@ -539,6 +674,7 @@ function ExerciseBlock({
         </>
       ) : (
         <>
+          {/* Vue client — prescription en lecture seule */}
           <div className="flex flex-wrap gap-x-4 gap-y-1 text-sm">
             <span><strong>{ex.setsLabel ?? ex.sets}</strong> × <strong>{ex.repsLabel ?? ex.reps}</strong> reps</span>
             {ex.weight > 0 && (
@@ -550,24 +686,27 @@ function ExerciseBlock({
           {(ex.coachComment ?? "") && (
             <p className="mt-1.5 rounded-lg bg-surface p-2 text-[13px]"><span className="text-dim">Coach : </span>{ex.coachComment}</p>
           )}
-          {/* Poids sportif — toujours disponible, indépendant de la prescription */}
+          {/* RPE prescrit */}
+          {!!ex.rpeCoach && ex.rpeCoach !== 0 && (
+            <div className="mt-2 rounded-xl border border-line bg-surface p-3">
+              <div className="mb-1.5 flex items-center gap-2">
+                <span className="text-[13px] text-dim">RPE prescrit</span>
+                <span className="rounded-lg bg-accent/15 px-2.5 py-1 text-sm font-bold text-accent">{ex.rpeCoach}</span>
+              </div>
+              <RpeGauge value={ex.rpeCoach} />
+            </div>
+          )}
+          {/* Poids global sportif */}
           <div className="mt-2.5">
             <span className="mb-1 block text-[13px] text-dim">
               {ex.weight > 0 ? (isPace ? "Mon allure réalisée" : "Mon poids réalisé") : (isPace ? "Allure réalisée" : "Poids utilisé")}
             </span>
             {isPace ? (
-              <PaceInput
-                value={ex.weightClient ?? 0}
-                onChange={(v) => onPatch({ weightClient: v > 0 ? v : undefined })}
-              />
+              <PaceInput value={ex.weightClient ?? 0} onChange={(v) => onPatch({ weightClient: v > 0 ? v : undefined })} />
             ) : (
               <div className="flex items-center gap-2">
                 <input
-                  type="number"
-                  inputMode="decimal"
-                  min={0}
-                  step={0.5}
-                  placeholder="ex : 80"
+                  type="number" inputMode="decimal" min={0} step={0.5} placeholder="ex : 80"
                   value={ex.weightClient ?? ""}
                   onChange={(e) => onPatch({ weightClient: e.target.value !== "" ? +e.target.value : undefined })}
                   className="flex-1"
@@ -576,22 +715,13 @@ function ExerciseBlock({
               </div>
             )}
           </div>
-          {/* RPE prescrit par le coach — affiché au client */}
-          {!!ex.rpeCoach && ex.rpeCoach !== 0 && (
-            <div className="mt-2.5 rounded-xl border border-line bg-surface p-3">
-              <div className="mb-1.5 flex items-center gap-2">
-                <span className="text-[13px] text-dim">RPE prescrit</span>
-                <span className="rounded-lg bg-accent/15 px-2.5 py-1 text-sm font-bold text-accent">
-                  {ex.rpeCoach}
-                </span>
-              </div>
-              <RpeGauge value={ex.rpeCoach} />
-            </div>
-          )}
         </>
       )}
 
-      {/* RPE client + échec — éditable client / lecture seule coach */}
+      {/* Log par série — visible coach (lecture) + client (édition) */}
+      <SetLogsSection ex={ex} isCoach={isCoach} onPatch={onPatch} />
+
+      {/* RPE client + échec */}
       <div className="mt-2.5">
         <div className="flex items-center gap-2">
           <span className="w-24 shrink-0 text-[13px] text-dim">RPE sportif</span>
@@ -611,12 +741,9 @@ function ExerciseBlock({
               onClick={() => onPatch({ failed: !ex.failed, ...(ex.failed ? {} : { rpeClient: 0 }) })}
               title={ex.failed ? "Retirer l'échec" : "Marquer comme raté"}
               className={`shrink-0 rounded-lg px-2 py-1 text-[13px] transition ${ex.failed ? "bg-danger text-white" : "bg-surface2 text-dim hover:text-danger"}`}
-            >
-              ❌
-            </button>
+            >❌</button>
           )}
         </div>
-        {/* Jauge RPE client */}
         {ex.rpeClient > 0 && !ex.failed && <RpeGauge value={ex.rpeClient} />}
       </div>
 

@@ -73,6 +73,7 @@ export interface ExerciseInstance {
   failed?: boolean; // true si le sportif a marqué l'exercice comme raté
   setsLabel?: string; // surcharge d'affichage pour sets (ex: "3-4")
   repsLabel?: string; // surcharge d'affichage pour reps (ex: "8-12")
+  setLogs?: { w: number; r: number; hard?: boolean }[]; // log par série — w=poids réalisé, r=reps réalisées, hard=série difficile
 }
 
 /** Une séance. `date` = null tant qu'elle est dans la banque « À placer ». */
@@ -268,6 +269,7 @@ export interface SessionTemplate {
   color: string;
   description: string;
   exercises: TemplateExercise[];
+  sport?: string; // ex: "Musculation", "Course à pied" — même liste que lib.categories[Sport]
 }
 
 /** Un slot dans une semaine type : plusieurs séances sur un jour. */
@@ -282,6 +284,7 @@ export interface WeekTemplate {
   name: string;
   description: string;
   days: WeekTemplateDay[];               // 0..7 entrées (jours non vides seulement)
+  sport?: string; // ex: "Musculation", "Course à pied"
 }
 
 /** Programme : enchaînement ordonné de semaines types sur plusieurs semaines (coach/admin only).

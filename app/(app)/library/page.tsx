@@ -42,63 +42,6 @@ export default function LibraryPage() {
   const [programSearch, setProgramSearch] = useState("");
   const [programSportFilter, setProgramSportFilter] = useState<string | null>(null);
 
-  // ── Dérivation dynamique des sports depuis lib.categories ────────────────
-  // Cherche la catégorie "Sport" (insensible à la casse) dans les catégories de la bibliothèque.
-  // Si elle existe, les exercices peuvent y être tagués → on dérive les sports de chaque template.
-  const sportCategory = useMemo(
-    () => lib.categories.find((c) => /sport/i.test(c.name)) ?? null,
-    [lib.categories],
-  );
-
-  const exById = useMemo(
-    () => new Map(lib.exercises.map((e) => [e.id, e])),
-    [lib.exercises],
-  );
-
-  // Sports (labels) couverts par une séance type
-  const sessionSports = useMemo(() => {
-    if (!sportCategory) return new Map<string, string[]>();
-    return new Map(
-      templates.sessionTemplates.map((tpl) => {
-        const labels = new Set<string>();
-        for (const ex of tpl.exercises) {
-          const libEx = exById.get(ex.exId);
-          if (!libEx) continue;
-          for (const optId of libEx.tags[sportCategory.id] ?? []) {
-            const opt = sportCategory.options.find((o) => o.id === optId);
-            if (opt) labels.add(opt.label);
-          }
-        }
-        return [tpl.id, [...labels]] as [string, string[]];
-      }),
-    );
-  }, [sportCategory, templates.sessionTemplates, exById]);
-
-  // Sports couverts par une semaine type (union des séances)
-  const weekSports = useMemo(() => {
-    if (!sportCategory) return new Map<string, string[]>();
-    const sessById = new Map(templates.sessionTemplates.map((s) => [s.id, s]));
-    return new Map(
-      templates.weekTemplates.map((wk) => {
-        const labels = new Set<string>();
-        for (const day of wk.days) {
-          for (const ref of day.sessions) {
-            const tpl = sessById.get(ref.tplId);
-            if (!tpl) continue;
-            for (const ex of tpl.exercises) {
-              const libEx = exById.get(ex.exId);
-              if (!libEx) continue;
-              for (const optId of libEx.tags[sportCategory.id] ?? []) {
-                const opt = sportCategory.options.find((o) => o.id === optId);
-                if (opt) labels.add(opt.label);
-              }
-            }
-          }
-        }
-        return [wk.id, [...labels]] as [string, string[]];
-      }),
-    );
-  }, [sportCategory, templates.weekTemplates, templates.sessionTemplates, exById]);
 
   // Exercices filtrés
   const filtered = useMemo(() => {
@@ -265,14 +208,12 @@ export default function LibraryPage() {
       {/* ===== TAB : SÉANCES TYPES ===== */}
       {tab === "sessions" && canEdit && (() => {
         const colors = [...new Set(templates.sessionTemplates.map((s) => s.color))];
-        // Sports disponibles parmi les séances existantes
-        const availSports = sportCategory
-          ? [...new Set(templates.sessionTemplates.flatMap((s) => sessionSports.get(s.id) ?? []))]
-          : [];
+        // Sports disponibles parmi les séances existantes (champ sport direct)
+        const availSports = [...new Set(templates.sessionTemplates.map((s) => s.sport).filter(Boolean))] as string[];
         const filtered = templates.sessionTemplates.filter((s) => {
           const matchSearch = !sessionSearch || s.name.toLowerCase().includes(sessionSearch.toLowerCase());
           const matchColor = !sessionColorFilter || s.color === sessionColorFilter;
-          const matchSport = !sessionSportFilter || (sessionSports.get(s.id) ?? []).includes(sessionSportFilter);
+          const matchSport = !sessionSportFilter || s.sport === sessionSportFilter;
           return matchSearch && matchColor && matchSport;
         });
         return (
@@ -383,12 +324,10 @@ export default function LibraryPage() {
 
       {/* ===== TAB : SEMAINES TYPES ===== */}
       {tab === "weeks" && canEdit && (() => {
-        const availWeekSports = sportCategory
-          ? [...new Set(templates.weekTemplates.flatMap((w) => weekSports.get(w.id) ?? []))]
-          : [];
+        const availWeekSports = [...new Set(templates.weekTemplates.map((w) => w.sport).filter(Boolean))] as string[];
         const filteredWeeks = templates.weekTemplates.filter((w) => {
           const matchSearch = !weekSearch || w.name.toLowerCase().includes(weekSearch.toLowerCase());
-          const matchSport = !weekSportFilter || (weekSports.get(w.id) ?? []).includes(weekSportFilter);
+          const matchSport = !weekSportFilter || w.sport === weekSportFilter;
           return matchSearch && matchSport;
         });
         return (
@@ -665,7 +604,12 @@ function SessionTemplateCard({ template, expanded, onToggleExpand, onEdit, onDel
         </div>
 
         {/* Stats rapides */}
-        <div className="mt-3 flex items-center gap-3">
+        <div className="mt-3 flex flex-wrap items-center gap-2">
+          {template.sport && (
+            <span className="rounded-full bg-accent/15 px-2.5 py-1 text-[11px] font-bold text-accent">
+              {template.sport}
+            </span>
+          )}
           <div className="flex items-center gap-1.5 rounded-lg bg-surface2 px-2.5 py-1.5">
             <span className="text-[18px] font-black text-ink leading-none">{template.exercises.length}</span>
             <span className="text-[10px] text-dim leading-tight">exo{template.exercises.length !== 1 ? "s" : ""}</span>
@@ -793,7 +737,12 @@ function WeekTemplateCard({ template, sessionTemplates, onEdit, onDelete }: {
       </div>
 
       {/* Footer stats */}
-      <div className="flex items-center gap-3 px-4 pb-3">
+      <div className="flex flex-wrap items-center gap-2 px-4 pb-3">
+        {template.sport && (
+          <span className="rounded-full bg-accent/15 px-2.5 py-1 text-[11px] font-bold text-accent">
+            {template.sport}
+          </span>
+        )}
         <span className="rounded-lg bg-surface2 px-2 py-1 text-[11px] font-semibold text-dim">
           {activeDays.length}j d&apos;entraînement
         </span>

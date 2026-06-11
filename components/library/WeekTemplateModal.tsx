@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useMemo, useState } from "react";
 import { useData } from "@/components/DataProvider";
 import type { WeekTemplate, WeekTemplateDay } from "@/lib/types";
 
@@ -22,8 +22,13 @@ export default function WeekTemplateModal({
   template: WeekTemplate | null;
   onClose: () => void;
 }) {
-  const { templates, updateTemplates } = useData();
+  const { templates, updateTemplates, library } = useData();
   const { sessionTemplates } = templates;
+
+  const sportOptions = useMemo(
+    () => library.categories.find((c) => /sport/i.test(c.name))?.options ?? [],
+    [library.categories],
+  );
 
   const [draft, setDraft] = useState<WeekTemplate>(
     template ? structuredClone(template) : blank()
@@ -92,6 +97,32 @@ export default function WeekTemplateModal({
             autoFocus
           />
         </label>
+
+        {/* Sport */}
+        {sportOptions.length > 0 && (
+          <div className="mb-3">
+            <span className="mb-1.5 block text-[13px] text-dim">Sport</span>
+            <div className="flex flex-wrap gap-2">
+              <button
+                type="button"
+                onClick={() => setDraft((d) => ({ ...d, sport: undefined }))}
+                className={`rounded-full px-3 py-1 text-[12px] font-semibold transition ${!draft.sport ? "bg-accent text-[#1a1500]" : "bg-surface2 text-dim hover:text-ink"}`}
+              >
+                —
+              </button>
+              {sportOptions.map((opt) => (
+                <button
+                  key={opt.id}
+                  type="button"
+                  onClick={() => setDraft((d) => ({ ...d, sport: d.sport === opt.label ? undefined : opt.label }))}
+                  className={`rounded-full px-3 py-1 text-[12px] font-semibold transition ${draft.sport === opt.label ? "bg-accent text-[#1a1500]" : "bg-surface2 text-dim hover:text-ink"}`}
+                >
+                  {opt.label}
+                </button>
+              ))}
+            </div>
+          </div>
+        )}
 
         {/* Description */}
         <label className="mb-4 block">
