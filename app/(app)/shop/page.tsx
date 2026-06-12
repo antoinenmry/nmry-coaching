@@ -530,7 +530,7 @@ function PlanCard({ plan, coach }: {
               )}
               {plan.difficulty ? (
                 <p className="text-[14px]">
-                  {"💧".repeat(plan.difficulty)}{"🩶".repeat(5 - plan.difficulty)}
+                  {"💧".repeat(plan.difficulty)}
                 </p>
               ) : null}
             </div>
@@ -561,7 +561,7 @@ function PlanCard({ plan, coach }: {
               )}
               {plan.difficulty ? (
                 <p className="text-[14px]">
-                  {"💧".repeat(plan.difficulty)}{"🩶".repeat(5 - plan.difficulty)}
+                  {"💧".repeat(plan.difficulty)}
                 </p>
               ) : null}
             </div>
@@ -911,7 +911,7 @@ function PlanForm({ form, setForm, onSave, onCancel, title, isPublish }: {
               className="flex-1 rounded-lg border border-line bg-surface py-2 text-[18px] transition hover:border-accent/40"
               title={`Niveau ${d}`}
             >
-              {d <= (form.difficulty ?? 0) ? "💧" : "🩶"}
+              {d <= (form.difficulty ?? 0) ? "💧" : <span className="text-dim text-[12px]">○</span>}
             </button>
           ))}
         </div>

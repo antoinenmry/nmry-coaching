@@ -257,7 +257,8 @@ export interface Challenge {
   title: string;
   description: string;
   condition: { type: ChallengeConditionType; value: number };
-  color?: string;  // hex, ex: "#534AB7"
+  color?: string;      // hex, ex: "#534AB7"
+  badgeImage?: string; // URL Supabase Storage (bucket badges), remplace l'emoji si définie
 }
 
 export interface UnlockedBadge {

@@ -1,7 +1,8 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { useData } from "@/components/DataProvider";
+import { createClient } from "@/lib/supabase/client";
 import dynamic from "next/dynamic";
 
 // Modales chargées à la demande (à l'ouverture) → bundle initial de /library allégé.
@@ -127,6 +128,9 @@ export default function LibraryPage() {
   const [cCondType, setCCondType] = useState<ChallengeConditionType>("session_count");
   const [cCondValue, setCCondValue] = useState("10");
   const [cColor, setCColor] = useState(PRESET_COLORS[0]);
+  const [cBadgeImage, setCBadgeImage] = useState("");
+  const [badgeImgBusy, setBadgeImgBusy] = useState(false);
+  const badgeFileRef = useRef<HTMLInputElement>(null);
   const [editingChallengeId, setEditingChallengeId] = useState<string | null>(null);
 
   // Auto-unlock : dès que l'onglet Défis est ouvert, on vérifie et on enregistre les badges débloqués
@@ -605,20 +609,54 @@ export default function LibraryPage() {
 
         if (canEdit) {
           // ---- Vue coach : formulaire + gestion ----
+          async function handleBadgeImageUpload(e: React.ChangeEvent<HTMLInputElement>) {
+            const file = e.target.files?.[0];
+            e.target.value = "";
+            if (!file) return;
+            setBadgeImgBusy(true);
+            try {
+              const bitmap = await createImageBitmap(file, { imageOrientation: "from-image" });
+              const scale = Math.min(1, 256 / Math.max(bitmap.width, bitmap.height));
+              const w = Math.round(bitmap.width * scale);
+              const h = Math.round(bitmap.height * scale);
+              const canvas = document.createElement("canvas");
+              canvas.width = w; canvas.height = h;
+              const ctx = canvas.getContext("2d");
+              if (!ctx) return;
+              ctx.drawImage(bitmap, 0, 0, w, h);
+              bitmap.close?.();
+              const blob = await new Promise<Blob | null>((r) => canvas.toBlob(r, "image/jpeg", 0.82));
+              if (!blob) return;
+              const supabase = createClient();
+              // Nettoyage de l'ancienne image si remplacement
+              if (cBadgeImage) {
+                const old = cBadgeImage.split("/badges/")[1];
+                if (old) supabase.storage.from("badges").remove([old]).catch(() => {});
+              }
+              const path = `${editingChallengeId ?? `tmp-${Date.now()}`}.jpg`;
+              const { error } = await supabase.storage.from("badges").upload(path, blob, {
+                contentType: "image/jpeg", upsert: true, cacheControl: "31536000",
+              });
+              if (!error) setCBadgeImage(supabase.storage.from("badges").getPublicUrl(path).data.publicUrl);
+            } finally {
+              setBadgeImgBusy(false);
+            }
+          }
+
           function saveChallenge() {
             if (!cTitle.trim()) return;
             const val = parseInt(cCondValue) || 1;
             if (editingChallengeId) {
               updateLibrary((lib) => {
                 const ch = (lib.challenges ?? []).find((c) => c.id === editingChallengeId);
-                if (ch) Object.assign(ch, { icon: cIcon, title: cTitle.trim(), description: cDesc.trim(), condition: { type: cCondType, value: val }, color: cColor });
+                if (ch) Object.assign(ch, { icon: cIcon, title: cTitle.trim(), description: cDesc.trim(), condition: { type: cCondType, value: val }, color: cColor, badgeImage: cBadgeImage || undefined });
               });
               setEditingChallengeId(null);
             } else {
-              const newChallenge: Challenge = { id: uid(), icon: cIcon, title: cTitle.trim(), description: cDesc.trim(), condition: { type: cCondType, value: val }, color: cColor };
+              const newChallenge: Challenge = { id: uid(), icon: cIcon, title: cTitle.trim(), description: cDesc.trim(), condition: { type: cCondType, value: val }, color: cColor, badgeImage: cBadgeImage || undefined };
               updateLibrary((lib) => { lib.challenges = [...(lib.challenges ?? []), newChallenge]; });
             }
-            setCIcon("🏆"); setCTitle(""); setCDesc(""); setCCondType("session_count"); setCCondValue("10"); setCColor(PRESET_COLORS[0]);
+            setCIcon("🏆"); setCTitle(""); setCDesc(""); setCCondType("session_count"); setCCondValue("10"); setCColor(PRESET_COLORS[0]); setCBadgeImage("");
           }
 
           function startEdit(ch: Challenge) {
@@ -626,22 +664,46 @@ export default function LibraryPage() {
             setCIcon(ch.icon); setCTitle(ch.title); setCDesc(ch.description);
             setCCondType(ch.condition.type); setCCondValue(String(ch.condition.value));
             setCColor(ch.color ?? PRESET_COLORS[0]);
+            setCBadgeImage(ch.badgeImage ?? "");
           }
 
           function cancelEdit() {
             setEditingChallengeId(null);
-            setCIcon("🏆"); setCTitle(""); setCDesc(""); setCCondType("session_count"); setCCondValue("10"); setCColor(PRESET_COLORS[0]);
+            setCIcon("🏆"); setCTitle(""); setCDesc(""); setCCondType("session_count"); setCCondValue("10"); setCColor(PRESET_COLORS[0]); setCBadgeImage("");
           }
 
           return (
             <div>
               <section className="mb-5 rounded-2xl border border-line bg-surface p-4">
                 <h3 className="mb-3 font-bold">{editingChallengeId ? "Modifier le défi" : "Nouveau défi"}</h3>
-                <div className="mb-3 grid grid-cols-[56px_1fr] gap-3">
+                <div className="mb-3 grid grid-cols-[52px_52px_1fr] gap-2">
                   <label className="block">
                     <span className="mb-1.5 block text-[13px] text-dim">Icône</span>
                     <input value={cIcon} onChange={(e) => setCIcon(e.target.value)} className="text-center text-lg" maxLength={4} />
                   </label>
+                  {/* Upload image badge */}
+                  <div>
+                    <span className="mb-1.5 block text-[13px] text-dim">Image</span>
+                    <button
+                      type="button"
+                      onClick={() => badgeFileRef.current?.click()}
+                      disabled={badgeImgBusy}
+                      className="relative flex h-10 w-full items-center justify-center overflow-hidden rounded-[10px] border border-dashed border-line bg-surface2 transition hover:border-accent disabled:opacity-60"
+                      title="Uploader une image de badge"
+                    >
+                      {badgeImgBusy ? (
+                        <span className="text-sm animate-pulse">⏳</span>
+                      ) : cBadgeImage ? (
+                        <img src={cBadgeImage} alt="badge" className="h-full w-full object-cover rounded-[9px]" />
+                      ) : (
+                        <span className="text-sm">🖼️</span>
+                      )}
+                    </button>
+                    {cBadgeImage && (
+                      <button type="button" onClick={() => setCBadgeImage("")} className="mt-0.5 w-full text-[10px] text-center text-dim hover:text-danger">Retirer</button>
+                    )}
+                    <input ref={badgeFileRef} type="file" accept="image/*" className="hidden" onChange={handleBadgeImageUpload} />
+                  </div>
                   <label className="block">
                     <span className="mb-1.5 block text-[13px] text-dim">Titre</span>
                     <input value={cTitle} onChange={(e) => setCTitle(e.target.value)} placeholder="Ex : Premier pas" />
@@ -681,7 +743,11 @@ export default function LibraryPage() {
                     ))}
                     {/* Aperçu */}
                     <div className="ml-auto flex items-center gap-2 rounded-xl px-3 py-1.5" style={{ background: cColor + "20", border: `1px solid ${cColor}50` }}>
-                      <span className="text-xl">{cIcon || "🏆"}</span>
+                      {cBadgeImage ? (
+                        <img src={cBadgeImage} alt="badge" className="h-8 w-8 rounded-lg object-cover" />
+                      ) : (
+                        <span className="text-xl">{cIcon || "🏆"}</span>
+                      )}
                       <span className="text-[13px] font-semibold" style={{ color: cColor }}>{cTitle || "Aperçu"}</span>
                     </div>
                   </div>
@@ -708,8 +774,10 @@ export default function LibraryPage() {
                       <div key={ch.id} className={`overflow-hidden rounded-2xl transition ${isEditing ? "ring-2 ring-accent/50" : ""}`} style={{ border: `0.5px solid ${color}50` }}>
                         {/* Bandeau gradient pleine largeur */}
                         <div className="flex items-center gap-3 px-4 py-3.5" style={{ background: `linear-gradient(135deg, ${color}, ${lighter})` }}>
-                          <div className="grid h-11 w-11 shrink-0 place-items-center rounded-xl text-2xl" style={{ background: "rgba(255,255,255,0.20)" }}>
-                            {ch.icon}
+                          <div className="grid h-11 w-11 shrink-0 place-items-center overflow-hidden rounded-xl text-2xl" style={{ background: "rgba(255,255,255,0.20)" }}>
+                            {ch.badgeImage ? (
+                              <img src={ch.badgeImage} alt={ch.title} className="h-full w-full object-cover" />
+                            ) : ch.icon}
                           </div>
                           <div className="min-w-0 flex-1">
                             <p className="font-bold text-white leading-tight">{ch.title}</p>
@@ -717,7 +785,11 @@ export default function LibraryPage() {
                           </div>
                           <div className="flex shrink-0 gap-1.5">
                             <button onClick={() => startEdit(ch)} className="grid h-8 w-8 place-items-center rounded-lg text-sm" style={{ background: "rgba(255,255,255,0.22)" }} aria-label="Modifier">✏️</button>
-                            <button onClick={() => updateLibrary((lib) => { lib.challenges = (lib.challenges ?? []).filter((c) => c.id !== ch.id); })} className="grid h-8 w-8 place-items-center rounded-lg text-sm" style={{ background: "rgba(255,255,255,0.22)" }} aria-label="Supprimer">🗑️</button>
+                            <button onClick={() => {
+                              const badgePath = ch.badgeImage?.split("/badges/")[1];
+                              if (badgePath) createClient().storage.from("badges").remove([badgePath]).catch(() => {});
+                              updateLibrary((lib) => { lib.challenges = (lib.challenges ?? []).filter((c) => c.id !== ch.id); });
+                            }} className="grid h-8 w-8 place-items-center rounded-lg text-sm" style={{ background: "rgba(255,255,255,0.22)" }} aria-label="Supprimer">🗑️</button>
                           </div>
                         </div>
                         {/* Pied de carte */}
@@ -834,9 +906,13 @@ function BadgeCard({ ch, prog, unlocked, unlockedAt }: {
       }}
     >
       <CircularGauge pct={unlocked ? 100 : prog.pct} color={color}>
-        <span style={{ fontSize: 30, filter: locked ? "grayscale(1)" : "none" }}>
-          {locked ? "🔒" : ch.icon}
-        </span>
+        {ch.badgeImage && !locked ? (
+          <img src={ch.badgeImage} alt={ch.title} className="h-14 w-14 rounded-full object-cover" />
+        ) : (
+          <span style={{ fontSize: 30, filter: locked ? "grayscale(1)" : "none" }}>
+            {locked ? "🔒" : ch.icon}
+          </span>
+        )}
       </CircularGauge>
 
       <p className="text-[13px] font-bold leading-tight mb-1" style={{ color: unlocked ? color : undefined }}>

@@ -249,6 +249,29 @@ drop policy if exists chat_attach_delete on storage.objects;
 create policy chat_attach_delete on storage.objects for delete to authenticated
   using (bucket_id = 'chat-attachments');
 
+-- ── Storage bucket badges ────────────────────────────────────────────────────
+-- Images personnalisées pour les badges de défis (coach → tous les sportifs).
+-- Bucket public, lecture par tous, écriture coach/admin seulement via service role.
+insert into storage.buckets (id, name, public, file_size_limit)
+values ('badges', 'badges', true, 2097152)
+on conflict (id) do update set file_size_limit = excluded.file_size_limit, public = excluded.public;
+
+drop policy if exists badges_insert on storage.objects;
+create policy badges_insert on storage.objects for insert to authenticated
+  with check (bucket_id = 'badges');
+
+drop policy if exists badges_update on storage.objects;
+create policy badges_update on storage.objects for update to authenticated
+  using (bucket_id = 'badges');
+
+drop policy if exists badges_read on storage.objects;
+create policy badges_read on storage.objects for select
+  using (bucket_id = 'badges');
+
+drop policy if exists badges_delete on storage.objects;
+create policy badges_delete on storage.objects for delete to authenticated
+  using (bucket_id = 'badges');
+
 -- ── Storage bucket avatars ────────────────────────────────────────────────────
 -- Photos de profil (compressées à ~512px côté client). Bucket distinct du chat
 -- pour ne PAS subir une éventuelle auto-suppression J+30 des médias de chat.
