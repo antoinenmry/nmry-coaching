@@ -100,6 +100,7 @@ export default function LibraryPage() {
   // --- Onglet Exercices ---
   const [selected, setSelected] = useState<Record<string, string[]>>({});
   const [search, setSearch] = useState("");
+  const [filtersOpen, setFiltersOpen] = useState(false);
   const [viewing, setViewing] = useState<{ ex: LibraryExercise; edit: boolean } | null>(null);
   const [creating, setCreating] = useState(false);
   const [managingFilters, setManagingFilters] = useState(false);
@@ -155,6 +156,8 @@ export default function LibraryPage() {
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [tab]);
 
+
+  const activeFilterCount = Object.values(selected).reduce((n, v) => n + v.length, 0);
 
   // Exercices filtrés
   const filtered = useMemo(() => {
@@ -239,39 +242,78 @@ export default function LibraryPage() {
             className="mb-4 w-full"
           />
 
-          {/* Filtres */}
-          <div className="mb-4 space-y-2">
-            {lib.categories.map((cat) => (
-              <div key={cat.id} className="flex flex-wrap items-center gap-2">
-                <span className="mr-1 w-full text-[11px] uppercase tracking-wide text-dim sm:w-auto">{cat.name}</span>
-                <Chip
-                  active={!(selected[cat.id]?.length)}
-                  label="Tous"
-                  count={countFor(cat.id, null)}
-                  onClick={() => setSelected((s) => ({ ...s, [cat.id]: [] }))}
-                />
-                {cat.options.map((opt) => (
-                  <Chip
-                    key={opt.id}
-                    active={(selected[cat.id] ?? []).includes(opt.id)}
-                    label={opt.label}
-                    count={countFor(cat.id, opt.id)}
-                    onClick={() =>
-                      setSelected((s) => {
-                        const cur = s[cat.id] ?? [];
-                        return {
-                          ...s,
-                          [cat.id]: cur.includes(opt.id)
-                            ? cur.filter((x) => x !== opt.id)
-                            : [...cur, opt.id],
-                        };
-                      })
-                    }
-                  />
-                ))}
-              </div>
-            ))}
+          {/* Filtres — barre de déclenchement */}
+          <div className="mb-3 flex items-center gap-2">
+            <button
+              onClick={() => setFiltersOpen((o) => !o)}
+              className={`flex flex-1 items-center gap-2 rounded-xl border px-3 py-2 text-[13px] transition ${
+                activeFilterCount > 0
+                  ? "border-accent/60 bg-accent/10 text-accent"
+                  : "border-line bg-surface2 text-dim hover:text-ink"
+              }`}
+            >
+              <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><line x1="4" y1="6" x2="20" y2="6"/><line x1="8" y1="12" x2="16" y2="12"/><line x1="11" y1="18" x2="13" y2="18"/></svg>
+              Filtres
+              {activeFilterCount > 0 && (
+                <span className="ml-1 rounded-full bg-accent px-1.5 py-0.5 text-[10px] font-semibold text-[#1a1500]">
+                  {activeFilterCount}
+                </span>
+              )}
+              <svg
+                width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"
+                className={`ml-auto transition-transform duration-200 ${filtersOpen ? "rotate-180" : ""}`}
+                aria-hidden="true"
+              >
+                <polyline points="6 9 12 15 18 9"/>
+              </svg>
+            </button>
+            {activeFilterCount > 0 && (
+              <button
+                onClick={() => setSelected({})}
+                className="rounded-xl border border-line px-3 py-2 text-[12px] text-dim hover:text-danger"
+              >
+                Effacer filtres
+              </button>
+            )}
           </div>
+
+          {/* Panneau filtres déroulant */}
+          {filtersOpen && (
+            <div className="mb-3 rounded-xl border border-line bg-surface p-3 space-y-3">
+              {lib.categories.map((cat) => (
+                <div key={cat.id}>
+                  <span className="mb-1.5 block text-[10px] font-semibold uppercase tracking-wide text-dim">{cat.name}</span>
+                  <div className="flex flex-wrap gap-1.5">
+                    <Chip
+                      active={!(selected[cat.id]?.length)}
+                      label="Tous"
+                      count={countFor(cat.id, null)}
+                      onClick={() => setSelected((s) => ({ ...s, [cat.id]: [] }))}
+                    />
+                    {cat.options.map((opt) => (
+                      <Chip
+                        key={opt.id}
+                        active={(selected[cat.id] ?? []).includes(opt.id)}
+                        label={opt.label}
+                        count={countFor(cat.id, opt.id)}
+                        onClick={() =>
+                          setSelected((s) => {
+                            const cur = s[cat.id] ?? [];
+                            return {
+                              ...s,
+                              [cat.id]: cur.includes(opt.id)
+                                ? cur.filter((x) => x !== opt.id)
+                                : [...cur, opt.id],
+                            };
+                          })
+                        }
+                      />
+                    ))}
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
 
           {/* Cartes exercices */}
           {filtered.length === 0 ? (
