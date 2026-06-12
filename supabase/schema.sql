@@ -165,7 +165,17 @@ set search_path = public as $$
   select exists (select 1 from public.profiles where id = auth.uid() and role in ('coach','admin'));
 $$;
 
--- 9d) (Le garde anti-élévation de rôle est défini en section 8, avec is_admin.)
+-- 9d) Restreindre l'exécution des fonctions SECURITY DEFINER aux utilisateurs
+-- authentifiés uniquement (advisory Supabase P3 — supprime l'accès anon).
+-- rls_auto_enable est une fonction interne Supabase, non touchée ici.
+revoke execute on function public.is_admin() from anon, public;
+revoke execute on function public.is_coach() from anon, public;
+revoke execute on function public.handle_new_user() from anon, public;
+revoke execute on function public.prevent_role_escalation() from anon, public;
+grant execute on function public.is_admin() to authenticated;
+grant execute on function public.is_coach() to authenticated;
+-- handle_new_user et prevent_role_escalation sont appelées par des triggers
+-- (pas directement par les utilisateurs) — pas besoin de grant authenticated.
 
 -- 9e) Table d'affectation coach ↔ client
 create table if not exists public.coach_client (
@@ -238,9 +248,10 @@ drop policy if exists chat_attach_insert on storage.objects;
 create policy chat_attach_insert on storage.objects for insert to authenticated
   with check (bucket_id = 'chat-attachments');
 
--- Lecture publique (bucket public) — explicite pour clarté.
+-- Lecture restreinte aux utilisateurs authentifiés (le service role bypass RLS).
+-- Empêche le listing anon de tous les fichiers du bucket (advisory Supabase P1).
 drop policy if exists chat_attach_read on storage.objects;
-create policy chat_attach_read on storage.objects for select
+create policy chat_attach_read on storage.objects for select to authenticated
   using (bucket_id = 'chat-attachments');
 
 -- Suppression depuis le navigateur (nettoyage des fichiers orphelins).
