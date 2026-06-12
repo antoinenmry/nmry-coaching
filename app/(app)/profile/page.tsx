@@ -3,6 +3,7 @@
 import { useRef, useState, useEffect } from "react";
 import { useData } from "@/components/DataProvider";
 import { createClient } from "@/lib/supabase/client";
+import type { Challenge, UnlockedBadge } from "@/lib/types";
 
 const SPORTS = [
   "Strongman", "Hybrid", "Powerlifting", "Running",
@@ -101,10 +102,56 @@ function LocationPicker({
 
 // ─── Page profil ──────────────────────────────────────────────────────────────
 export default function ProfilePage() {
-  const { state, update, loading, me, activeUserId } = useData();
+  const { state, update, loading, me, activeUserId, library } = useData();
   const p = state.profile;
   const fileRef = useRef<HTMLInputElement>(null);
   const [photoBusy, setPhotoBusy] = useState(false);
+
+  // --- Badges épinglés ---
+  const [pickerOpen, setPickerOpen] = useState(false);
+  const [pickerSlot, setPickerSlot] = useState(0);
+  const [activeTooltip, setActiveTooltip] = useState<number | null>(null);
+
+  const challenges: Challenge[] = library.challenges ?? [];
+  const unlockedBadges: UnlockedBadge[] = state.badges ?? [];
+  const pinnedIds: (string | null)[] = [
+    state.profileBadges?.[0] ?? null,
+    state.profileBadges?.[1] ?? null,
+    state.profileBadges?.[2] ?? null,
+  ];
+  const unlockedChallenges = challenges.filter((ch) =>
+    unlockedBadges.some((b) => b.challengeId === ch.id)
+  );
+
+  useEffect(() => {
+    if (activeTooltip === null) return;
+    const close = () => setActiveTooltip(null);
+    document.addEventListener("click", close);
+    return () => document.removeEventListener("click", close);
+  }, [activeTooltip]);
+
+  function setPinned(slot: number, id: string | null) {
+    update((d) => {
+      const pins: (string | undefined)[] = [
+        d.profileBadges?.[0],
+        d.profileBadges?.[1],
+        d.profileBadges?.[2],
+      ];
+      if (id) {
+        for (let i = 0; i < 3; i++) {
+          if (pins[i] === id) pins[i] = undefined;
+        }
+      }
+      pins[slot] = id ?? undefined;
+      d.profileBadges = pins as string[];
+    });
+  }
+
+  function openPicker(slot: number) {
+    setActiveTooltip(null);
+    setPickerSlot(slot);
+    setPickerOpen(true);
+  }
 
   const set = (key: keyof typeof p) => (
     e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement>
@@ -338,6 +385,148 @@ export default function ProfilePage() {
           </div>
         </div>
       </section>
+
+      {/* Badges épinglés — visible si des défis existent */}
+      {challenges.length > 0 && (
+        <section className="rounded-2xl border border-line bg-surface p-4">
+          <h2 className="mb-4 text-xl font-bold">Mes badges</h2>
+
+          <div className="flex justify-center gap-6">
+            {[0, 1, 2].map((slot) => {
+              const id = pinnedIds[slot];
+              const ch = id ? challenges.find((c) => c.id === id) : null;
+              const ub = id ? unlockedBadges.find((b) => b.challengeId === id) : null;
+              const color = ch?.color ?? "#a855f7";
+              const showTooltip = activeTooltip === slot;
+
+              return (
+                <div key={slot} className="relative flex flex-col items-center gap-2">
+                  <button
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      if (ch) {
+                        setActiveTooltip(showTooltip ? null : slot);
+                      } else {
+                        openPicker(slot);
+                      }
+                    }}
+                    style={ch ? { borderColor: `${color}90` } : {}}
+                    className={`flex h-[72px] w-[72px] items-center justify-center rounded-full transition ${
+                      ch
+                        ? "border-2 bg-surface2"
+                        : "border-2 border-dashed border-line bg-surface2 hover:border-accent/60"
+                    }`}
+                  >
+                    {ch ? (
+                      ch.badgeImage ? (
+                        <img src={ch.badgeImage} alt={ch.title} className="h-14 w-14 rounded-full object-cover" />
+                      ) : (
+                        <span style={{ fontSize: 30 }}>{ch.icon}</span>
+                      )
+                    ) : (
+                      <span className="text-[28px] text-dim opacity-30">+</span>
+                    )}
+                  </button>
+
+                  <p className="max-w-[80px] text-center text-[11px] leading-tight text-dim">
+                    {ch ? ch.title : <span className="opacity-40">Choisir</span>}
+                  </p>
+
+                  {/* Tooltip (tap/hover) */}
+                  {showTooltip && ch && ub && (
+                    <div
+                      className="absolute bottom-full left-1/2 z-20 mb-2 w-52 -translate-x-1/2 rounded-xl border border-line bg-surface p-3"
+                      onClick={(e) => e.stopPropagation()}
+                    >
+                      <p className="mb-1 text-[13px] font-bold" style={{ color }}>{ch.title}</p>
+                      <p className="mb-1.5 text-[11px] text-dim">
+                        Débloqué le{" "}
+                        {new Date(ub.unlockedAt + "T12:00:00").toLocaleDateString("fr-FR", {
+                          day: "numeric",
+                          month: "long",
+                          year: "numeric",
+                        })}
+                      </p>
+                      <p className="mb-3 text-[12px] text-ink">{ch.description}</p>
+                      <div className="flex gap-2">
+                        <button
+                          onClick={() => openPicker(slot)}
+                          className="flex-1 rounded-lg border border-line py-1.5 text-[12px] text-dim hover:text-ink"
+                        >
+                          Changer
+                        </button>
+                        <button
+                          onClick={() => { setPinned(slot, null); setActiveTooltip(null); }}
+                          className="flex-1 rounded-lg border border-line py-1.5 text-[12px] text-danger"
+                        >
+                          Retirer
+                        </button>
+                      </div>
+                    </div>
+                  )}
+                </div>
+              );
+            })}
+          </div>
+
+          {unlockedChallenges.length === 0 && (
+            <p className="mt-4 text-center text-[12px] text-dim">
+              Débloquez des badges dans l&apos;onglet Défis de la bibliothèque.
+            </p>
+          )}
+        </section>
+      )}
+
+      {/* Picker modal */}
+      {pickerOpen && (
+        <div
+          className="fixed inset-0 z-50 flex items-end justify-center bg-black/60 sm:items-center"
+          onClick={() => setPickerOpen(false)}
+        >
+          <div
+            className="w-full max-w-sm rounded-t-3xl border-t border-line bg-surface p-5 sm:rounded-3xl"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <h3 className="mb-4 text-lg font-bold">Choisir un badge</h3>
+            {unlockedChallenges.length === 0 ? (
+              <p className="py-6 text-center text-[13px] text-dim">
+                Aucun badge débloqué pour l&apos;instant.
+              </p>
+            ) : (
+              <div className="grid grid-cols-3 gap-3">
+                {unlockedChallenges.map((ch) => {
+                  const color = ch.color ?? "#a855f7";
+                  const isSelected = pinnedIds[pickerSlot] === ch.id;
+                  return (
+                    <button
+                      key={ch.id}
+                      onClick={() => { setPinned(pickerSlot, ch.id); setPickerOpen(false); }}
+                      className="flex flex-col items-center gap-1.5 rounded-xl border p-2.5 transition"
+                      style={{
+                        borderColor: isSelected ? `${color}80` : undefined,
+                        background: isSelected ? `${color}15` : undefined,
+                      }}
+                    >
+                      {ch.badgeImage ? (
+                        <img src={ch.badgeImage} alt={ch.title} className="h-12 w-12 rounded-full object-cover" />
+                      ) : (
+                        <span style={{ fontSize: 28 }}>{ch.icon}</span>
+                      )}
+                      <p className="line-clamp-2 text-center text-[11px] leading-tight">{ch.title}</p>
+                    </button>
+                  );
+                })}
+              </div>
+            )}
+            <button
+              onClick={() => setPickerOpen(false)}
+              className="mt-4 w-full rounded-xl border border-line py-2.5 text-[13px] text-dim"
+            >
+              Annuler
+            </button>
+          </div>
+        </div>
+      )}
 
       <p className="text-center text-xs text-dim">Les modifications sont enregistrées automatiquement.</p>
     </div>

@@ -422,6 +422,7 @@ export interface AppState {
   preferences: UserPreferences;
   metrics?: Metric[];          // métriques corporelles personnalisables
   badges?: UnlockedBadge[];    // badges débloqués par le sportif
+  profileBadges?: string[];   // IDs des badges épinglés sur le profil (index 0-2 = 3 slots)
 }
 
 // Bibliothèque de départ (catégories muscu modifiables/supprimables).
