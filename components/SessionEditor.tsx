@@ -517,10 +517,9 @@ function SetLogsSection({
                 {/* Badge cyclable : travail → 🔥 échauffement → ❌ échec */}
                 <button
                   type="button"
-                  disabled={isCoach}
-                  onClick={() => !isCoach && cycleKind(i)}
+                  onClick={() => cycleKind(i)}
                   title={isWarm ? "Échauffement (taper → échec)" : isFail ? "Échec (taper → série de travail)" : "Série de travail (taper → échauffement)"}
-                  className={`grid h-6 w-6 place-items-center rounded-md text-[11px] font-bold transition ${
+                  className={`grid h-6 w-6 place-items-center rounded-md text-[11px] font-bold transition cursor-pointer hover:opacity-80 ${
                     isWarm
                       ? "bg-accent/20 text-accent"
                       : isFail
@@ -528,7 +527,7 @@ function SetLogsSection({
                         : hasData
                           ? "bg-ok/20 text-ok"
                           : "bg-surface text-dim"
-                  } ${!isCoach ? "cursor-pointer hover:opacity-80" : "cursor-default"}`}
+                  }`}
                 >
                   {isWarm ? "🔥" : isFail ? "❌" : `S${workNumber(i)}`}
                 </button>
@@ -541,7 +540,6 @@ function SetLogsSection({
                   step={0.5}
                   placeholder={ex.weight > 0 ? String(ex.weight) : "—"}
                   value={log.w || ""}
-                  disabled={isCoach}
                   onChange={(e) => patchLog(i, { w: +e.target.value || 0 })}
                   className={`text-sm ${inputAccent}`}
                 />
@@ -554,43 +552,34 @@ function SetLogsSection({
                   step={1}
                   placeholder={ex.reps > 0 ? String(ex.reps) : "—"}
                   value={log.r || ""}
-                  disabled={isCoach}
                   onChange={(e) => patchLog(i, { r: +e.target.value || 0 })}
                   className={`text-sm ${inputAccent}`}
                 />
 
                 {/* Supprimer */}
-                {!isCoach ? (
-                  <button
-                    type="button"
-                    onClick={() => removeRow(i)}
-                    className="grid h-8 w-8 place-items-center rounded-lg text-[12px] text-dim hover:text-danger"
-                  >✕</button>
-                ) : <div />}
+                <button
+                  type="button"
+                  onClick={() => removeRow(i)}
+                  className="grid h-8 w-8 place-items-center rounded-lg text-[12px] text-dim hover:text-danger"
+                >✕</button>
               </div>
             );
           })}
 
           {/* Ajouter une série */}
-          {!isCoach && (
-            <button
-              type="button"
-              onClick={addRow}
-              className="flex w-full items-center justify-center gap-1.5 border-t border-dashed border-line px-3 py-2 text-[12px] text-dim hover:text-ink"
-            >
-              + Ajouter une série
-            </button>
-          )}
+          <button
+            type="button"
+            onClick={addRow}
+            className="flex w-full items-center justify-center gap-1.5 border-t border-dashed border-line px-3 py-2 text-[12px] text-dim hover:text-ink"
+          >
+            + Ajouter une série
+          </button>
 
-          {/* Légende du cycle de tap (client) */}
-          {!isCoach && logs.length > 0 && (
+          {/* Légende du cycle de tap */}
+          {logs.length > 0 && (
             <p className="border-t border-line px-3 py-2 text-[11px] text-dim">
               Tape sur le numéro : <span className="font-semibold text-ink">S1</span> travail → <span className="font-semibold text-accent">🔥</span> échauffement → <span className="font-semibold text-danger">❌</span> échec
             </p>
-          )}
-
-          {logs.length === 0 && isCoach && (
-            <p className="px-3 py-3 text-center text-[12px] text-dim">Aucun détail logué par le sportif.</p>
           )}
         </div>
       )}
@@ -666,7 +655,7 @@ function ExerciseBlock({
         <>
           <div className="grid grid-cols-3 gap-2">
             <label className="block">
-              <span className="mb-1 block text-[13px] text-dim">Séries</span>
+              <span className="mb-1 block text-[13px] font-semibold text-ink">Séries</span>
               <input
                 type="text" inputMode="numeric" placeholder="3 ou 2-4"
                 value={ex.setsLabel ?? (ex.sets || "")}
@@ -678,7 +667,7 @@ function ExerciseBlock({
               />
             </label>
             <label className="block">
-              <span className="mb-1 block text-[13px] text-dim">Répétitions</span>
+              <span className="mb-1 block text-[13px] font-semibold text-ink">Répétitions</span>
               <input
                 type="text" inputMode="numeric" placeholder="10 ou 8-12"
                 value={ex.repsLabel ?? (ex.reps || "")}
@@ -690,7 +679,7 @@ function ExerciseBlock({
               />
             </label>
             <label className="block">
-              <span className="mb-1 block text-[13px] text-dim">{isPace ? "Allure" : "Poids (kg)"}</span>
+              <span className="mb-1 block text-[13px] font-semibold text-ink">{isPace ? "Allure" : "Poids (kg)"}</span>
               {isPace ? (
                 <PaceInput value={ex.weight} onChange={(v) => onPatch({ weight: v })} />
               ) : (
@@ -704,9 +693,9 @@ function ExerciseBlock({
 
           {/* RPE coach compact */}
           <div className="mt-2 flex items-center gap-2">
-            <span className="shrink-0 text-[12px] text-dim">RPE coach</span>
+            <span className="shrink-0 text-[12px] font-semibold text-ink">RPE coach</span>
             <input
-              type="text" inputMode="decimal" placeholder="ex : 7, 7/8, ~8"
+              type="text" inputMode="decimal" placeholder=""
               value={ex.rpeCoach ?? ""}
               onChange={(e) => onPatch({ rpeCoach: e.target.value })}
               className="flex-1"
@@ -727,11 +716,11 @@ function ExerciseBlock({
           )}
 
           <label className="mt-2.5 block">
-            <span className="mb-1 block text-[13px] text-dim">Commentaire coach</span>
+            <span className="mb-1 block text-[13px] font-semibold text-ink">Commentaire coach</span>
             <textarea
               value={ex.coachComment ?? ""}
               onChange={(e) => onPatch({ coachComment: e.target.value })}
-              placeholder="Consigne technique, points de vigilance…"
+              placeholder=""
               className="min-h-[56px]"
             />
           </label>
@@ -834,7 +823,7 @@ function ExerciseBlock({
       {/* RPE client + échec */}
       <div className="mt-2.5">
         <div className="flex items-center gap-2">
-          <span className="w-24 shrink-0 text-[13px] text-dim">RPE sportif</span>
+          <span className="w-24 shrink-0 text-[13px] font-semibold text-ink">RPE sportif</span>
           {ex.failed ? (
             <span className="rounded-lg bg-danger/20 px-2.5 py-1 text-sm font-bold text-danger">❌ Raté</span>
           ) : (
