@@ -1,9 +1,10 @@
 "use client";
 
 import Link from "next/link";
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useData } from "@/components/DataProvider";
 import { daysUntil, countdownLabel } from "@/lib/dates";
+import { createClient } from "@/lib/supabase/client";
 import type { AppState, ExerciseLibrary } from "@/lib/types";
 
 const CARDS = [
@@ -14,6 +15,16 @@ const CARDS = [
   { href: "/followup", icon: "📝", label: "Mon Suivi", color: "var(--color-danger)" },
   { href: "/library", icon: "📚", label: "Ma Bibliothèque", color: "var(--color-accent)" },
 ];
+
+// Emojis proposés dans le picker par carte (admin)
+const CARD_EMOJIS: Record<string, string[]> = {
+  "/profile":  ["👤","🧑","🙋","🏃","💪","⚡","🔥","🌟"],
+  "/plan":     ["🗓️","📅","📋","🏋️","⏱️","📌","🎽","🚀"],
+  "/goals":    ["🎯","🏅","🥇","🏆","⭐","🌠","🎖️","🎪"],
+  "/records":  ["🏆","📈","💯","🔝","⚡","🥊","🏋️","💥"],
+  "/followup": ["📝","💬","🩺","❤️","📊","🧘","🌡️","📓"],
+  "/library":  ["📚","🗂️","💡","🔍","🧠","📖","🏗️","🎓"],
+};
 
 // ─── Helpers info dynamique cartes ──────────────────────────────────────────
 
@@ -123,6 +134,26 @@ function getCardInfo(
   }
 }
 
+function renderIcon(
+  href: string,
+  defaultIcon: string,
+  cardIcons: Record<string, string>,
+  profilePhoto: string,
+) {
+  const custom = cardIcons[href];
+  if (custom) {
+    return custom.startsWith("http") ? (
+      <img src={custom} alt="" className="h-10 w-10 shrink-0 rounded-full object-cover border border-line" />
+    ) : (
+      <span className="text-3xl">{custom}</span>
+    );
+  }
+  if (href === "/profile" && profilePhoto) {
+    return <img src={profilePhoto} alt="avatar" className="h-10 w-10 shrink-0 rounded-full object-cover border border-line" />;
+  }
+  return <span className="text-3xl">{defaultIcon}</span>;
+}
+
 function DashboardSkeleton() {
   return (
     <div className="animate-pulse">
@@ -139,7 +170,7 @@ function DashboardSkeleton() {
 }
 
 export default function Dashboard() {
-  const { me, state, library, loading, role } = useData();
+  const { me, state, library, loading, role, updateLibrary } = useData();
   const today = new Date().toISOString().slice(0, 10);
   const isCoach = role === "coach" || role === "admin";
   const displayName = state.profile.name || me?.name || me?.email || "Moi";
@@ -149,6 +180,11 @@ export default function Dashboard() {
   // de app_state.data.messages, obsolète depuis la migration du chat.
   const [unreadMessages, setUnreadMessages] = useState(0);
   const [coachUrgent, setCoachUrgent] = useState(0);
+  const [editMode, setEditMode] = useState(false);
+  const [pickerCard, setPickerCard] = useState<string | null>(null);
+  const [pickerValue, setPickerValue] = useState("");
+  const [uploading, setUploading] = useState(false);
+  const fileInputRef = useRef<HTMLInputElement>(null);
   useEffect(() => {
     if (loading || !me) return;
     let cancelled = false;
@@ -164,6 +200,64 @@ export default function Dashboard() {
   }, [loading, me]);
 
   if (loading) return <DashboardSkeleton />;
+
+  const isAdmin = role === "admin";
+  const cardIcons = library.cardIcons ?? {};
+
+  const applyIcon = () => {
+    const card = pickerCard;
+    const value = pickerValue;
+    if (!card || !value) return;
+    updateLibrary((lib) => {
+      if (!lib.cardIcons) lib.cardIcons = {};
+      lib.cardIcons[card] = value;
+    });
+    setPickerCard(null);
+  };
+
+  const resetIcon = () => {
+    const card = pickerCard;
+    if (!card) return;
+    updateLibrary((lib) => {
+      if (lib.cardIcons) delete lib.cardIcons[card];
+    });
+    setPickerCard(null);
+  };
+
+  const handleUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const card = pickerCard;
+    const file = e.target.files?.[0];
+    if (!file || !card) return;
+    setUploading(true);
+    try {
+      const img = new Image();
+      const objUrl = URL.createObjectURL(file);
+      img.src = objUrl;
+      await new Promise<void>((r) => { img.onload = () => r(); });
+      const size = 80;
+      const canvas = document.createElement("canvas");
+      canvas.width = size; canvas.height = size;
+      canvas.getContext("2d")!.drawImage(img, 0, 0, size, size);
+      URL.revokeObjectURL(objUrl);
+      const blob = await new Promise<Blob | null>((r) => canvas.toBlob(r, "image/jpeg", 0.82));
+      if (!blob) return;
+      const slug = card.replace(/\//g, "");
+      const path = `card-icons/${slug}.jpg`;
+      const supabase = createClient();
+      const { error } = await supabase.storage.from("badges").upload(path, blob, {
+        contentType: "image/jpeg", upsert: true, cacheControl: "31536000",
+      });
+      if (error) throw error;
+      const uploadedUrl = supabase.storage.from("badges").getPublicUrl(path).data.publicUrl;
+      setPickerValue(uploadedUrl);
+    } catch {
+      // silent — user can retry
+    } finally {
+      setUploading(false);
+      if (fileInputRef.current) fileInputRef.current.value = "";
+    }
+  };
+
   const cardColors = state.preferences?.cardColors ?? {};
   const cardColorMode = state.preferences?.cardColorMode ?? "full";
 
@@ -227,13 +321,38 @@ export default function Dashboard() {
         );
       })()}
 
+      {/* Bouton admin — modifier les icônes */}
+      {isAdmin && (
+        <div className="mb-2 flex justify-end">
+          <button
+            onClick={() => { setEditMode(!editMode); if (editMode) setPickerCard(null); }}
+            className={`flex items-center gap-1.5 rounded-xl border px-3 py-1.5 text-[13px] transition ${
+              editMode
+                ? "border-accent/50 bg-accent/10 text-accent"
+                : "border-line bg-surface text-dim"
+            }`}
+          >
+            {editMode ? "✓ Terminer" : "✏️ Icônes"}
+          </button>
+        </div>
+      )}
+
       {/* Grille de cartes */}
       <div className="grid grid-cols-2 gap-3.5">
         {CARDS.map((c) => (
           <Link
             key={c.href}
             href={c.href}
-            className="relative flex aspect-square flex-col justify-between overflow-hidden rounded-2xl border border-line bg-surface p-4 transition active:scale-95"
+            onClick={(e) => {
+              if (editMode) {
+                e.preventDefault();
+                setPickerCard(c.href);
+                setPickerValue(cardIcons[c.href] ?? "");
+              }
+            }}
+            className={`relative flex aspect-square flex-col justify-between overflow-hidden rounded-2xl border bg-surface p-4 transition active:scale-95 ${
+              editMode ? "border-dashed border-accent/60" : "border-line"
+            }`}
           >
             {cardColorMode === "full" ? (
               <span className="absolute inset-0 opacity-20" style={{ background: cardColors[c.href] || c.color }} />
@@ -241,10 +360,15 @@ export default function Dashboard() {
               <span className="absolute -right-7 -top-7 h-[90px] w-[90px] rounded-full opacity-15" style={{ background: cardColors[c.href] || c.color }} />
             )}
            <div className="flex items-start justify-between">
-                 {c.href === "/profile" && state.profile.photo ? (
-  <img src={state.profile.photo} alt="avatar" className="h-10 w-10 shrink-0 rounded-full object-cover border border-line" />
-) : (
-  <span className="text-3xl">{c.icon}</span>
+                 {renderIcon(c.href, c.icon, cardIcons, state.profile.photo)}
+{/* Badge crayon en mode édition */}
+{editMode && (
+  <div className="pointer-events-none absolute right-2 top-2 z-10 flex h-6 w-6 items-center justify-center rounded-full bg-accent">
+    <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+      <path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/>
+      <path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/>
+    </svg>
+  </div>
 )}
 {/* Badge messages non lus sur Mon Suivi */}
 {c.href === "/followup" && unreadMessages > 0 && (
@@ -294,6 +418,78 @@ export default function Dashboard() {
           </Link>
         ))}
       </div>
+
+      {/* Picker icône (admin) */}
+      {pickerCard && (
+        <div
+          className="fixed inset-0 z-50 flex items-end justify-center bg-black/60 sm:items-center"
+          onClick={() => setPickerCard(null)}
+        >
+          <div
+            className="w-full max-w-sm rounded-t-3xl border-t border-line bg-surface p-5 sm:rounded-3xl"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <p className="mb-3 text-[11px] font-semibold uppercase tracking-wide text-dim">
+              Icône — {CARDS.find((c) => c.href === pickerCard)?.label}
+            </p>
+            <div className="mb-4 grid grid-cols-8 gap-1.5">
+              {(CARD_EMOJIS[pickerCard] ?? []).map((e) => (
+                <button
+                  key={e}
+                  onClick={() => setPickerValue(e)}
+                  className={`flex h-10 w-full items-center justify-center rounded-xl text-2xl transition ${
+                    pickerValue === e ? "bg-accent/20 ring-1 ring-accent" : "bg-surface2"
+                  }`}
+                >
+                  {e}
+                </button>
+              ))}
+            </div>
+
+            <div className="relative my-3 flex items-center">
+              <div className="flex-1 border-t border-line" />
+              <span className="mx-2 text-[11px] text-dim">ou image personnalisée</span>
+              <div className="flex-1 border-t border-line" />
+            </div>
+
+            <div className="mb-4 flex items-center gap-3">
+              <button
+                onClick={() => fileInputRef.current?.click()}
+                disabled={uploading}
+                className="flex items-center gap-2 rounded-xl border border-line bg-surface2 px-3 py-2 text-[13px] text-dim disabled:opacity-50"
+              >
+                {uploading ? "Upload…" : "📁 Uploader"}
+              </button>
+              {pickerValue.startsWith("http") && (
+                <img src={pickerValue} alt="" className="h-10 w-10 rounded-full object-cover border border-line" />
+              )}
+            </div>
+            <input
+              ref={fileInputRef}
+              type="file"
+              accept="image/*"
+              className="hidden"
+              onChange={handleUpload}
+            />
+
+            <div className="flex gap-2">
+              <button
+                onClick={resetIcon}
+                className="flex-1 rounded-xl border border-line py-2.5 text-[13px] text-dim"
+              >
+                Par défaut
+              </button>
+              <button
+                onClick={applyIcon}
+                disabled={!pickerValue}
+                className="flex-1 rounded-xl bg-accent py-2.5 text-[13px] font-semibold text-white disabled:opacity-40"
+              >
+                Appliquer
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

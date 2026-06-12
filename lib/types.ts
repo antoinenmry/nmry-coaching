@@ -277,6 +277,7 @@ export interface ExerciseLibrary {
   challenges?: Challenge[];
   challengesVisible?: boolean;  // true = carte visible côté client sur l'accueil
   mapVisible?: boolean;         // true = onglet "Ma carte" visible côté sportif (off par défaut → coach/admin seulement)
+  cardIcons?: Record<string, string>; // href → emoji ou URL Storage (icône personnalisée des cartes d'accueil, admin uniquement)
 }
 
 // ---- Templates (Séances types & Semaines types) — visibles coach/admin seulement ----

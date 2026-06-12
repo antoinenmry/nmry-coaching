@@ -83,6 +83,12 @@ npx tsc --noEmit # type-check seul (sûr, ne touche pas au cache)
   - Redirect URLs : `https://nmry-coaching.vercel.app/auth/callback` + `http://localhost:3000/auth/callback`
 - Après changement d'env vars Vercel : **redéployer manuellement**.
 
+### ⚠️ Auth redirects toujours vers la prod
+`app/login/page.tsx` utilise `const SITE_URL = "https://nmry-coaching.vercel.app"` (hardcodé, pas
+`window.location.origin`) pour les callbacks signup et reset-password. Intentionnel : évite que
+les liens envoyés par email pointent vers `localhost` quand quelqu'un demande un reset depuis
+le dev local. **Ne pas revenir à `window.location.origin`.**
+
 ### ⚠️ Limite emails Supabase (plan gratuit : 2-3 emails/heure)
 **Fix immédiat — changer le mdp sans email (SQL Editor Supabase) :**
 ```sql
@@ -232,6 +238,11 @@ Document unique par sportif (JSON dans `app_state.data` Supabase) :
   début/milieu/fin), échelle Y globale, **tooltip au tap** sur un point (date + valeur exacte)).
   Migration auto au 1er chargement : `profile.height`/`profile.weight` → 1ère entrée des métriques.
 
+- `challenges?: Challenge[]` : défis (badge, titre, objectif, progression).
+  `Challenge { id, emoji, title, target, unit, value, badgeImage? }`.
+  `badgeImage?` = URL Storage bucket `badges` (image personnalisée uploadée par le coach, 256 px JPEG,
+  s'affiche à la place de l'emoji dans `BadgeCard` et la liste des défis).
+
 - `records: RecordsData` : force (max 3 par exercice), CAP, Hyrox.
 - `preferences: UserPreferences` : `cardColors` (href→hex), `cardColorMode` (`"arc"|"full"`), `notifPrefs?: NotifPrefs`, `planNotifSentAt?` (coach : dernière notif programme par clientId).
 - `library` : **ignoré en mode auth** — la bibliothèque vient de `library_state` (table dédiée, singleton).
@@ -297,10 +308,22 @@ WeekTemplateDay { dayIndex: 0-6, sessions: { tplId }[] }
 | `coach_client` | `coach_id, client_id, assigned_at` — affectations |
 | `broadcasts` | `id, coach_id, message, created_at, expires_at` — popups broadcast |
 | `push_subscriptions` | `id, user_id, endpoint, p256dh, auth, updated_at` — souscriptions push |
-| `chat_messages` | `id, coach_id, client_id, sender_id, sender_name, body, audio_url, is_voice, is_urgent, type, is_read, created_at, edited_at` — chat isolé par conversation |
+| `chat_messages` | `id, coach_id, client_id, sender_id, sender_name, body, audio_url, audio_path, is_voice, is_urgent, type, is_read, created_at, edited_at` — chat isolé par conversation (`audio_path` = chemin Storage pour les vocaux migrés) |
 
 ### ⚠️ SQL à exécuter dans Supabase si pas encore fait
 ```sql
+-- audio_path sur chat_messages (vocaux → Storage)
+ALTER TABLE public.chat_messages ADD COLUMN IF NOT EXISTS audio_path TEXT;
+
+-- bucket badges (images personnalisées pour les défis)
+INSERT INTO storage.buckets (id, name, public, file_size_limit)
+VALUES ('badges', 'badges', true, 2097152)
+ON CONFLICT (id) DO NOTHING;
+CREATE POLICY IF NOT EXISTS "badges_insert" ON storage.objects FOR INSERT WITH CHECK (bucket_id = 'badges' AND auth.role() = 'authenticated');
+CREATE POLICY IF NOT EXISTS "badges_update" ON storage.objects FOR UPDATE USING (bucket_id = 'badges' AND auth.role() = 'authenticated');
+CREATE POLICY IF NOT EXISTS "badges_read"   ON storage.objects FOR SELECT USING (bucket_id = 'badges');
+CREATE POLICY IF NOT EXISTS "badges_delete" ON storage.objects FOR DELETE USING (bucket_id = 'badges' AND auth.role() = 'authenticated');
+
 -- template_state
 CREATE TABLE IF NOT EXISTS public.template_state (
   id int PRIMARY KEY DEFAULT 1 CHECK (id = 1),
@@ -426,22 +449,27 @@ sportif → re-upsert du blob entier à chaque envoi → **contamination croisé
   ⚠️ Relancer `schema.sql` dans Supabase pour créer la table + migrer l'historique + activer Realtime.
 
 ## Stockage & quotas Supabase (Disk IO / egress)
-⚠️ Le plan **gratuit** (compute « Micro ») a un **budget Disk IO** limité + **5 Go d'egress**.
-Quand le budget Disk IO est épuisé, l'instance throttle puis **ne répond plus** (incident réel
-2026-06). **Cause racine = le blob `app_state` monolithique** (lu en entier à chaque chargement,
+Plan actuel : **Pro** (250 Go d'egress/mois, compute supérieur). Passé en Pro en 2026-06 suite à
+un dépassement du plan gratuit (5 Go) qui a rendu le site inaccessible (504 GATEWAY_TIMEOUT).
+**Cause racine = le blob `app_state` monolithique** (lu en entier à chaque chargement,
 réécrit en entier à chaque édition) + base64 dans les lignes.
 
 **Mitigations en place :**
 - **Médias hors blob → Supabase Storage** (buckets publics, chemins horodatés, `cacheControl: 1 an`) :
-  - `avatars` — photos de profil (upload direct navigateur, voir `/profile`).
-  - `chat-attachments` — photos/vidéos du chat (upload direct, voir `MessagesTab`).
+  - `avatars` — photos de profil (upload direct navigateur, voir `/profile`). Migration faite (3 photos migrées).
+  - `chat-attachments` — photos/vidéos du chat (upload direct) **+ vocaux** (nouveaux enregistrements uploadés directement ; migration faite, 2 vocaux migrés, colonne `audio_path` ajoutée).
+  - `badges` — images personnalisées pour les défis (max 2 Mo, compressées à 256 px JPEG 0.82).
 - **Sauvegardes `app_state` débouncées à 2 s + dédoublonnées** (pas de réécriture d'un blob identique).
 - **immer** (partage structurel) au lieu de `structuredClone` intégral.
 - Requêtes ciblées : chat exclut `audio_url`/photos du payload ; cron lit des sous-champs.
 
-**Leviers restants (par impact) :** migrer les photos **base64 legacy** restantes → Storage ;
-**vocaux base64** (`chat_messages.audio_url`) → Storage ; **sortir `sessions`/`records` du blob**
-en tables dédiées (fix de fond). Sinon **passer en plan Pro** (compute + egress supérieurs).
+**Routes de migration one-shot (admin) :**
+- `GET /api/admin/migrate-photos` — migre les photos base64 legacy de `app_state` → bucket `avatars`.
+- `GET /api/admin/migrate-audio` — migre les vocaux base64 de `chat_messages.audio_url` → bucket `chat-attachments`.
+Ces routes sont idempotentes (sautent les URLs déjà en https://).
+
+**Leviers restants (par impact) :** **sortir `sessions`/`records` du blob**
+en tables dédiées (fix de fond — supprime la cause racine).
 
 ## Cron Vercel
 `vercel.json` : `GET /api/cron/reminders` tous les jours à 7h (`0 7 * * *`).
@@ -480,6 +508,8 @@ pas le blob `app_state` entier de tout le monde.
 | `/api/auth/on-signup` | POST | Push nouvelle inscription → coaches/admins | auth |
 | `/api/me/has-coach` | GET | Vérifie si client a un coach (bypass RLS) | auth |
 | `/api/cron/reminders` | GET | Rappels séance + objectifs (cron 7h) | CRON_SECRET |
+| `/api/admin/migrate-photos` | GET | Migration one-shot : base64 → Storage bucket `avatars` | requireRole coach/admin |
+| `/api/admin/migrate-audio` | GET | Migration one-shot : base64 → Storage bucket `chat-attachments` | requireRole coach/admin |
 
 ## Carte des fichiers
 | Chemin | Rôle |
@@ -509,7 +539,7 @@ pas le blob `app_state` entier de tout le monde.
 | `components/NotifPrefsPanel.tsx` | Toggles notifications push (abonnement + prefs par type) |
 | `components/PushSubscribeButton.tsx` | Bouton standalone abonnement push (remplacé par NotifPrefsPanel) |
 | `components/ClientSelector.tsx` | Dropdown coach (portal `document.body` — évite clipping backdrop-blur) |
-| `components/SessionEditor.tsx` | Édition séance : coach = tout ; sportif = feedback + validation + ❌ raté |
+| `components/SessionEditor.tsx` | Édition séance : coach = tout (incl. édition des logs de séries) ; sportif = feedback + validation + ❌ raté. Labels blancs+gras (`text-ink font-semibold`), pas de placeholders. |
 | `components/GoalInfoModal.tsx` | Fiche objectif lecture seule (planning) — affiche épreuves + clientName |
 | `components/EventsDisplay.tsx` | Tableau épreuves prévu/réalisé (partagé goals + modal) |
 | `components/ExerciseMultiSelect.tsx` | Filtres + recherche + liste d'exercices à cocher |
@@ -579,5 +609,7 @@ pas le blob `app_state` entier de tout le monde.
 - [ ] Tests Supabase bout en bout (schema.sql + RLS + multi-sportif)
 - [ ] Migration : `sessions` et `records` en tables Supabase dédiées plutôt que blob JSON
 - [ ] Rate limiting sur les routes d'envoi (broadcasts, notifications) — issue sécurité moyenne
-- [x] Limite/compression taille photos (compressées à l'upload). Reste : **borner les vocaux** (audio base64).
+- [x] Limite/compression taille photos (compressées à l'upload).
+- [x] Vocaux base64 → Storage (`chat-attachments`, migration faite). Nouveaux enregistrements uploadés directement, `audio_path` en base.
+- [x] Photos base64 legacy → Storage (`avatars`, migration faite).
 - [ ] Migrer `sessions`/`profile` hors du blob `app_state` (tables/colonnes dédiées) — supprime la cause racine des contaminations de blob
