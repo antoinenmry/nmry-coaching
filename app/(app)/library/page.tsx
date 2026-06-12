@@ -884,15 +884,6 @@ export default function LibraryPage() {
       {/* ===== TAB : MA CARTE ===== */}
       {tab === "map" && (
         <div>
-          {canEdit && (
-            <div className="mb-3 flex items-start gap-2 rounded-xl border border-amber-500/30 bg-amber-500/5 px-3 py-2.5">
-              <span className="text-base">🚧</span>
-              <p className="text-[12px] text-dim">
-                Carte de la communauté. <strong className="text-ink">Masquée aux sportifs</strong> pour
-                l&apos;instant — seuls ceux qui ont coché « Visible sur la carte » dans leur profil y apparaissent.
-              </p>
-            </div>
-          )}
           <CommunityMap />
         </div>
       )}
