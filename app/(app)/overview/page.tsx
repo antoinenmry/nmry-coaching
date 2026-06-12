@@ -5,7 +5,6 @@ import { useData } from "@/components/DataProvider";
 import { createClient } from "@/lib/supabase/client";
 import { daysUntil, countdownLabel, frenchDate } from "@/lib/dates";
 import type { AppState, Goal, Followup, Profile } from "@/lib/types";
-import { emptyState } from "@/lib/types";
 
 interface ClientData {
   profile: Profile;
@@ -29,18 +28,21 @@ export default function OverviewPage() {
     (async () => {
       if (clientProfiles.length === 0) { setLoading(false); return; }
       const ids = clientProfiles.map((c) => c.id);
+      // Extraction ciblée des sous-champs (goals/followups) au lieu du blob
+      // `data` entier → egress divisé par ~100 quand les séances s'accumulent.
       const { data: rows } = await supabase
         .from("app_state")
-        .select("user_id,data")
+        .select("user_id, goals:data->goals, followups:data->followups")
         .in("user_id", ids);
 
       const result: ClientData[] = clientProfiles.map((profile) => {
-        const row = rows?.find((r) => r.user_id === profile.id);
-        const state: AppState = { ...emptyState(), ...(row?.data ?? {}) };
+        const row = rows?.find((r) => r.user_id === profile.id) as
+          | { goals: AppState["goals"] | null; followups: AppState["followups"] | null }
+          | undefined;
         return {
           profile,
-          goals: state.goals ?? [],
-          injuries: (state.followups ?? []).filter((f) => f.type === "injury"),
+          goals: row?.goals ?? [],
+          injuries: (row?.followups ?? []).filter((f) => f.type === "injury"),
         };
       });
 

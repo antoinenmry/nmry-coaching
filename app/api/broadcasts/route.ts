@@ -3,6 +3,7 @@ import { createClient } from "@/lib/supabase/server";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { sendPushToCoachClients } from "@/lib/push";
 import { insertChatMessage } from "@/lib/chat";
+import { rateLimit } from "@/lib/rateLimit";
 
 /**
  * POST /api/broadcasts
@@ -29,6 +30,15 @@ export async function POST(req: NextRequest) {
 
   if (!profile || (profile.role !== "coach" && profile.role !== "admin")) {
     return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+  }
+
+  // Anti-spam : au plus 5 broadcasts / heure par coach (push + fan-out chat à tous).
+  const rl = rateLimit(`broadcast:${user.id}`, 5, 3_600_000);
+  if (!rl.ok) {
+    return NextResponse.json(
+      { error: "Trop de broadcasts envoyés, réessaie plus tard." },
+      { status: 429, headers: { "Retry-After": String(rl.retryAfter) } }
+    );
   }
 
   const { message, expiresInHours = 24 } = await req.json().catch(() => ({}));

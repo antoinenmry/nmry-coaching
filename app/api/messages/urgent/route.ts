@@ -4,6 +4,7 @@ import { createAdminClient } from "@/lib/supabase/admin";
 import nodemailer from "nodemailer";
 import { sendPushToUser } from "@/lib/push";
 import { getUserNotifPrefs } from "@/lib/notifPrefs";
+import { rateLimit } from "@/lib/rateLimit";
 
 /**
  * POST /api/messages/urgent
@@ -28,6 +29,15 @@ export async function POST(req: NextRequest) {
   // Vérifier que clientId correspond bien à l'utilisateur connecté (anti-usurpation)
   if (clientId !== user.id) {
     return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+  }
+
+  // Anti-spam : au plus 3 emails urgents / minute par sportif (email + push au coach).
+  const rl = rateLimit(`urgent:${user.id}`, 3, 60_000);
+  if (!rl.ok) {
+    return NextResponse.json(
+      { error: "Trop de messages urgents, réessaie dans un instant." },
+      { status: 429, headers: { "Retry-After": String(rl.retryAfter) } }
+    );
   }
 
   const admin = createAdminClient();

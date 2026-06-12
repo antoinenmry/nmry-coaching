@@ -13,8 +13,7 @@ const PlaceSessionModal = dynamic(() => import("@/components/plan/PlaceSessionMo
 import { AUTH_ENABLED } from "@/lib/config";
 import { SESSION_COLORS, newSession, exerciseInstanceFromLibrary } from "@/lib/data";
 import { countdownLabel } from "@/lib/dates";
-import type { AppState, Followup, Goal, SessionInstance } from "@/lib/types";
-import { emptyState } from "@/lib/types";
+import type { Followup, Goal, SessionInstance } from "@/lib/types";
 import { createClient } from "@/lib/supabase/client";
 
 const MONTHS = ["Janvier","Février","Mars","Avril","Mai","Juin","Juillet","Août","Septembre","Octobre","Novembre","Décembre"];
@@ -74,15 +73,15 @@ export default function PlanPage() {
     const otherClients = clients.filter((c) => c.role === "client" && c.id !== activeUserId);
     if (otherClients.length === 0) { setOtherGoals([]); return; }
     (async () => {
+      // Extraction ciblée du sous-champ `goals` au lieu du blob `data` entier.
       const { data: rows } = await supabase
         .from("app_state")
-        .select("user_id,data")
+        .select("user_id, goals:data->goals")
         .in("user_id", otherClients.map((c) => c.id));
-      const goals: Goal[] = (rows ?? []).flatMap((row) => {
+      const goals: Goal[] = ((rows ?? []) as { user_id: string; goals: Goal[] | null }[]).flatMap((row) => {
         const profile = otherClients.find((c) => c.id === row.user_id);
         const name = profile?.name || profile?.email || "Sportif";
-        const s: AppState = { ...emptyState(), ...(row.data ?? {}) };
-        return (s.goals ?? []).map((g) => ({ ...g, clientName: name }));
+        return (row.goals ?? []).map((g) => ({ ...g, clientName: name }));
       });
       setOtherGoals(goals);
     })();

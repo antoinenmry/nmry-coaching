@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import webpush from "web-push";
 import { createClient } from "@/lib/supabase/server";
 import { createAdminClient } from "@/lib/supabase/admin";
+import { rateLimit } from "@/lib/rateLimit";
 
 /**
  * POST /api/push/test
@@ -12,6 +13,15 @@ export async function POST() {
   const supabase = await createClient();
   const { data: { user } } = await supabase.auth.getUser();
   if (!user) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+
+  // Anti-spam : au plus 5 notifs de test / minute par utilisateur.
+  const rl = rateLimit(`pushtest:${user.id}`, 5, 60_000);
+  if (!rl.ok) {
+    return NextResponse.json(
+      { ok: false, stage: "rate_limited", message: "Trop de tests, réessaie dans un instant." },
+      { status: 429, headers: { "Retry-After": String(rl.retryAfter) } }
+    );
+  }
 
   // Diagnostic config VAPID
   const pub = process.env.NEXT_PUBLIC_VAPID_PUBLIC_KEY;
