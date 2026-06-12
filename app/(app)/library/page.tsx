@@ -207,9 +207,7 @@ export default function LibraryPage() {
         {(canEdit || (lib.challenges ?? []).length > 0) && (
           <TabButton active={tab === "challenges"} onClick={() => setTab("challenges")} label="Défis" count={(lib.challenges ?? []).length} />
         )}
-        {(canEdit || lib.mapVisible) && (
-          <TabButton active={tab === "map"} onClick={() => setTab("map")} label="Ma carte" />
-        )}
+        <TabButton active={tab === "map"} onClick={() => setTab("map")} label="Ma carte" />
       </div>
 
       {/* ===== TAB : EXERCICES ===== */}
@@ -884,7 +882,7 @@ export default function LibraryPage() {
       })()}
 
       {/* ===== TAB : MA CARTE ===== */}
-      {tab === "map" && (canEdit || lib.mapVisible) && (
+      {tab === "map" && (
         <div>
           {canEdit && (
             <div className="mb-3 flex items-start gap-2 rounded-xl border border-amber-500/30 bg-amber-500/5 px-3 py-2.5">

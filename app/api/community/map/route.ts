@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server";
-import { requireRole } from "@/lib/apiAuth";
+import { createClient } from "@/lib/supabase/server";
 import { createAdminClient } from "@/lib/supabase/admin";
 
 /**
@@ -26,8 +26,9 @@ interface MapMember {
 }
 
 export async function GET() {
-  const auth = await requireRole(["coach", "admin"]);
-  if (!auth) return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+  const supabase = await createClient();
+  const { data: { user } } = await supabase.auth.getUser();
+  if (!user) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
 
   const admin = createAdminClient();
   // On ne sélectionne que les sous-champs utiles (jamais la photo base64).

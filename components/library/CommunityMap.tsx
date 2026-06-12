@@ -89,19 +89,50 @@ export default function CommunityMap() {
       const [lat, lng] = key.split(",").map(Number);
       bounds.push([lat, lng]);
       const count = arr.length;
-      const size = count > 1 ? 46 : 38;
       const city = arr[0].city;
       const names = arr.map((m) => m.firstName).join(", ");
-      // Pastille = cercle (compteur) + étiquette ville intégrée → très lisible sur la carte.
+
+      // Génère une pastille circulaire : photo si dispo, sinon initiale colorée.
+      const avatar = (m: MapMember, size: number, zIndex: number, offset: number) => {
+        const border = `border:2.5px solid #0e0e10`;
+        const pos = `position:absolute;left:${offset}px;top:0;z-index:${zIndex}`;
+        const circle = `width:${size}px;height:${size}px;border-radius:50%;overflow:hidden;${border};${pos}`;
+        if (m.photo) {
+          return `<div style="${circle}"><img src="${m.photo}" style="width:100%;height:100%;object-fit:cover" /></div>`;
+        }
+        return `<div style="${circle};background:${PIN};display:flex;align-items:center;justify-content:center;color:#fff;font-weight:700;font-size:${Math.round(size * 0.4)}px">${m.firstName.slice(0, 1).toUpperCase()}</div>`;
+      };
+
+      let avatarsHtml: string;
+      let stackW: number;
+      const AV = 42; // taille avatar unique
+      const SM = 32; // taille avatars en stack
+      const STEP = 20; // décalage horizontal par avatar
+
+      if (count === 1) {
+        stackW = AV;
+        avatarsHtml = avatar(arr[0], AV, 1, 0);
+      } else {
+        const visible = arr.slice(0, 3);
+        stackW = SM + (visible.length - 1) * STEP + (count > 3 ? STEP : 0);
+        avatarsHtml = visible.map((m, i) => avatar(m, SM, visible.length - i, i * STEP)).join("");
+        if (count > 3) {
+          const extra = count - 3;
+          avatarsHtml += `<div style="position:absolute;left:${3 * STEP}px;top:0;z-index:0;width:${SM}px;height:${SM}px;border-radius:50%;background:#1e1e2e;border:2.5px solid #0e0e10;display:flex;align-items:center;justify-content:center;color:#aaa;font-size:10px;font-weight:700">+${extra}</div>`;
+        }
+      }
+
+      const iconH = (count === 1 ? AV : SM) + 26;
+      const iconW = Math.max(stackW + 8, 100);
       const icon = L.divIcon({
         className: "",
         html:
-          `<div style="display:flex;flex-direction:column;align-items:center;width:140px">` +
-          `<div style="width:${size}px;height:${size}px;display:flex;align-items:center;justify-content:center;border-radius:50%;background:${PIN};color:#fff;font-weight:700;font-size:16px;border:3px solid #0e0e10;box-shadow:0 2px 8px rgba(0,0,0,0.5),0 0 0 5px rgba(83,74,183,0.22)">${count}</div>` +
-          `<div style="margin-top:5px;background:#0e0e10;color:#fff;font-size:11px;font-weight:600;padding:2px 9px;border-radius:99px;border:1px solid ${PIN};white-space:nowrap;box-shadow:0 2px 6px rgba(0,0,0,0.5)">${city}</div>` +
+          `<div style="display:flex;flex-direction:column;align-items:center;width:${iconW}px">` +
+          `<div style="position:relative;height:${count === 1 ? AV : SM}px;width:${stackW}px;margin:0 auto">${avatarsHtml}</div>` +
+          `<div style="margin-top:6px;background:#0e0e10;color:#fff;font-size:11px;font-weight:600;padding:2px 9px;border-radius:99px;border:1px solid ${PIN};white-space:nowrap">${city}</div>` +
           `</div>`,
-        iconSize: [140, size + 28],
-        iconAnchor: [70, size / 2],
+        iconSize: [iconW, iconH],
+        iconAnchor: [iconW / 2, (count === 1 ? AV : SM) / 2],
       });
       L.marker([lat, lng], { icon })
         .addTo(layer)
