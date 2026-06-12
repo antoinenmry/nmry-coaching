@@ -146,6 +146,7 @@ export interface ChatMessage {
   attachmentUrl?: string;     // Supabase Storage public URL (image ou vidéo)
   attachmentType?: "image" | "video";
   attachmentPath?: string;    // chemin Storage pour la suppression
+  audioPath?: string;         // chemin Storage pour les vocaux (vide si encore base64 legacy)
 }
 
 /** Une note du bloc-notes partagé sportif ↔ coach (stocké dans app_state du sportif). */

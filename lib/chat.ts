@@ -21,6 +21,7 @@ export interface ChatRow {
   attachment_url: string | null;
   attachment_type: string | null;
   attachment_path: string | null;
+  audio_path: string | null;
 }
 
 /** Convertit une ligne SQL en ChatMessage (forme utilisée par le front). */
@@ -40,6 +41,7 @@ export function rowToMessage(r: ChatRow): ChatMessage {
     attachmentUrl: r.attachment_url ?? undefined,
     attachmentType: (r.attachment_type as ChatMessage["attachmentType"]) ?? undefined,
     attachmentPath: r.attachment_path ?? undefined,
+    audioPath: r.audio_path ?? undefined,
   };
 }
 
@@ -56,6 +58,7 @@ export interface InsertChatArgs {
   attachmentUrl?: string;
   attachmentType?: "image" | "video";
   attachmentPath?: string;
+  audioPath?: string;
 }
 
 /** Insère un message dans la conversation (coach_id, client_id). */
@@ -76,6 +79,7 @@ export async function insertChatMessage(admin: Admin, args: InsertChatArgs): Pro
       attachment_url: args.attachmentUrl ?? null,
       attachment_type: args.attachmentType ?? null,
       attachment_path: args.attachmentPath ?? null,
+      audio_path: args.audioPath ?? null,
     })
     .select()
     .single();

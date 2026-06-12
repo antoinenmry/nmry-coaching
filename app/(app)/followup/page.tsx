@@ -39,6 +39,7 @@ function rowToChatMessage(r: Record<string, unknown>): ChatMessage {
     attachmentUrl: (r.attachment_url as string) ?? undefined,
     attachmentType: (r.attachment_type as ChatMessage["attachmentType"]) ?? undefined,
     attachmentPath: (r.attachment_path as string) ?? undefined,
+    audioPath: (r.audio_path as string) ?? undefined,
   };
 }
 
@@ -459,7 +460,7 @@ function MessagesTab() {
 
   // Envoie un message (texte, vocal ou media) via l'API chat, puis recharge la conversation.
   // Renvoie true si l'enregistrement a réussi (utile pour nettoyer un média orphelin).
-  async function postMessage(payload: { text?: string; audioUrl?: string; isVoice?: boolean; isUrgent?: boolean; attachmentUrl?: string; attachmentType?: string; attachmentPath?: string }): Promise<boolean> {
+  async function postMessage(payload: { text?: string; audioUrl?: string; audioPath?: string; isVoice?: boolean; isUrgent?: boolean; attachmentUrl?: string; attachmentType?: string; attachmentPath?: string }): Promise<boolean> {
     if (!convClientId || !me) return false;
     try {
       const res = await fetch("/api/chat", {
@@ -507,17 +508,31 @@ function MessagesTab() {
       mrRef.current = mr;
       chunksRef.current = [];
       mr.ondataavailable = e => { if (e.data.size > 0) chunksRef.current.push(e.data); };
-      mr.onstop = () => {
-        // Utiliser le vrai MIME type choisi par le navigateur
+      mr.onstop = async () => {
         const mimeType = mr.mimeType || "audio/webm";
         const blob = new Blob(chunksRef.current, { type: mimeType });
-        const reader = new FileReader();
-        reader.onload = () => {
-          if (!me) return;
-          postMessage({ isVoice: true, audioUrl: reader.result as string });
-        };
-        reader.readAsDataURL(blob);
         stream.getTracks().forEach(t => t.stop());
+        if (!me) return;
+
+        // Upload direct vers Storage (évite le blob base64 en DB → ↓ egress/Disk IO).
+        const ext = mimeType.includes("mp4") || mimeType.includes("m4a") ? "m4a" : "webm";
+        const path = `${me.id}/${Date.now()}.${ext}`;
+        const supabase = createClient();
+        const { error } = await supabase.storage
+          .from("chat-attachments")
+          .upload(path, blob, { contentType: mimeType, cacheControl: "31536000" });
+
+        if (!error) {
+          const url = supabase.storage.from("chat-attachments").getPublicUrl(path).data.publicUrl;
+          postMessage({ isVoice: true, audioUrl: url, audioPath: path });
+        } else {
+          // Repli base64 si l'upload échoue (réseau coupé, quota Storage plein, etc.)
+          const reader = new FileReader();
+          reader.onload = () => {
+            postMessage({ isVoice: true, audioUrl: reader.result as string });
+          };
+          reader.readAsDataURL(blob);
+        }
       };
       mr.start(200);
       setRecording(true); setRecTime(0);

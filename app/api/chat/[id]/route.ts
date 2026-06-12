@@ -55,10 +55,14 @@ export async function DELETE(_req: NextRequest, { params }: { params: Promise<{ 
   if (!row) return NextResponse.json({ error: "Introuvable" }, { status: 404 });
   if (!allowed) return NextResponse.json({ error: "Forbidden" }, { status: 403 });
 
-  // Supprime le fichier Storage si le message avait une pièce jointe
+  // Supprime les fichiers Storage associés au message
   const attachPath = (row as { attachment_path?: string | null }).attachment_path;
   if (attachPath) {
     await admin.storage.from("chat-attachments").remove([attachPath]).catch(() => {});
+  }
+  const audioPath = (row as { audio_path?: string | null }).audio_path;
+  if (audioPath) {
+    await admin.storage.from("chat-attachments").remove([audioPath]).catch(() => {});
   }
   await admin.from("chat_messages").delete().eq("id", id);
   return NextResponse.json({ ok: true });

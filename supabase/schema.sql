@@ -30,6 +30,7 @@ create table if not exists public.app_state (
 -- Migrations : ajouter les colonnes si la table existe déjà
 alter table public.app_state add column if not exists updated_by_coach_at  timestamptz;
 alter table public.app_state add column if not exists updated_by_client_at timestamptz;
+alter table public.chat_messages add column if not exists audio_path text;
 
 alter table public.profiles  enable row level security;
 alter table public.app_state enable row level security;
@@ -216,7 +217,8 @@ create table if not exists public.chat_messages (
   edited_at       timestamptz,
   attachment_url  text,           -- Supabase Storage public URL (image/vidéo)
   attachment_type text,           -- 'image' | 'video'
-  attachment_path text            -- chemin Storage pour la suppression serveur
+  attachment_path text,           -- chemin Storage pour la suppression serveur
+  audio_path      text            -- chemin Storage pour les vocaux (post-migration base64)
 );
 
 create index if not exists chat_messages_client_idx on public.chat_messages (client_id, created_at);

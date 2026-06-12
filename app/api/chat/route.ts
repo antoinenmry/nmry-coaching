@@ -133,6 +133,7 @@ export async function POST(req: NextRequest) {
   const attachmentUrl: string | undefined = body?.attachmentUrl;
   const attachmentType: "image" | "video" | undefined = body?.attachmentType;
   const attachmentPath: string | undefined = body?.attachmentPath;
+  const audioPath: string | undefined = body?.audioPath;
   if (!text.trim() && !audioUrl && !attachmentUrl) {
     return NextResponse.json({ error: "Message vide" }, { status: 400 });
   }
@@ -171,6 +172,7 @@ export async function POST(req: NextRequest) {
     attachmentUrl,
     attachmentType,
     attachmentPath,
+    audioPath,
   });
   if (!row) return NextResponse.json({ error: "Erreur d'enregistrement" }, { status: 500 });
 
