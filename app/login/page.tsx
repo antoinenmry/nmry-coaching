@@ -4,6 +4,8 @@ import { Suspense, useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { createClient } from "@/lib/supabase/client";
 
+const SITE_URL = "https://nmry-coaching.vercel.app";
+
 type Screen = "signin" | "signup" | "pending" | "forgot" | "forgot_sent";
 
 function LoginForm() {
@@ -46,7 +48,7 @@ function LoginForm() {
         password,
         options: {
           data: { name: name.trim() },
-          emailRedirectTo: `${window.location.origin}/auth/callback`,
+          emailRedirectTo: `${SITE_URL}/auth/callback`,
         },
       });
       if (error) {
@@ -89,7 +91,7 @@ function LoginForm() {
     }
     setBusy(true);
     const { error } = await supabase.auth.resetPasswordForEmail(email, {
-      redirectTo: `${window.location.origin}/auth/callback?next=/auth/reset-password`,
+      redirectTo: `${SITE_URL}/auth/callback?next=/auth/reset-password`,
     });
     setBusy(false);
     if (error) {
