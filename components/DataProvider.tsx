@@ -9,6 +9,7 @@ import {
   useCallback,
 } from "react";
 import { useRouter } from "next/navigation";
+import { produce, setAutoFreeze } from "immer";
 import { createClient } from "@/lib/supabase/client";
 import { AUTH_ENABLED } from "@/lib/config";
 import {
@@ -21,11 +22,21 @@ import {
 } from "@/lib/types";
 type Mode = "auth" | "local";
 
+// immer : mutations via brouillon avec partage structurel (les sous-arbres non
+// modifiés sont réutilisés) → fini le structuredClone intégral de l'état à chaque
+// frappe. autoFreeze désactivé pour garder un comportement identique à avant
+// (pas de gel des objets → aucune régression sur du code qui muterait l'état).
+setAutoFreeze(false);
+
 const LOCAL_KEY = "nmry-local-state";
 const LOCAL_ROLE_KEY = "nmry-local-role";
 const COACH_CLIENT_KEY = "nmry-coach-selected-client";
 const LOCAL_PROFILE: Profile = { id: "local", email: "", name: "Moi", role: "client" };
 const EMPTY_TEMPLATES: TemplateLibrary = { sessionTemplates: [], weekTemplates: [] };
+// Sauvegarde différée : 2 s (au lieu de 500 ms) → bien moins d'écritures du blob
+// app_state pendant l'édition (↓ Disk IO Supabase). + dédoublonnage : on ne
+// réécrit pas un blob identique au dernier sauvegardé (cf. pushNow).
+const SAVE_DEBOUNCE_MS = 2000;
 
 function loadLocal(): AppState {
   if (typeof window === "undefined") return emptyState();
@@ -102,6 +113,10 @@ export function DataProvider({ children }: { children: React.ReactNode }) {
   const saveTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const libraryTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const templatesTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  // Dédoublonnage des sauvegardes app_state : on mémorise le dernier blob écrit
+  // (par profil) pour ne pas réécrire un état identique → ↓ Disk IO.
+  const lastSavedJson = useRef<string | null>(null);
+  const lastSavedUserId = useRef<string | null>(null);
   const stateRef = useRef(state);
   const libraryRef = useRef(library);
   const templatesRef = useRef(templates);
@@ -122,8 +137,12 @@ export function DataProvider({ children }: { children: React.ReactNode }) {
         .select("data")
         .eq("user_id", userId)
         .maybeSingle();
+      const loaded = { ...emptyState(), ...(data?.data ?? {}) };
       setActiveUserId(userId);
-      setState({ ...emptyState(), ...(data?.data ?? {}) });
+      setState(loaded);
+      // Amorce le baseline : on vient de charger ce blob → ne pas le réécrire tel quel.
+      lastSavedJson.current = JSON.stringify(loaded);
+      lastSavedUserId.current = userId;
     },
     [supabase],
   );
@@ -262,6 +281,12 @@ export function DataProvider({ children }: { children: React.ReactNode }) {
       return;
     }
 
+    // Dédoublonnage : si le blob est identique à la dernière sauvegarde de CE
+    // profil, on n'écrit rien → économie de Disk IO (ex. édition annulée, valeur
+    // re-saisie à l'identique, effet qui déclenche update() sans réel changement).
+    const json = JSON.stringify(stateRef.current);
+    if (userId === lastSavedUserId.current && json === lastSavedJson.current) return;
+
     setSaving(true);
     const now = new Date().toISOString();
     const isCoachSaving = ["coach","admin"].includes(meRef.current?.role ?? "");
@@ -273,7 +298,12 @@ export function DataProvider({ children }: { children: React.ReactNode }) {
         ? { updated_by_coach_at: now }
         : { updated_by_client_at: now }),
     });
-    if (error) console.error("Sauvegarde échouée", error);
+    if (error) {
+      console.error("Sauvegarde échouée", error);
+    } else {
+      lastSavedJson.current = json;
+      lastSavedUserId.current = userId;
+    }
     setSaving(false);
   }, [supabase]);
 
@@ -307,16 +337,12 @@ export function DataProvider({ children }: { children: React.ReactNode }) {
         console.error("[NMRY] Écriture refusée : client ne peut modifier que ses propres données.");
         return;
       }
-      setState((prev) => {
-        const next = structuredClone(prev);
-        recipe(next);
-        return next;
-      });
+      setState((prev) => produce(prev, recipe));
       // On capture le profil actif au moment de l'édition : la sauvegarde différée
       // ne pourra s'écrire que dans CETTE ligne (cf. write-fence dans pushNow).
       const scheduledFor = activeRef.current ?? undefined;
       if (saveTimer.current) clearTimeout(saveTimer.current);
-      saveTimer.current = setTimeout(() => pushNow(scheduledFor), 500);
+      saveTimer.current = setTimeout(() => pushNow(scheduledFor), SAVE_DEBOUNCE_MS);
     },
     [pushNow],
   );
@@ -327,13 +353,9 @@ export function DataProvider({ children }: { children: React.ReactNode }) {
         update((s) => { recipe(s.library); });
         return;
       }
-      setLibraryState((prev) => {
-        const next = structuredClone(prev);
-        recipe(next);
-        return next;
-      });
+      setLibraryState((prev) => produce(prev, recipe));
       if (libraryTimer.current) clearTimeout(libraryTimer.current);
-      libraryTimer.current = setTimeout(pushLibraryNow, 500);
+      libraryTimer.current = setTimeout(pushLibraryNow, SAVE_DEBOUNCE_MS);
     },
     [pushLibraryNow, update],
   );
@@ -344,13 +366,9 @@ export function DataProvider({ children }: { children: React.ReactNode }) {
         console.error("[NMRY] Modification templates refusée : rôle insuffisant.");
         return;
       }
-      setTemplates((prev) => {
-        const next = structuredClone(prev);
-        recipe(next);
-        return next;
-      });
+      setTemplates((prev) => produce(prev, recipe));
       if (templatesTimer.current) clearTimeout(templatesTimer.current);
-      templatesTimer.current = setTimeout(pushTemplatesNow, 500);
+      templatesTimer.current = setTimeout(pushTemplatesNow, SAVE_DEBOUNCE_MS);
     },
     [pushTemplatesNow],
   );

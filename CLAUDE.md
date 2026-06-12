@@ -9,7 +9,11 @@ UI **en français**.
 - **Tailwind CSS v4** (config via `@theme` dans `app/globals.css`, pas de `tailwind.config`)
 - **Supabase** (auth email + Postgres + RLS + Realtime) via `@supabase/ssr` — **actuellement ACTIVÉ**
 - **nodemailer** + Gmail SMTP — emails d'alerte urgence coach (pas de custom domain requis)
-- **web-push** — notifications push PWA (VAPID)
+- **web-push** — notifications push PWA (VAPID). ⚠️ `lib/push.ts` **tolère l'absence des clés
+  VAPID** (skip `setVapidDetails` + `sendPush*` no-op si non configuré) → le build ne plante plus
+  en local sans clés ; en prod (Vercel, clés posées) les push fonctionnent.
+- **immer** — mutations immuables de l'état (`update`/`updateLibrary`/`updateTemplates`) avec
+  **partage structurel** (plus de `structuredClone` intégral à chaque frappe → fluidité de saisie).
 - Déploiement **Vercel** (auto-deploy sur push `main`)
 
 ## Commandes
@@ -115,7 +119,9 @@ Intercepte `?error=access_denied` sur `/` → redirect `/login?error=lien_invali
 
 ### ⚠️ Isolation `app_state` entre profils (anti-contamination) — CRITIQUE
 `pushNow` (DataProvider) écrit le **blob `app_state` entier** du profil actif via une
-sauvegarde différée (500 ms). Un changement de profil rapide côté coach pouvait écrire les
+sauvegarde différée (**2 s** ; + **dédoublonnage** : ne réécrit pas un blob identique au dernier
+sauvegardé, baseline `lastSavedJson` amorcée au chargement → ↓ Disk IO Supabase).
+Un changement de profil rapide côté coach pouvait écrire les
 données d'un sportif dans la ligne d'un autre (incident réel : fiche affichant les données
 d'un autre sportif). **Trois garde-fous** sont en place — ne pas les retirer :
 1. **Write-fence** : `pushNow(expectedUserId)` abandonne la sauvegarde si `activeUserId` a
@@ -173,8 +179,10 @@ Exposés par `useData()` : `role`, `me`, `clients`, `activeUserId`, `switchClien
 Document unique par sportif (JSON dans `app_state.data` Supabase) :
 
 - `profile: UserProfileData` :
-  `name`, `photo` (base64, **compressé à l'upload : max 512px, JPEG 0.72 → ~20-40 Ko**),
+  `name`, `photo` (**URL Supabase Storage** bucket `avatars` ; compressée à l'upload max 512px
+  JPEG 0.72 ; base64 legacy encore possible pour d'anciens profils → s'allège au prochain changement),
   `birthDate`, `gender`, `height`, `weight`, `sports[]`, `diet`,
+  `mapConsent?` (carte communauté, voir **Carte communauté**),
   `instagram?` (`@handle` ; le `@` est un préfixe visuel en `span` flex hors de l'`input`, la valeur
   stockée n'inclut pas de `@` doublé), `location?` (`{ label, lat, lng }` via API Nominatim/OpenStreetMap).
   ⚠️ `diet` est affiché/édité dans `/followup` (pas `/profile`).
@@ -266,7 +274,7 @@ type CardInfoOption =
 ### Templates (coach/admin uniquement)
 Stockés dans `template_state` (singleton Supabase, RLS `is_coach()`).
 Chargés dans `DataProvider` → `templates: TemplateLibrary`.
-Mutés via `updateTemplates((t) => { ... })` — debounce 500ms → `PUT /api/templates`.
+Mutés via `updateTemplates((t) => { ... })` — debounce 2 s → `PUT /api/templates`.
 
 ```typescript
 TemplateLibrary {
@@ -417,6 +425,24 @@ sportif → re-upsert du blob entier à chaque envoi → **contamination croisé
 - **Migration** : backfill idempotent dans `schema.sql` (depuis `app_state.data.messages`).
   ⚠️ Relancer `schema.sql` dans Supabase pour créer la table + migrer l'historique + activer Realtime.
 
+## Stockage & quotas Supabase (Disk IO / egress)
+⚠️ Le plan **gratuit** (compute « Micro ») a un **budget Disk IO** limité + **5 Go d'egress**.
+Quand le budget Disk IO est épuisé, l'instance throttle puis **ne répond plus** (incident réel
+2026-06). **Cause racine = le blob `app_state` monolithique** (lu en entier à chaque chargement,
+réécrit en entier à chaque édition) + base64 dans les lignes.
+
+**Mitigations en place :**
+- **Médias hors blob → Supabase Storage** (buckets publics, chemins horodatés, `cacheControl: 1 an`) :
+  - `avatars` — photos de profil (upload direct navigateur, voir `/profile`).
+  - `chat-attachments` — photos/vidéos du chat (upload direct, voir `MessagesTab`).
+- **Sauvegardes `app_state` débouncées à 2 s + dédoublonnées** (pas de réécriture d'un blob identique).
+- **immer** (partage structurel) au lieu de `structuredClone` intégral.
+- Requêtes ciblées : chat exclut `audio_url`/photos du payload ; cron lit des sous-champs.
+
+**Leviers restants (par impact) :** migrer les photos **base64 legacy** restantes → Storage ;
+**vocaux base64** (`chat_messages.audio_url`) → Storage ; **sortir `sessions`/`records` du blob**
+en tables dédiées (fix de fond). Sinon **passer en plan Pro** (compute + egress supérieurs).
+
 ## Cron Vercel
 `vercel.json` : `GET /api/cron/reminders` tous les jours à 7h (`0 7 * * *`).
 Sécurisé par `Authorization: Bearer <CRON_SECRET>`. Si `CRON_SECRET` absent → 503.
@@ -526,7 +552,8 @@ pas le blob `app_state` entier de tout le monde.
   `max-h-[26vh] overflow-y-auto` + bouton « Créer la séance » toujours visible).
 - **Dropdowns dans le header** : utiliser `createPortal(…, document.body)` + `position:fixed` pour
   éviter le clipping causé par `backdrop-filter: blur()` sur le header sticky.
-- **Mutations d'état sportif** : `update((draft) => { ... })` — immuable + sauvegarde différée 500 ms.
+- **Mutations d'état sportif** : `update((draft) => { ... })` — immuable via **immer** + sauvegarde
+  différée **2 s** + **dédoublonnage** (pas de réécriture d'un blob identique).
 - **Mutations bibliothèque** : `updateLibrary((lib) => { ... })` — coach/admin seulement.
 - **Mutations templates** : `updateTemplates((t) => { ... })` — coach/admin seulement, `template_state`.
 - **Sets/reps texte** : champs `type="text"` acceptant "3" ou "3-4". `setsLabel`/`repsLabel` stockent

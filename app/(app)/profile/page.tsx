@@ -167,7 +167,9 @@ export default function ProfilePage() {
         const path = `${userId}/${Date.now()}.jpg`;
         const { error } = await supabase.storage
           .from("avatars")
-          .upload(path, blob, { contentType: "image/jpeg", upsert: true });
+          // cacheControl 1 an : le nom de fichier est horodaté (cache-busting au
+          // changement), donc on peut mettre en cache longtemps → ↓ egress sur les revisionnages.
+          .upload(path, blob, { contentType: "image/jpeg", upsert: true, cacheControl: "31536000" });
         if (!error) {
           storedUrl = supabase.storage.from("avatars").getPublicUrl(path).data.publicUrl;
           // Nettoyage de l'ancien fichier Storage (si c'en était un)

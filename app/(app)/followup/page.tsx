@@ -568,7 +568,8 @@ function MessagesTab() {
       const supabase = createClient();
       const { error: upErr } = await supabase.storage
         .from("chat-attachments")
-        .upload(path, file, { contentType: file.type, upsert: false });
+        // cacheControl 1 an : chemin horodaté unique → revisionnages servis depuis le cache (↓ egress).
+        .upload(path, file, { contentType: file.type, upsert: false, cacheControl: "31536000" });
       if (upErr) {
         flashError("⚠️ Upload échoué : " + upErr.message);
         return;
