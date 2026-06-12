@@ -174,8 +174,12 @@ revoke execute on function public.handle_new_user() from anon, public;
 revoke execute on function public.prevent_role_escalation() from anon, public;
 grant execute on function public.is_admin() to authenticated;
 grant execute on function public.is_coach() to authenticated;
--- handle_new_user et prevent_role_escalation sont appelées par des triggers
--- (pas directement par les utilisateurs) — pas besoin de grant authenticated.
+-- handle_new_user et prevent_role_escalation sont des triggers : révocation
+-- de authenticated aussi (appelées par le système, pas par les users).
+revoke execute on function public.handle_new_user() from authenticated;
+revoke execute on function public.prevent_role_escalation() from authenticated;
+-- is_admin() et is_coach() doivent rester accessibles à authenticated (RLS).
+-- rls_auto_enable est interne Supabase — advisory permanent, non corrigeable.
 
 -- 9e) Table d'affectation coach ↔ client
 create table if not exists public.coach_client (
@@ -248,11 +252,15 @@ drop policy if exists chat_attach_insert on storage.objects;
 create policy chat_attach_insert on storage.objects for insert to authenticated
   with check (bucket_id = 'chat-attachments');
 
--- Lecture restreinte aux utilisateurs authentifiés (le service role bypass RLS).
--- Empêche le listing anon de tous les fichiers du bucket (advisory Supabase P1).
+-- Lecture restreinte à l'authentifié + dossier propre à l'utilisateur.
+-- Le service role bypass RLS → les routes API (audio, avatars) ne sont pas impactées.
+-- Résout l'advisory "Public Bucket Allows Listing" côté Supabase.
 drop policy if exists chat_attach_read on storage.objects;
 create policy chat_attach_read on storage.objects for select to authenticated
-  using (bucket_id = 'chat-attachments');
+  using (
+    bucket_id = 'chat-attachments'
+    and (storage.foldername(name))[1] = auth.uid()::text
+  );
 
 -- Suppression depuis le navigateur (nettoyage des fichiers orphelins).
 -- La suppression liée à un message passe, elle, par le service role (admin) côté serveur.
@@ -276,7 +284,7 @@ create policy badges_update on storage.objects for update to authenticated
   using (bucket_id = 'badges');
 
 drop policy if exists badges_read on storage.objects;
-create policy badges_read on storage.objects for select
+create policy badges_read on storage.objects for select to authenticated
   using (bucket_id = 'badges');
 
 drop policy if exists badges_delete on storage.objects;
@@ -302,7 +310,7 @@ create policy avatars_update on storage.objects for update to authenticated
   using (bucket_id = 'avatars');
 
 drop policy if exists avatars_read on storage.objects;
-create policy avatars_read on storage.objects for select
+create policy avatars_read on storage.objects for select to authenticated
   using (bucket_id = 'avatars');
 
 drop policy if exists avatars_delete on storage.objects;
