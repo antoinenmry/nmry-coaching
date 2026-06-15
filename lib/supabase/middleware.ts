@@ -8,9 +8,15 @@ const SUPABASE_URL = process.env.NEXT_PUBLIC_SUPABASE_URL;
 const SUPABASE_ANON_KEY = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
 
 /** Route publique : /login et les routes de callback /auth/* (confirmation email,
- *  reset mot de passe) qui s'exécutent AVANT que la session existe. */
+ *  reset mot de passe) qui s'exécutent AVANT que la session existe.
+ *  `/api/dashboard/*` : routes en lecture seule pour le dashboard mural, protégées par
+ *  leur propre secret (Authorization: Bearer DASHBOARD_SECRET) — pas par la session. */
 function isPublicPath(path: string) {
-  return path === "/login" || path.startsWith("/auth/");
+  return (
+    path === "/login" ||
+    path.startsWith("/auth/") ||
+    path.startsWith("/api/dashboard/")
+  );
 }
 
 /** Supabase redirige vers la Site URL avec ?error= quand un lien est expiré/invalide.
