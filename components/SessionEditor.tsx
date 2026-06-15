@@ -681,7 +681,12 @@ function ExerciseBlock({
             <label className="block">
               <span className="mb-1 block text-[13px] font-semibold text-ink">{isPace ? "Allure" : "Poids (kg)"}</span>
               {isPace ? (
-                <PaceInput value={ex.weight} onChange={(v) => onPatch({ weight: v })} />
+                <input
+                  type="text"
+                  value={ex.weightLabel ?? ""}
+                  onChange={(e) => onPatch({ weightLabel: e.target.value || undefined })}
+                  placeholder="ex : 4:30 à 4:35"
+                />
               ) : (
                 <input type="number" min={0} step={1} placeholder="0"
                   value={ex.weight || ""}
@@ -730,9 +735,9 @@ function ExerciseBlock({
           {/* Vue client — prescription en lecture seule */}
           <div className="flex flex-wrap gap-x-4 gap-y-1 text-sm">
             <span><strong>{ex.setsLabel ?? ex.sets}</strong> × <strong>{ex.repsLabel ?? ex.reps}</strong> reps</span>
-            {ex.weight > 0 && (
+            {(isPace ? (ex.weightLabel || ex.weight > 0) : ex.weight > 0) && (
               <span className="rounded-md bg-surface px-2 py-0.5 text-[12px] font-semibold text-dim">
-                Prescrit : {isPace ? fmtPaceDisplay(ex.weight) : `${ex.weight} kg`}
+                Prescrit : {isPace ? (ex.weightLabel ?? fmtPaceDisplay(ex.weight)) : `${ex.weight} kg`}
               </span>
             )}
           </div>
@@ -752,7 +757,7 @@ function ExerciseBlock({
           {/* Poids global sportif */}
           <div className="mt-2.5">
             <span className="mb-1 block text-[13px] text-dim">
-              {ex.weight > 0 ? (isPace ? "Mon allure réalisée" : "Mon poids réalisé") : (isPace ? "Allure réalisée" : "Poids utilisé")}
+              {(ex.weightLabel || ex.weight > 0) ? (isPace ? "Mon allure réalisée" : "Mon poids réalisé") : (isPace ? "Allure réalisée" : "Poids utilisé")}
             </span>
             {isPace ? (
               <PaceInput value={ex.weightClient ?? 0} onChange={(v) => onPatch({ weightClient: v > 0 ? v : undefined })} />
