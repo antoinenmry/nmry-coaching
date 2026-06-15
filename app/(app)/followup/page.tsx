@@ -56,7 +56,13 @@ function fmtSec(s: number) {
   return `${Math.floor(s / 60)}:${String(Math.floor(s) % 60).padStart(2, "0")}`;
 }
 function fmtHour(iso: string) {
-  return new Date(iso).toLocaleTimeString("fr-FR", { hour: "2-digit", minute: "2-digit" });
+  const d = new Date(iso);
+  const now = new Date();
+  const time = d.toLocaleTimeString("fr-FR", { hour: "2-digit", minute: "2-digit" });
+  if (d.toDateString() === now.toDateString()) return time;
+  const yest = new Date(now); yest.setDate(now.getDate() - 1);
+  if (d.toDateString() === yest.toDateString()) return `Hier, ${time}`;
+  return `${d.toLocaleDateString("fr-FR", { day: "numeric", month: "short" })}, ${time}`;
 }
 function isActive(f: Followup): boolean {
   const today = todayKey();

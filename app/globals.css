@@ -35,6 +35,7 @@ html, body {
   background: var(--color-bg);
   color: var(--color-ink);
   -webkit-tap-highlight-color: transparent;
+  overscroll-behavior-y: contain;
 }
 
 * { box-sizing: border-box; }

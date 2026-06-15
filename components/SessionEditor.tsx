@@ -85,7 +85,6 @@ function PaceInput({
       <div className="flex items-center gap-2">
         <input
           type="text"
-          inputMode="decimal"
           value={raw}
           onChange={handleChange}
           onFocus={() => { focusedRef.current = true; }}
@@ -432,7 +431,8 @@ function SetLogsSection({
   function ensureRows() {
     if (!open) {
       if (logs.length === 0 && targetSets > 0) {
-        onPatch({ setLogs: Array.from({ length: targetSets }, () => ({ w: 0, r: 0 })) });
+        const defW = ex.weightClient ?? ex.weight;
+        onPatch({ setLogs: Array.from({ length: targetSets }, () => ({ w: defW, r: 0 })) });
       }
       setOpen(true);
     } else {
@@ -454,7 +454,7 @@ function SetLogsSection({
   }
 
   function addRow() {
-    onPatch({ setLogs: [...logs, { w: 0, r: 0 }] });
+    onPatch({ setLogs: [...logs, { w: ex.weightClient ?? ex.weight, r: 0 }] });
   }
 
   function removeRow(i: number) {
