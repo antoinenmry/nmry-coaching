@@ -165,7 +165,7 @@ export default function SessionEditor({
   role: Role;
   onClose: () => void;
 }) {
-  const { update, state, library } = useData();
+  const { update, state, library, activeUserId, me } = useData();
   const session = state.sessions.find((s) => s.id === sessionId);
   const [picking, setPicking] = useState(false);
 
@@ -197,6 +197,9 @@ export default function SessionEditor({
     return ids;
   }, [library, paceOptionIds]);
   const isCoach = role === "coach" || role === "admin";
+  // Auto-suivi : coach/admin éditant SA PROPRE séance (pas celle d'un sportif sélectionné)
+  // → en plus de la prescription, on lui montre aussi le ressenti/validation/RPE sportif.
+  const isSelf = activeUserId === me?.id;
   const backdropRef = useRef(false);
 
   const patchSession = (patch: Partial<typeof session>) =>
@@ -331,11 +334,11 @@ export default function SessionEditor({
               return (
                 <button
                   key={value}
-                  disabled={isCoach}
+                  disabled={isCoach && !isSelf}
                   onClick={() => patchSession({ emoji: active ? 0 : value })}
                   className={`grid h-11 flex-1 place-items-center rounded-lg border text-2xl transition ${
                     active ? "border-accent bg-accent/15" : "border-line bg-surface"
-                  } ${isCoach ? "opacity-60" : ""}`}
+                  } ${isCoach && !isSelf ? "opacity-60" : ""}`}
                   title={`${value}/5`}
                 >
                   {emo}
@@ -345,8 +348,8 @@ export default function SessionEditor({
           </div>
         </div>
 
-        {/* Valider la séance (client) */}
-        {!isCoach && session.date && (
+        {/* Valider la séance (client, ou coach/admin sur sa propre séance) */}
+        {(!isCoach || isSelf) && session.date && (
           <button
             onClick={() => patchSession({ done: !session.done })}
             className={`mt-3 w-full rounded-xl py-3 font-semibold transition ${
@@ -368,6 +371,7 @@ export default function SessionEditor({
               total={session.exercises.length}
               video={videoById[ex.exId]}
               isCoach={isCoach}
+              isSelf={isSelf}
               isPace={paceExIds.has(ex.exId)}
               onPatch={(patch) => patchEx(ex.uid, patch)}
               onRemove={() => removeExercise(ex.uid)}
@@ -593,6 +597,7 @@ function ExerciseBlock({
   total,
   video,
   isCoach,
+  isSelf,
   isPace,
   onPatch,
   onRemove,
@@ -606,6 +611,7 @@ function ExerciseBlock({
   video?: string;
   isPace?: boolean;
   isCoach: boolean;
+  isSelf: boolean;
   onPatch: (patch: Partial<ExerciseInstance>) => void;
   onRemove: () => void;
   onMove: (dir: -1 | 1) => void;
@@ -620,7 +626,7 @@ function ExerciseBlock({
 
   const isPr =
     !isPace &&
-    !isCoach &&
+    (!isCoach || isSelf) &&
     effectiveWeight > 0 &&
     (recordMax === undefined || effectiveWeight > recordMax);
   // La décision (enregistrer / ignorer) est PERSISTÉE sur l'exercice (prDismissedWeight)
@@ -754,7 +760,12 @@ function ExerciseBlock({
               <RpeGauge value={ex.rpeCoach} />
             </div>
           )}
-          {/* Poids global sportif */}
+        </>
+      )}
+
+      {/* Poids/allure réalisée + bannière PR — sportif, ou coach/admin sur sa propre séance (auto-suivi) */}
+      {(!isCoach || isSelf) && (
+        <>
           <div className="mt-2.5">
             <span className="mb-1 block text-[13px] text-dim">
               {(ex.weightLabel || ex.weight > 0) ? (isPace ? "Mon allure réalisée" : "Mon poids réalisé") : (isPace ? "Allure réalisée" : "Poids utilisé")}
@@ -836,10 +847,10 @@ function ExerciseBlock({
               {ex.rpeClient ? `${ex.rpeClient}/10` : "—"}
             </span>
           )}
-          {!isCoach && !ex.failed && (
+          {(!isCoach || isSelf) && !ex.failed && (
             <input type="range" min={0} max={10} step={1} value={ex.rpeClient} onChange={(e) => onPatch({ rpeClient: +e.target.value })} className="flex-1" />
           )}
-          {!isCoach && (
+          {(!isCoach || isSelf) && (
             <button
               type="button"
               onClick={() => onPatch({ failed: !ex.failed, ...(ex.failed ? {} : { rpeClient: 0 }) })}
@@ -852,7 +863,7 @@ function ExerciseBlock({
       </div>
 
       {/* Commentaire client */}
-      {isCoach ? (
+      {isCoach && !isSelf ? (
         ex.clientComment ? (
           <p className="mt-2 rounded-lg bg-surface p-2 text-[13px]"><span className="text-dim">Sportif : </span>{ex.clientComment}</p>
         ) : null
