@@ -2,8 +2,8 @@
 
 import { useRef, useCallback, useEffect, useState } from "react";
 
-const THRESHOLD = 70;   // px à tirer pour déclencher
-const MAX_PULL  = 100;  // px max d'étirement visuel
+const THRESHOLD = 120;  // px à tirer pour déclencher
+const MAX_PULL  = 150;  // px max d'étirement visuel
 
 export default function PullToRefresh({ children }: { children: React.ReactNode }) {
   const startYRef   = useRef<number | null>(null);
