@@ -259,7 +259,7 @@ export default function SessionEditor({
       onPointerDown={(e) => { backdropRef.current = e.target === e.currentTarget; }}
       onClick={(e) => { if (backdropRef.current && e.target === e.currentTarget) onClose(); }}
     >
-      <div className="max-h-[90vh] w-full max-w-xl overflow-y-auto rounded-t-3xl border-t border-line bg-surface p-5 sm:rounded-3xl sm:border">
+      <div className="max-h-[90vh] w-full max-w-xl overflow-y-auto overflow-x-hidden rounded-t-3xl border-t border-line bg-surface p-5 sm:rounded-3xl sm:border">
         <button onClick={onClose} className="float-right grid h-9 w-9 place-items-center rounded-lg bg-surface2" aria-label="Fermer">✕</button>
 
         <div className="border-l-4 pl-2.5" style={{ borderColor: session.color }}>
