@@ -50,8 +50,10 @@ npx tsc --noEmit # type-check seul (sûr, ne touche pas au cache)
 | `NEXT_PUBLIC_VAPID_PUBLIC_KEY` | Public | Clé VAPID publique pour les push notifications |
 | `VAPID_PRIVATE_KEY` | **Serveur uniquement** | Clé VAPID privée — ne jamais exposer |
 | `CRON_SECRET` | **Serveur uniquement** | Secret pour sécuriser `GET /api/cron/reminders` |
+| `DASHBOARD_SECRET` | **Serveur uniquement** | Secret pour sécuriser `GET /api/dashboard/today` (dashboard mural domestique) |
+| `DASHBOARD_EMAILS` | **Serveur uniquement** | Liste fixe d'emails (séparés par `,`) exposés au dashboard mural |
 
-`SUPABASE_SERVICE_ROLE_KEY`, `GMAIL_APP_PASSWORD`, `VAPID_PRIVATE_KEY`, `CRON_SECRET` ne doivent **jamais** être exposées côté client.
+`SUPABASE_SERVICE_ROLE_KEY`, `GMAIL_APP_PASSWORD`, `VAPID_PRIVATE_KEY`, `CRON_SECRET`, `DASHBOARD_SECRET` ne doivent **jamais** être exposées côté client.
 
 ### Valeurs VAPID actuelles (générées une fois, ne pas regénérer)
 - Public : `BDt3cgXasa7mT_7V8Np5vZIGBlDaQBfR114Zqfh80vqoVIxe6fqyGMVQhG6DpY9e5k6h_lBpOmeJn5ES_yjaaco`
@@ -102,7 +104,8 @@ Supabase → Authentication → Email → "OTP Expiry" → `86400` (24h).
 
 ### ⚠️ Piège middleware — `MIDDLEWARE_INVOCATION_FAILED`
 Le middleware vérifie la présence des variables avant de créer le client Supabase.
-Les routes `/auth/*` sont exclues de la protection.
+Les routes `/auth/*` et `/api/dashboard/*` sont exclues de la protection session (`isPublicPath`) —
+`/api/dashboard/*` s'auto-protège par `DASHBOARD_SECRET`.
 Intercepte `?error=access_denied` sur `/` → redirect `/login?error=lien_invalide`.
 
 ### État Supabase
@@ -199,16 +202,19 @@ Document unique par sportif (JSON dans `app_state.data` Supabase) :
 - `sessions: SessionInstance[]` — **liste à plat** :
   - `date = null` → banque « À placer » ; `date = "YYYY-MM-DD"` → placée.
   - `ExerciseInstance` : `uid`, `exId`, `name`, `sets`, `reps`, `weight`, `rpeCoach`, `rpeClient`,
-    `coachComment`, `clientComment`, `weightClient?`, `failed?`, `setsLabel?`, `repsLabel?`.
+    `coachComment`, `clientComment`, `weightClient?`, `failed?`, `setsLabel?`, `repsLabel?`, `weightLabel?`.
     `weight/rpeCoach = 0` → non renseigné. `setsLabel`/`repsLabel` = surcharge texte (ex: "3-4").
     `failed = true` → exercice raté par le sportif (affiché à la place du RPE).
     `weightClient?` = poids **réellement réalisé** par le sportif (indépendant de la prescription
     `weight` du coach ; saisissable même si le coach ne prescrit rien, ex. « travaille ton max »).
     Affiché en vert dans la synthèse `/plan` + vue coach (« Réalisé »).
   - **Allure (course)** : un exercice tagué `isPace` (option de filtre) utilise l'allure (min/km)
-    au lieu du poids (kg). `weight`/`weightClient` stockent alors des **minutes décimales**.
-    Saisie via `PaceInput` (`SessionEditor`) : accepte `5:30` (mm:ss) ou `5.5` (décimal), affiche
-    « 5 min 30 s/km » en live. Côté coach (prescrit) et sportif (réalisé).
+    au lieu du poids (kg).
+    - **Coach (prescription)** : champ **texte libre** `weightLabel?` (ex: « 4:30 à 4:35 »,
+      « Zone 2 », « sous 5:00 ») — affiché tel quel au sportif. Prioritaire sur `weight`/`fmtPaceDisplay`.
+    - **Sportif (réalisé)** : `weightClient` via `PaceInput` (`SessionEditor`) — accepte `5:30` (mm:ss)
+      ou `5.5` (décimal), stocke des **minutes décimales**, affiche « 5 min 30 s/km » en live.
+    - `slimExercise` (dashboard mural) priorise `weightLabel` sur `weight`.
   - **Verrou date** : quand `session.done === true`, la date est figée (input désactivé côté sportif,
     drag bloqué dans `/plan`, garde dans `place()`). Indicateur 🔒.
 
@@ -374,6 +380,11 @@ Page `/library` : 3 onglets — Exercices (tous) | Séances types (coach/admin) 
 - `merchandiseItems?: MerchItem[]` — `{ id, image, name, price, url, comment? }` (onglet Merch)
 - `shopItems?: ShopItem[]` — `{ id, image, name, brand, url, code?, discount?, comment?, category }` (onglet Shop)
 - `shopTabsVisible?: { merch, shop }` — onglets Merch/Shop masqués par défaut, activés par le coach.
+- `cardIcons?: Record<string, string>` — **icônes personnalisées des cartes de l'accueil** (href → emoji
+  OU URL Storage). Éditable **admin uniquement** : bouton « ✏️ Icônes » sur `/` → mode édition (badge
+  crayon par carte) → bottom-sheet picker (8 emojis présets par carte + upload image). Les images sont
+  compressées 80×80 JPEG 0.82 → bucket `badges/card-icons/{slug}.jpg`, affichées dans un cercle 40px
+  (même diamètre que la photo de profil). Helper `renderIcon()` dans `app/(app)/page.tsx` : custom > photo profil > emoji par défaut.
 Page `/shop` (bouton 🎁 dans le header). Visible client seulement si du contenu existe + onglet visible.
 
 ## PWA & Push notifications
@@ -435,7 +446,8 @@ sportif → re-upsert du blob entier à chaque envoi → **contamination croisé
   **Pagination** : 15 derniers + bouton « Voir les messages précédents » (conserve la position de
   scroll). **Vocaux chargés à la demande** : `VoicePlayer` récupère l'audio via `/api/chat/audio`
   au 1er play (indicateur ⏳), garde le chemin direct si `audioUrl` déjà présent. Urgent (bandeau
-  rouge + email), édition/suppression : inchangés.
+  rouge + email), édition/suppression : inchangés. **Horodatage** (`fmtHour`) : heure seule
+  aujourd'hui, « Hier, HH:MM » la veille, « 11 juin, HH:MM » au-delà.
 - ⚡ **Realtime** : `MessagesTab` s'abonne aux `postgres_changes` de `chat_messages` filtrés
   `client_id=eq.<conversation active>` (INSERT/UPDATE/DELETE) → messages **en direct** sans
   recharger, accusés de lecture ✓✓ live. Isolation : un seul `client_id` par canal + RLS
@@ -510,6 +522,7 @@ pas le blob `app_state` entier de tout le monde.
 | `/api/cron/reminders` | GET | Rappels séance + objectifs (cron 7h) | CRON_SECRET |
 | `/api/admin/migrate-photos` | GET | Migration one-shot : base64 → Storage bucket `avatars` | requireRole coach/admin |
 | `/api/admin/migrate-audio` | GET | Migration one-shot : base64 → Storage bucket `chat-attachments` | requireRole coach/admin |
+| `/api/dashboard/today` | GET | Dashboard mural domestique (iPad + proxy Flask) : séance du jour (Paris) + prochain objectif, sportifs `DASHBOARD_EMAILS` fixés serveur, lecture seule sous-champs | `DASHBOARD_SECRET` (Bearer) |
 
 ## Carte des fichiers
 | Chemin | Rôle |
@@ -539,7 +552,8 @@ pas le blob `app_state` entier de tout le monde.
 | `components/NotifPrefsPanel.tsx` | Toggles notifications push (abonnement + prefs par type) |
 | `components/PushSubscribeButton.tsx` | Bouton standalone abonnement push (remplacé par NotifPrefsPanel) |
 | `components/ClientSelector.tsx` | Dropdown coach (portal `document.body` — évite clipping backdrop-blur) |
-| `components/SessionEditor.tsx` | Édition séance : coach = tout (incl. édition des logs de séries) ; sportif = feedback + validation + ❌ raté. Labels blancs+gras (`text-ink font-semibold`), pas de placeholders. |
+| `components/SessionEditor.tsx` | Édition séance : coach = tout (incl. édition des logs de séries) ; sportif = feedback + validation + ❌ raté. **Auto-suivi** : si coach/admin édite SA PROPRE séance (`activeUserId === me.id`, pas un sportif via ClientSelector) → `isSelf=true` débloque aussi le ressenti/validation/poids réalisé/RPE/raté/commentaire (prescription + tracking). Labels blancs+gras (`text-ink font-semibold`), pas de placeholders. |
+| `components/PullToRefresh.tsx` | Pull-to-refresh custom (monté dans `(app)/layout.tsx`). Anti-déclenchement accidentel : seuil **120px** PUIS **maintien 800ms** au-delà du seuil (rond se remplit → vert « armé ») avant que le relâchement ne fasse `window.location.reload()`. Ajuster `THRESHOLD`/`HOLD_MS`. |
 | `components/GoalInfoModal.tsx` | Fiche objectif lecture seule (planning) — affiche épreuves + clientName |
 | `components/EventsDisplay.tsx` | Tableau épreuves prévu/réalisé (partagé goals + modal) |
 | `components/ExerciseMultiSelect.tsx` | Filtres + recherche + liste d'exercices à cocher |
@@ -554,6 +568,7 @@ pas le blob `app_state` entier de tout le monde.
 | `lib/chat.ts` | Helpers chat : `insertChatMessage` / `rowToMessage` / `getCoachOf` |
 | `lib/apiAuth.ts` | `requireRole([...])` — garde d'auth + rôle mutualisée pour les routes API |
 | `app/api/chat/` | Routes chat : `route.ts` (GET paginé/POST), `[id]/` (PATCH/DELETE), `audio/` (GET à la demande), `unread/` |
+| `app/api/dashboard/today/` | Route lecture seule dashboard mural (secret `DASHBOARD_SECRET`, emails fixés `DASHBOARD_EMAILS`) |
 | `lib/supabase/client.ts` | Client browser |
 | `lib/supabase/server.ts` | Client serveur (Server Components, route handlers) |
 | `lib/supabase/admin.ts` | Client service role — **server-side uniquement** |
