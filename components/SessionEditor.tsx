@@ -545,7 +545,7 @@ function SetLogsSection({
                   placeholder={ex.weight > 0 ? String(ex.weight) : "—"}
                   value={log.w || ""}
                   onChange={(e) => patchLog(i, { w: +e.target.value || 0 })}
-                  className={`text-sm ${inputAccent}`}
+                  className={`min-w-0 text-sm ${inputAccent}`}
                 />
 
                 {/* Reps réalisées */}
@@ -557,7 +557,7 @@ function SetLogsSection({
                   placeholder={ex.reps > 0 ? String(ex.reps) : "—"}
                   value={log.r || ""}
                   onChange={(e) => patchLog(i, { r: +e.target.value || 0 })}
-                  className={`text-sm ${inputAccent}`}
+                  className={`min-w-0 text-sm ${inputAccent}`}
                 />
 
                 {/* Supprimer */}
