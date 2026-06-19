@@ -7,11 +7,12 @@ const HOLD_MS   = 800;  // durée de maintien requise AU-DELÀ du seuil avant de
 const MAX_PULL  = 150;  // px max d'étirement visuel
 
 export default function PullToRefresh({ children }: { children: React.ReactNode }) {
-  const startYRef    = useRef<number | null>(null);
-  const pullingRef   = useRef(false);
-  const crossedAtRef = useRef<number | null>(null); // timestamp du franchissement du seuil
-  const armedRef     = useRef(false);               // true = maintien terminé, relâcher rafraîchit
-  const rafRef       = useRef<number | null>(null);
+  const startYRef        = useRef<number | null>(null);
+  const pullingRef       = useRef(false);
+  const crossedAtRef     = useRef<number | null>(null); // timestamp du franchissement du seuil
+  const armedRef         = useRef(false);               // true = maintien terminé, relâcher rafraîchit
+  const rafRef           = useRef<number | null>(null);
+  const insideScrollRef  = useRef(false); // true = touch parti d'un conteneur scrollable (modale…)
 
   const [pull, setPull]                 = useState(0);   // 0-MAX_PULL, pilote l'étirement visuel
   const [holdProgress, setHoldProgress] = useState(0);   // 0-1, avancée du maintien
@@ -48,6 +49,17 @@ export default function PullToRefresh({ children }: { children: React.ReactNode 
 
   const onTouchStart = useCallback((e: TouchEvent) => {
     if (window.scrollY > 0) return; // n'active qu'en tout haut de page
+    // Si le toucher part d'un conteneur scrollable (modale, liste…), ne pas interférer.
+    let el = e.target as HTMLElement | null;
+    insideScrollRef.current = false;
+    while (el && el !== document.body) {
+      const ov = getComputedStyle(el).overflowY;
+      if ((ov === "auto" || ov === "scroll") && el.scrollHeight > el.clientHeight) {
+        insideScrollRef.current = true;
+        break;
+      }
+      el = el.parentElement;
+    }
     startYRef.current = e.touches[0].clientY;
     pullingRef.current = false;
     resetHold();
@@ -55,6 +67,7 @@ export default function PullToRefresh({ children }: { children: React.ReactNode 
 
   const onTouchMove = useCallback((e: TouchEvent) => {
     if (startYRef.current === null) return;
+    if (insideScrollRef.current) return; // laisser la modale gérer son scroll
     const delta = e.touches[0].clientY - startYRef.current;
     if (delta <= 0) { startYRef.current = null; resetHold(); setPull(0); return; }
     if (window.scrollY === 0 && delta > 4) e.preventDefault();

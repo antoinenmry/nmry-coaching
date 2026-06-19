@@ -36,6 +36,7 @@ html, body {
   color: var(--color-ink);
   -webkit-tap-highlight-color: transparent;
   overscroll-behavior-y: contain;
+  overflow-x: hidden; /* empêche le glissement horizontal accidentel sur iOS */
 }
 
 * { box-sizing: border-box; }
