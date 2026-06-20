@@ -244,8 +244,14 @@ Document unique par sportif (JSON dans `app_state.data` Supabase) :
   début/milieu/fin), échelle Y globale, **tooltip au tap** sur un point (date + valeur exacte)).
   Migration auto au 1er chargement : `profile.height`/`profile.weight` → 1ère entrée des métriques.
 
-- `challenges?: Challenge[]` : défis (badge, titre, objectif, progression).
-  `Challenge { id, emoji, title, target, unit, value, badgeImage? }`.
+- `challenges?: Challenge[]` (dans `library_state`, **global**) : défis/badges créés par le coach.
+  `Challenge { id, icon, title, description, condition: { type, value, exId? }, color?, badgeImage? }`.
+  Débloqués automatiquement (`state.badges: UnlockedBadge[]`) à l'ouverture de l'onglet Défis dès que
+  `computeChallengeProgress(ch, state).pct >= 100`. Types de condition (`ChallengeConditionType`) :
+  `session_count` (séances validées), `pr_count` (records enregistrés), `streak_weeks` (semaines
+  consécutives avec ≥1 séance), `goal_achieved` (objectifs avec une épreuve réalisée), **`exercise_weight`**
+  (PR force = poids max enregistré pour l'exercice `condition.exId` ≥ `value` kg ; sélecteur d'exercice
+  dans l'éditeur coach, comparé à `state.records.strength`).
   `badgeImage?` = URL Storage bucket `badges` (image personnalisée uploadée par le coach, 256 px JPEG,
   s'affiche à la place de l'emoji dans `BadgeCard` et la liste des défis).
 

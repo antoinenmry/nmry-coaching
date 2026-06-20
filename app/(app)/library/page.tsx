@@ -28,6 +28,7 @@ const CONDITION_LABELS: Record<ChallengeConditionType, string> = {
   pr_count: "Records enregistrés",
   streak_weeks: "Semaines consécutives",
   goal_achieved: "Objectifs réalisés",
+  exercise_weight: "Poids sur un exercice",
 };
 
 function lightenHex(hex: string): string {
@@ -86,6 +87,14 @@ function computeChallengeProgress(ch: Challenge, state: AppState): { current: nu
     case "goal_achieved":
       current = state.goals.filter((g) => (g.events ?? []).some((e) => e.achieved.trim())).length;
       break;
+    case "exercise_weight": {
+      // PR = poids maximal enregistré pour l'exercice ciblé (records force).
+      const rec = ch.condition.exId
+        ? state.records.strength.find((ex) => ex.exId === ch.condition.exId)
+        : undefined;
+      current = rec ? rec.entries.reduce((max, e) => Math.max(max, e.weight), 0) : 0;
+      break;
+    }
   }
   return { current, target, pct: target > 0 ? Math.min(100, Math.round((current / target) * 100)) : 0 };
 }
@@ -128,6 +137,7 @@ export default function LibraryPage() {
   const [cDesc, setCDesc] = useState("");
   const [cCondType, setCCondType] = useState<ChallengeConditionType>("session_count");
   const [cCondValue, setCCondValue] = useState("10");
+  const [cCondExId, setCCondExId] = useState(""); // exercice ciblé (condition "exercise_weight")
   const [cColor, setCColor] = useState(PRESET_COLORS[0]);
   const [cBadgeImage, setCBadgeImage] = useState("");
   const [badgeImgBusy, setBadgeImgBusy] = useState(false);
@@ -685,31 +695,38 @@ export default function LibraryPage() {
 
           function saveChallenge() {
             if (!cTitle.trim()) return;
+            if (cCondType === "exercise_weight" && !cCondExId) return; // exercice requis
             const val = parseInt(cCondValue) || 1;
+            const condition = {
+              type: cCondType,
+              value: val,
+              ...(cCondType === "exercise_weight" ? { exId: cCondExId } : {}),
+            };
             if (editingChallengeId) {
               updateLibrary((lib) => {
                 const ch = (lib.challenges ?? []).find((c) => c.id === editingChallengeId);
-                if (ch) Object.assign(ch, { icon: cIcon, title: cTitle.trim(), description: cDesc.trim(), condition: { type: cCondType, value: val }, color: cColor, badgeImage: cBadgeImage || undefined });
+                if (ch) Object.assign(ch, { icon: cIcon, title: cTitle.trim(), description: cDesc.trim(), condition, color: cColor, badgeImage: cBadgeImage || undefined });
               });
               setEditingChallengeId(null);
             } else {
-              const newChallenge: Challenge = { id: uid(), icon: cIcon, title: cTitle.trim(), description: cDesc.trim(), condition: { type: cCondType, value: val }, color: cColor, badgeImage: cBadgeImage || undefined };
+              const newChallenge: Challenge = { id: uid(), icon: cIcon, title: cTitle.trim(), description: cDesc.trim(), condition, color: cColor, badgeImage: cBadgeImage || undefined };
               updateLibrary((lib) => { lib.challenges = [...(lib.challenges ?? []), newChallenge]; });
             }
-            setCIcon("🏆"); setCTitle(""); setCDesc(""); setCCondType("session_count"); setCCondValue("10"); setCColor(PRESET_COLORS[0]); setCBadgeImage("");
+            setCIcon("🏆"); setCTitle(""); setCDesc(""); setCCondType("session_count"); setCCondValue("10"); setCCondExId(""); setCColor(PRESET_COLORS[0]); setCBadgeImage("");
           }
 
           function startEdit(ch: Challenge) {
             setEditingChallengeId(ch.id);
             setCIcon(ch.icon); setCTitle(ch.title); setCDesc(ch.description);
             setCCondType(ch.condition.type); setCCondValue(String(ch.condition.value));
+            setCCondExId(ch.condition.exId ?? "");
             setCColor(ch.color ?? PRESET_COLORS[0]);
             setCBadgeImage(ch.badgeImage ?? "");
           }
 
           function cancelEdit() {
             setEditingChallengeId(null);
-            setCIcon("🏆"); setCTitle(""); setCDesc(""); setCCondType("session_count"); setCCondValue("10"); setCColor(PRESET_COLORS[0]); setCBadgeImage("");
+            setCIcon("🏆"); setCTitle(""); setCDesc(""); setCCondType("session_count"); setCCondValue("10"); setCCondExId(""); setCColor(PRESET_COLORS[0]); setCBadgeImage("");
           }
 
           return (
@@ -763,10 +780,23 @@ export default function LibraryPage() {
                     </select>
                   </label>
                   <label className="block">
-                    <span className="mb-1.5 block text-[13px] text-dim">Valeur</span>
+                    <span className="mb-1.5 block text-[13px] text-dim">{cCondType === "exercise_weight" ? "Poids (kg)" : "Valeur"}</span>
                     <input type="number" min="1" value={cCondValue} onChange={(e) => setCCondValue(e.target.value)} className="text-center" />
                   </label>
                 </div>
+                {/* Exercice ciblé — uniquement pour la condition "poids sur un exercice" */}
+                {cCondType === "exercise_weight" && (
+                  <label className="mb-3 block">
+                    <span className="mb-1.5 block text-[13px] text-dim">Exercice ciblé (compare le PR force)</span>
+                    <select value={cCondExId} onChange={(e) => setCCondExId(e.target.value)} className="w-full">
+                      <option value="">— Choisir un exercice —</option>
+                      {[...lib.exercises].sort((a, b) => a.name.localeCompare(b.name)).map((ex) => (
+                        <option key={ex.id} value={ex.id}>{ex.name}</option>
+                      ))}
+                    </select>
+                    {!cCondExId && <span className="mt-1 block text-[11px] text-danger">Sélectionne l&apos;exercice à comparer.</span>}
+                  </label>
+                )}
                 {/* Sélecteur de couleur */}
                 <div className="mb-4">
                   <span className="mb-1.5 block text-[13px] text-dim">Couleur du badge</span>
@@ -793,7 +823,7 @@ export default function LibraryPage() {
                   </div>
                 </div>
                 <div className="flex gap-2">
-                  <button onClick={saveChallenge} disabled={!cTitle.trim()} className="flex-1 rounded-xl bg-accent py-2.5 font-semibold text-[#1a1500] disabled:opacity-40">
+                  <button onClick={saveChallenge} disabled={!cTitle.trim() || (cCondType === "exercise_weight" && !cCondExId)} className="flex-1 rounded-xl bg-accent py-2.5 font-semibold text-[#1a1500] disabled:opacity-40">
                     {editingChallengeId ? "Enregistrer" : "+ Créer le défi"}
                   </button>
                   {editingChallengeId && (
@@ -834,7 +864,13 @@ export default function LibraryPage() {
                         </div>
                         {/* Pied de carte */}
                         <div className="flex items-center bg-surface px-4 py-2">
-                          <p className="text-[12px] text-dim">{CONDITION_LABELS[ch.condition.type]} — <strong className="text-ink">{ch.condition.value}</strong></p>
+                          {ch.condition.type === "exercise_weight" ? (
+                            <p className="text-[12px] text-dim">
+                              {lib.exercises.find((ex) => ex.id === ch.condition.exId)?.name ?? "Exercice supprimé"} — PR ≥ <strong className="text-ink">{ch.condition.value} kg</strong>
+                            </p>
+                          ) : (
+                            <p className="text-[12px] text-dim">{CONDITION_LABELS[ch.condition.type]} — <strong className="text-ink">{ch.condition.value}</strong></p>
+                          )}
                         </div>
                       </div>
                     );
@@ -874,7 +910,11 @@ export default function LibraryPage() {
                 const prog = computeChallengeProgress(ch, state);
                 const unlocked = unlockedIds.has(ch.id);
                 const unlockedAt = (state.badges ?? []).find((b) => b.challengeId === ch.id)?.unlockedAt;
-                return <BadgeCard key={ch.id} ch={ch} prog={prog} unlocked={unlocked} unlockedAt={unlockedAt ?? null} />;
+                const isWeight = ch.condition.type === "exercise_weight";
+                const subLabel = isWeight
+                  ? (lib.exercises.find((ex) => ex.id === ch.condition.exId)?.name ?? "Exercice")
+                  : CONDITION_LABELS[ch.condition.type];
+                return <BadgeCard key={ch.id} ch={ch} prog={prog} unlocked={unlocked} unlockedAt={unlockedAt ?? null} unit={isWeight ? " kg" : ""} subLabel={subLabel} />;
               })}
             </div>
           </div>
@@ -918,11 +958,13 @@ function CircularGauge({ pct, color, children }: { pct: number; color: string; c
   );
 }
 
-function BadgeCard({ ch, prog, unlocked, unlockedAt }: {
+function BadgeCard({ ch, prog, unlocked, unlockedAt, unit = "", subLabel }: {
   ch: Challenge;
   prog: { current: number; target: number; pct: number };
   unlocked: boolean;
   unlockedAt: string | null;
+  unit?: string;
+  subLabel?: string;
 }) {
   const color = ch.color ?? PRESET_COLORS[0];
   const locked = prog.pct === 0 && !unlocked;
@@ -957,12 +999,12 @@ function BadgeCard({ ch, prog, unlocked, unlockedAt }: {
       ) : (
         <>
           <p className="text-[12px] font-semibold" style={{ color }}>
-            {prog.current}<span className="text-dim font-normal">/{prog.target}</span>
+            {prog.current}<span className="text-dim font-normal">/{prog.target}{unit}</span>
           </p>
           <div className="mt-2 h-1.5 w-full rounded-full bg-surface2 overflow-hidden">
             <div className="h-full rounded-full transition-all" style={{ width: `${prog.pct}%`, background: color }} />
           </div>
-          <p className="mt-1 text-[10px] text-dim">{CONDITION_LABELS[ch.condition.type]}</p>
+          <p className="mt-1 text-[10px] text-dim">{subLabel ?? CONDITION_LABELS[ch.condition.type]}</p>
         </>
       )}
     </div>

@@ -250,14 +250,16 @@ export type ChallengeConditionType =
   | "session_count"    // X séances validées
   | "pr_count"         // X records enregistrés
   | "streak_weeks"     // X semaines consécutives avec ≥1 séance validée
-  | "goal_achieved";   // X objectifs avec au moins une épreuve "Réalisé" renseignée
+  | "goal_achieved"    // X objectifs avec au moins une épreuve "Réalisé" renseignée
+  | "exercise_weight"; // PR (poids max enregistré) d'un exercice ≥ poids cible
 
 export interface Challenge {
   id: string;
   icon: string;
   title: string;
   description: string;
-  condition: { type: ChallengeConditionType; value: number };
+  // `exId` n'est requis que pour la condition "exercise_weight" (→ LibraryExercise.id ciblé).
+  condition: { type: ChallengeConditionType; value: number; exId?: string };
   color?: string;      // hex, ex: "#534AB7"
   badgeImage?: string; // URL Supabase Storage (bucket badges), remplace l'emoji si définie
 }
