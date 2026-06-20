@@ -36,7 +36,9 @@ html, body {
   color: var(--color-ink);
   -webkit-tap-highlight-color: transparent;
   overscroll-behavior-y: contain;
-  overflow-x: hidden; /* empêche le glissement horizontal accidentel sur iOS */
+  /* clip (et non hidden) : bloque le glissement horizontal SANS créer de conteneur
+     de scroll sur la racine — sinon le scroll vertical casse sur desktop (Mac). */
+  overflow-x: clip;
 }
 
 * { box-sizing: border-box; }
