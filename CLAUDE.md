@@ -258,9 +258,13 @@ Document unique par sportif (JSON dans `app_state.data` Supabase) :
   `session_count` (séances validées), `pr_count` (records enregistrés), `streak_weeks` (semaines
   consécutives avec ≥1 séance), `goal_achieved` (objectifs avec une épreuve réalisée), **`exercise_weight`**
   (PR force = poids max enregistré pour l'exercice `condition.exId` ≥ `value` kg ; sélecteur d'exercice
-  dans l'éditeur coach, comparé à `state.records.strength`).
+  dans l'éditeur coach, comparé à `state.records.strength`), **`badge_set`** (collection : débloqué quand
+  TOUS les badges `condition.requiredIds` sont obtenus — ex. « GOAT des GOAT » = avoir tous les badges
+  GOAT par exercice ; multi-select de badges dans l'éditeur, déblocage en cascade via re-render).
   `badgeImage?` = URL Storage bucket `badges` (image personnalisée uploadée par le coach, 256 px JPEG,
-  s'affiche à la place de l'emoji dans `BadgeCard` et la liste des défis).
+  affichée en **`object-contain`** = badge entier visible). ⚠️ L'upload utilise un **chemin horodaté
+  unique** (`{id}-{ts}.jpg`) à chaque fois : sinon même URL + `cacheControl` 1 an = l'ancienne image
+  reste servie au remplacement. L'ancienne image est supprimée du bucket.
 
 - `records: RecordsData` : force (max 3 par exercice), CAP, Hyrox.
 - `preferences: UserPreferences` : `cardColors` (href→hex), `cardColorMode` (`"arc"|"full"`), `notifPrefs?: NotifPrefs`, `planNotifSentAt?` (coach : dernière notif programme par clientId).

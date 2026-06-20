@@ -51,6 +51,13 @@ export function computeChallengeProgress(
       current = rec ? rec.entries.reduce((max, e) => Math.max(max, e.weight), 0) : 0;
       break;
     }
+    case "badge_set": {
+      // Collection : nombre de badges prérequis déjà débloqués / total requis.
+      const req = ch.condition.requiredIds ?? [];
+      const unlocked = new Set((state.badges ?? []).map((b) => b.challengeId));
+      const got = req.filter((id) => unlocked.has(id)).length;
+      return { current: got, target: req.length, pct: req.length > 0 && got >= req.length ? 100 : (req.length > 0 ? Math.round((got / req.length) * 100) : 0) };
+    }
   }
   return { current, target, pct: target > 0 ? Math.min(100, Math.round((current / target) * 100)) : 0 };
 }
@@ -70,6 +77,10 @@ export function conditionText(ch: Challenge, exercises: LibraryExercise[] = []):
     case "exercise_weight": {
       const name = exercises.find((ex) => ex.id === ch.condition.exId)?.name ?? "un exercice";
       return `Atteindre ${v} kg sur ${name}`;
+    }
+    case "badge_set": {
+      const n = ch.condition.requiredIds?.length ?? 0;
+      return `Débloquer ${n} badge${n > 1 ? "s" : ""} prérequis`;
     }
   }
 }
