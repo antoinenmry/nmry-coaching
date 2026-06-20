@@ -347,7 +347,7 @@ export default function Dashboard() {
                 <p className="text-sm font-semibold uppercase tracking-wider text-white/80">🎉 Badge débloqué</p>
                 <div className="mx-auto mt-4 grid h-32 w-32 place-items-center overflow-hidden rounded-full text-7xl shadow-xl animate-[pop_0.4s_ease]" style={{ background: "rgba(255,255,255,0.22)" }}>
                   {ch.badgeImage ? (
-                    <img src={ch.badgeImage} alt={ch.title} className="h-full w-full object-cover" />
+                    <img src={ch.badgeImage} alt={ch.title} className="h-full w-full object-contain" />
                   ) : ch.icon}
                 </div>
                 <h3 className="mt-4 text-2xl font-bold text-white">{ch.title}</h3>

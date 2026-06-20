@@ -418,7 +418,7 @@ export default function ProfilePage() {
                   >
                     {ch ? (
                       ch.badgeImage ? (
-                        <img src={ch.badgeImage} alt={ch.title} className="h-14 w-14 rounded-full object-cover" />
+                        <img src={ch.badgeImage} alt={ch.title} className="h-14 w-14 rounded-full object-contain" />
                       ) : (
                         <span style={{ fontSize: 30 }}>{ch.icon}</span>
                       )
@@ -465,7 +465,7 @@ export default function ProfilePage() {
               <div className="flex flex-col items-center px-6 pt-7 pb-5 text-center" style={{ background: `linear-gradient(160deg, ${color}, ${color}cc)` }}>
                 <div className="grid h-28 w-28 place-items-center overflow-hidden rounded-full text-6xl shadow-lg" style={{ background: "rgba(255,255,255,0.22)" }}>
                   {ch.badgeImage ? (
-                    <img src={ch.badgeImage} alt={ch.title} className="h-full w-full object-cover" />
+                    <img src={ch.badgeImage} alt={ch.title} className="h-full w-full object-contain" />
                   ) : ch.icon}
                 </div>
                 <h3 className="mt-4 text-xl font-bold text-white">{ch.title}</h3>
@@ -538,7 +538,7 @@ export default function ProfilePage() {
                       }}
                     >
                       {ch.badgeImage ? (
-                        <img src={ch.badgeImage} alt={ch.title} className="h-12 w-12 rounded-full object-cover" />
+                        <img src={ch.badgeImage} alt={ch.title} className="h-12 w-12 rounded-full object-contain" />
                       ) : (
                         <span style={{ fontSize: 28 }}>{ch.icon}</span>
                       )}

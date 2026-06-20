@@ -698,7 +698,7 @@ export default function LibraryPage() {
                       {badgeImgBusy ? (
                         <span className="text-sm animate-pulse">⏳</span>
                       ) : cBadgeImage ? (
-                        <img src={cBadgeImage} alt="badge" className="h-full w-full object-cover rounded-[9px]" />
+                        <img src={cBadgeImage} alt="badge" className="h-full w-full object-contain rounded-[9px]" />
                       ) : (
                         <span className="text-sm">🖼️</span>
                       )}
@@ -761,7 +761,7 @@ export default function LibraryPage() {
                     {/* Aperçu */}
                     <div className="ml-auto flex items-center gap-2 rounded-xl px-3 py-1.5" style={{ background: cColor + "20", border: `1px solid ${cColor}50` }}>
                       {cBadgeImage ? (
-                        <img src={cBadgeImage} alt="badge" className="h-8 w-8 rounded-lg object-cover" />
+                        <img src={cBadgeImage} alt="badge" className="h-8 w-8 rounded-lg object-contain" />
                       ) : (
                         <span className="text-xl">{cIcon || "🏆"}</span>
                       )}
@@ -793,7 +793,7 @@ export default function LibraryPage() {
                         <div className="flex items-center gap-3 px-4 py-3.5" style={{ background: `linear-gradient(135deg, ${color}, ${lighter})` }}>
                           <div className="grid h-11 w-11 shrink-0 place-items-center overflow-hidden rounded-xl text-2xl" style={{ background: "rgba(255,255,255,0.20)" }}>
                             {ch.badgeImage ? (
-                              <img src={ch.badgeImage} alt={ch.title} className="h-full w-full object-cover" />
+                              <img src={ch.badgeImage} alt={ch.title} className="h-full w-full object-contain" />
                             ) : ch.icon}
                           </div>
                           <div className="min-w-0 flex-1">
@@ -927,7 +927,7 @@ function BadgeCard({ ch, prog, unlocked, unlockedAt, unit = "", subLabel }: {
     >
       <CircularGauge pct={unlocked ? 100 : prog.pct} color={color}>
         {ch.badgeImage && !locked ? (
-          <img src={ch.badgeImage} alt={ch.title} className="h-14 w-14 rounded-full object-cover" />
+          <img src={ch.badgeImage} alt={ch.title} className="h-14 w-14 rounded-full object-contain" />
         ) : (
           <span style={{ fontSize: 30, filter: locked ? "grayscale(1)" : "none" }}>
             {locked ? "🔒" : ch.icon}
