@@ -43,6 +43,13 @@ html, body {
 
 * { box-sizing: border-box; }
 
+/* Pop d'apparition (badge débloqué) */
+@keyframes pop {
+  0%   { transform: scale(0.4); opacity: 0; }
+  70%  { transform: scale(1.1); opacity: 1; }
+  100% { transform: scale(1); }
+}
+
 /* Champs de formulaire — style de base commun */
 input, textarea, select {
   width: 100%;

@@ -5,7 +5,8 @@ import { useEffect, useRef, useState } from "react";
 import { useData } from "@/components/DataProvider";
 import { daysUntil, countdownLabel } from "@/lib/dates";
 import { createClient } from "@/lib/supabase/client";
-import type { AppState, ExerciseLibrary } from "@/lib/types";
+import { challengesToUnlock, conditionText } from "@/lib/challenges";
+import type { AppState, ExerciseLibrary, Challenge } from "@/lib/types";
 
 const CARDS = [
   { href: "/profile", icon: "👤", label: "Mon Profil", color: "var(--color-accent)" },
@@ -170,7 +171,7 @@ function DashboardSkeleton() {
 }
 
 export default function Dashboard() {
-  const { me, state, library, loading, role, updateLibrary } = useData();
+  const { me, state, library, loading, role, updateLibrary, update, activeUserId } = useData();
   const today = new Date().toISOString().slice(0, 10);
   const isCoach = role === "coach" || role === "admin";
   const displayName = state.profile.name || me?.name || me?.email || "Moi";
@@ -185,6 +186,14 @@ export default function Dashboard() {
   const [pickerValue, setPickerValue] = useState("");
   const [uploading, setUploading] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
+
+  // --- Badges : déblocage + pop-up de célébration ---
+  const SEEN_KEY = "nmry_seen_badge_unlocks";
+  const [seenBadges, setSeenBadges] = useState<Set<string>>(new Set());
+  const [seenLoaded, setSeenLoaded] = useState(false);
+  const seededRef = useRef(false);
+  const isSelf = activeUserId === me?.id; // n'agir que sur SON propre profil (pas un client via coach)
+
   useEffect(() => {
     if (loading || !me) return;
     let cancelled = false;
@@ -198,6 +207,59 @@ export default function Dashboard() {
       .catch(() => {});
     return () => { cancelled = true; };
   }, [loading, me]);
+
+  // Seed du set "déjà vus" au 1er chargement réel : si aucune entrée localStorage,
+  // on considère tous les badges DÉJÀ débloqués comme vus → pas de burst de pop-ups
+  // au déploiement. Seuls les déblocages ULTÉRIEURS déclencheront la célébration.
+  useEffect(() => {
+    if (loading || seededRef.current) return;
+    seededRef.current = true;
+    const raw = typeof window !== "undefined" ? localStorage.getItem(SEEN_KEY) : null;
+    if (raw === null) {
+      const initial = (state.badges ?? []).map((b) => b.challengeId);
+      try { localStorage.setItem(SEEN_KEY, JSON.stringify(initial)); } catch {}
+      setSeenBadges(new Set(initial));
+    } else {
+      try { setSeenBadges(new Set(JSON.parse(raw) as string[])); } catch { setSeenBadges(new Set()); }
+    }
+    setSeenLoaded(true);
+  }, [loading, state.badges]);
+
+  // Auto-unlock sur l'accueil (uniquement sur son propre profil) : dès qu'une condition
+  // est remplie, on enregistre le badge — la pop-up suit via le set "déjà vus".
+  useEffect(() => {
+    if (loading || !me || !isSelf) return;
+    const challenges = library.challenges ?? [];
+    if (!challenges.length) return;
+    const toUnlock = challengesToUnlock(challenges, state);
+    if (!toUnlock.length) return;
+    const stamp = new Date().toISOString().slice(0, 10);
+    update((d) => {
+      if (!d.badges) d.badges = [];
+      toUnlock.forEach((id) => {
+        if (!d.badges!.find((b) => b.challengeId === id)) {
+          d.badges!.push({ challengeId: id, unlockedAt: stamp });
+        }
+      });
+    });
+  }, [loading, me, isSelf, state, library, update]);
+
+  // Badges débloqués mais pas encore célébrés (résolus vers leur défi courant).
+  const celebrate: Challenge[] = (!loading && isSelf && seenLoaded)
+    ? (state.badges ?? [])
+        .filter((b) => !seenBadges.has(b.challengeId))
+        .map((b) => (library.challenges ?? []).find((c) => c.id === b.challengeId))
+        .filter((c): c is Challenge => !!c)
+    : [];
+
+  function dismissCelebrated(id: string) {
+    setSeenBadges((prev) => {
+      const next = new Set(prev);
+      next.add(id);
+      try { localStorage.setItem(SEEN_KEY, JSON.stringify([...next])); } catch {}
+      return next;
+    });
+  }
 
   if (loading) return <DashboardSkeleton />;
 
@@ -268,6 +330,44 @@ export default function Dashboard() {
 
   return (
     <div>
+      {/* Pop-up de célébration : nouveau badge débloqué */}
+      {celebrate.length > 0 && (() => {
+        const ch = celebrate[0];
+        const color = ch.color ?? "#a855f7";
+        return (
+          <div
+            className="fixed inset-0 z-[60] flex items-center justify-center bg-black/70 p-5"
+            onClick={() => dismissCelebrated(ch.id)}
+          >
+            <div
+              className="w-full max-w-sm overflow-hidden rounded-3xl border border-line bg-surface text-center"
+              onClick={(e) => e.stopPropagation()}
+            >
+              <div className="px-6 pt-7 pb-6" style={{ background: `linear-gradient(160deg, ${color}, ${color}cc)` }}>
+                <p className="text-sm font-semibold uppercase tracking-wider text-white/80">🎉 Badge débloqué</p>
+                <div className="mx-auto mt-4 grid h-32 w-32 place-items-center overflow-hidden rounded-full text-7xl shadow-xl animate-[pop_0.4s_ease]" style={{ background: "rgba(255,255,255,0.22)" }}>
+                  {ch.badgeImage ? (
+                    <img src={ch.badgeImage} alt={ch.title} className="h-full w-full object-cover" />
+                  ) : ch.icon}
+                </div>
+                <h3 className="mt-4 text-2xl font-bold text-white">{ch.title}</h3>
+                {ch.description && <p className="mt-1 text-[13px] text-white/85">{ch.description}</p>}
+              </div>
+              <div className="p-5">
+                <p className="text-[13px] text-dim">{conditionText(ch, library.exercises)}</p>
+                <button
+                  onClick={() => dismissCelebrated(ch.id)}
+                  className="mt-4 w-full rounded-xl py-3 font-bold text-white"
+                  style={{ background: color }}
+                >
+                  {celebrate.length > 1 ? `Génial ! (encore ${celebrate.length - 1})` : "Génial !"}
+                </button>
+              </div>
+            </div>
+          </div>
+        );
+      })()}
+
       {/* Carte Vue d'ensemble (coach uniquement) */}
       {isCoach && (
         <Link

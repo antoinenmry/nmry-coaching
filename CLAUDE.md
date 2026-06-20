@@ -246,8 +246,15 @@ Document unique par sportif (JSON dans `app_state.data` Supabase) :
 
 - `challenges?: Challenge[]` (dans `library_state`, **global**) : défis/badges créés par le coach.
   `Challenge { id, icon, title, description, condition: { type, value, exId? }, color?, badgeImage? }`.
-  Débloqués automatiquement (`state.badges: UnlockedBadge[]`) à l'ouverture de l'onglet Défis dès que
-  `computeChallengeProgress(ch, state).pct >= 100`. Types de condition (`ChallengeConditionType`) :
+  Débloqués automatiquement (`state.badges: UnlockedBadge[]`) à l'ouverture de l'onglet Défis **et sur
+  l'accueil** dès que `computeChallengeProgress(ch, state).pct >= 100` (logique partagée dans
+  `lib/challenges.ts` : `computeChallengeProgress` / `challengesToUnlock` / `conditionText`).
+  **Pop-up de célébration** sur l'accueil (`page.tsx`) au déblocage d'un nouveau badge : le set des
+  badges « déjà vus » est en `localStorage` (`nmry_seen_badge_unlocks`), seedé au 1er chargement avec
+  les badges déjà débloqués → seuls les déblocages ultérieurs déclenchent la pop-up. N'agit que sur son
+  propre profil (`activeUserId === me.id`). **Modal détail** dans `/profile` au clic sur un badge épinglé
+  (grande image + « comment l'obtenir » via `conditionText` + date de déblocage + Changer/Retirer).
+  Types de condition (`ChallengeConditionType`) :
   `session_count` (séances validées), `pr_count` (records enregistrés), `streak_weeks` (semaines
   consécutives avec ≥1 séance), `goal_achieved` (objectifs avec une épreuve réalisée), **`exercise_weight`**
   (PR force = poids max enregistré pour l'exercice `condition.exId` ≥ `value` kg ; sélecteur d'exercice
@@ -572,6 +579,7 @@ pas le blob `app_state` entier de tout le monde.
 | `lib/push.ts` | Utilitaire web-push : `sendPushToUser` / `sendPushToCoachClients` |
 | `lib/notifPrefs.ts` | `getUserNotifPrefs(userId)` — lit prefs depuis app_state (admin client) |
 | `lib/chat.ts` | Helpers chat : `insertChatMessage` / `rowToMessage` / `getCoachOf` |
+| `lib/challenges.ts` | Logique partagée défis/badges : `computeChallengeProgress` / `challengesToUnlock` / `conditionText` (utilisée par `/library`, `/profile`, accueil) |
 | `lib/apiAuth.ts` | `requireRole([...])` — garde d'auth + rôle mutualisée pour les routes API |
 | `app/api/chat/` | Routes chat : `route.ts` (GET paginé/POST), `[id]/` (PATCH/DELETE), `audio/` (GET à la demande), `unread/` |
 | `app/api/dashboard/today/` | Route lecture seule dashboard mural (secret `DASHBOARD_SECRET`, emails fixés `DASHBOARD_EMAILS`) |

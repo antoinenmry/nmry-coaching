@@ -4,6 +4,7 @@ import { useRef, useState, useEffect } from "react";
 import { useData } from "@/components/DataProvider";
 import { createClient } from "@/lib/supabase/client";
 import type { Challenge, UnlockedBadge } from "@/lib/types";
+import { conditionText, computeChallengeProgress } from "@/lib/challenges";
 
 const SPORTS = [
   "Strongman", "Hybrid", "Powerlifting", "Running",
@@ -395,9 +396,7 @@ export default function ProfilePage() {
             {[0, 1, 2].map((slot) => {
               const id = pinnedIds[slot];
               const ch = id ? challenges.find((c) => c.id === id) : null;
-              const ub = id ? unlockedBadges.find((b) => b.challengeId === id) : null;
               const color = ch?.color ?? "#a855f7";
-              const showTooltip = activeTooltip === slot;
 
               return (
                 <div key={slot} className="relative flex flex-col items-center gap-2">
@@ -405,7 +404,7 @@ export default function ProfilePage() {
                     onClick={(e) => {
                       e.stopPropagation();
                       if (ch) {
-                        setActiveTooltip(showTooltip ? null : slot);
+                        setActiveTooltip(slot); // ouvre le modal détail du badge
                       } else {
                         openPicker(slot);
                       }
@@ -431,39 +430,6 @@ export default function ProfilePage() {
                   <p className="max-w-[80px] text-center text-[11px] leading-tight text-dim">
                     {ch ? ch.title : <span className="opacity-40">Choisir</span>}
                   </p>
-
-                  {/* Tooltip (tap/hover) */}
-                  {showTooltip && ch && ub && (
-                    <div
-                      className="absolute bottom-full left-1/2 z-20 mb-2 w-52 -translate-x-1/2 rounded-xl border border-line bg-surface p-3"
-                      onClick={(e) => e.stopPropagation()}
-                    >
-                      <p className="mb-1 text-[13px] font-bold" style={{ color }}>{ch.title}</p>
-                      <p className="mb-1.5 text-[11px] text-dim">
-                        Débloqué le{" "}
-                        {new Date(ub.unlockedAt + "T12:00:00").toLocaleDateString("fr-FR", {
-                          day: "numeric",
-                          month: "long",
-                          year: "numeric",
-                        })}
-                      </p>
-                      <p className="mb-3 text-[12px] text-ink">{ch.description}</p>
-                      <div className="flex gap-2">
-                        <button
-                          onClick={() => openPicker(slot)}
-                          className="flex-1 rounded-lg border border-line py-1.5 text-[12px] text-dim hover:text-ink"
-                        >
-                          Changer
-                        </button>
-                        <button
-                          onClick={() => { setPinned(slot, null); setActiveTooltip(null); }}
-                          className="flex-1 rounded-lg border border-line py-1.5 text-[12px] text-danger"
-                        >
-                          Retirer
-                        </button>
-                      </div>
-                    </div>
-                  )}
                 </div>
               );
             })}
@@ -476,6 +442,70 @@ export default function ProfilePage() {
           )}
         </section>
       )}
+
+      {/* Modal détail d'un badge épinglé (grande image + condition + date de déblocage) */}
+      {activeTooltip !== null && (() => {
+        const slot = activeTooltip;
+        const id = pinnedIds[slot];
+        const ch = id ? challenges.find((c) => c.id === id) : null;
+        if (!ch) return null;
+        const ub = unlockedBadges.find((b) => b.challengeId === ch.id);
+        const color = ch.color ?? "#a855f7";
+        const prog = computeChallengeProgress(ch, state);
+        return (
+          <div
+            className="fixed inset-0 z-50 flex items-end justify-center bg-black/60 sm:items-center"
+            onClick={() => setActiveTooltip(null)}
+          >
+            <div
+              className="w-full max-w-sm overflow-hidden rounded-t-3xl border-t border-line bg-surface sm:rounded-3xl sm:border"
+              onClick={(e) => e.stopPropagation()}
+            >
+              {/* En-tête coloré + grande image/icône */}
+              <div className="flex flex-col items-center px-6 pt-7 pb-5 text-center" style={{ background: `linear-gradient(160deg, ${color}, ${color}cc)` }}>
+                <div className="grid h-28 w-28 place-items-center overflow-hidden rounded-full text-6xl shadow-lg" style={{ background: "rgba(255,255,255,0.22)" }}>
+                  {ch.badgeImage ? (
+                    <img src={ch.badgeImage} alt={ch.title} className="h-full w-full object-cover" />
+                  ) : ch.icon}
+                </div>
+                <h3 className="mt-4 text-xl font-bold text-white">{ch.title}</h3>
+                {ch.description && <p className="mt-1 text-[13px] text-white/80">{ch.description}</p>}
+              </div>
+
+              {/* Corps : comment / quand */}
+              <div className="space-y-3 p-5">
+                <div className="rounded-xl bg-surface2 p-3">
+                  <p className="text-[11px] uppercase tracking-wide text-dim">Comment l&apos;obtenir</p>
+                  <p className="mt-0.5 text-sm font-semibold text-ink">{conditionText(ch, library.exercises)}</p>
+                </div>
+                <div className="rounded-xl bg-surface2 p-3">
+                  <p className="text-[11px] uppercase tracking-wide text-dim">Débloqué</p>
+                  <p className="mt-0.5 text-sm font-semibold" style={{ color }}>
+                    {ub
+                      ? `le ${new Date(ub.unlockedAt + "T12:00:00").toLocaleDateString("fr-FR", { day: "numeric", month: "long", year: "numeric" })}`
+                      : `Pas encore (${prog.current}/${prog.target})`}
+                  </p>
+                </div>
+
+                <div className="flex gap-2 pt-1">
+                  <button
+                    onClick={() => openPicker(slot)}
+                    className="flex-1 rounded-xl border border-line py-2.5 text-[13px] font-semibold text-dim hover:text-ink"
+                  >
+                    Changer
+                  </button>
+                  <button
+                    onClick={() => { setPinned(slot, null); setActiveTooltip(null); }}
+                    className="flex-1 rounded-xl border border-line py-2.5 text-[13px] font-semibold text-danger"
+                  >
+                    Retirer
+                  </button>
+                </div>
+              </div>
+            </div>
+          </div>
+        );
+      })()}
 
       {/* Picker modal */}
       {pickerOpen && (

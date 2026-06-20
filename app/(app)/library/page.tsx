@@ -16,7 +16,8 @@ const CommunityMap = dynamic(() => import("@/components/library/CommunityMap"), 
   ssr: false,
   loading: () => <p className="py-10 text-center text-dim">Chargement de la carte…</p>,
 });
-import type { LibraryExercise, SessionTemplate, WeekTemplate, Program, Challenge, ChallengeConditionType, AppState, SessionInstance } from "@/lib/types";
+import type { LibraryExercise, SessionTemplate, WeekTemplate, Program, Challenge, ChallengeConditionType } from "@/lib/types";
+import { computeChallengeProgress, challengesToUnlock } from "@/lib/challenges";
 
 type Tab = "exercises" | "sessions" | "weeks" | "programs" | "challenges" | "map";
 
@@ -48,56 +49,6 @@ const PRESET_COLORS = [
   "#639922", // vert
   "#E24B4A", // rouge
 ];
-
-function isoWeekKey(dateStr: string): string {
-  const d = new Date(dateStr + "T12:00:00");
-  const jan1 = new Date(d.getFullYear(), 0, 1);
-  const week = Math.ceil(((d.getTime() - jan1.getTime()) / 86400000 + jan1.getDay() + 1) / 7);
-  return `${d.getFullYear()}-${week}`;
-}
-
-function computeStreakWeeks(sessions: SessionInstance[]): number {
-  const doneDates = sessions.filter((s) => s.done && s.date).map((s) => s.date!);
-  if (!doneDates.length) return 0;
-  const weeks = new Set(doneDates.map(isoWeekKey));
-  let streak = 0;
-  const cursor = new Date();
-  while (true) {
-    if (weeks.has(isoWeekKey(cursor.toISOString().slice(0, 10)))) {
-      streak++;
-      cursor.setDate(cursor.getDate() - 7);
-    } else break;
-  }
-  return streak;
-}
-
-function computeChallengeProgress(ch: Challenge, state: AppState): { current: number; target: number; pct: number } {
-  const target = ch.condition.value;
-  let current = 0;
-  switch (ch.condition.type) {
-    case "session_count":
-      current = state.sessions.filter((s) => s.done).length;
-      break;
-    case "pr_count":
-      current = state.records.strength.reduce((n, ex) => n + ex.entries.length, 0);
-      break;
-    case "streak_weeks":
-      current = computeStreakWeeks(state.sessions);
-      break;
-    case "goal_achieved":
-      current = state.goals.filter((g) => (g.events ?? []).some((e) => e.achieved.trim())).length;
-      break;
-    case "exercise_weight": {
-      // PR = poids maximal enregistré pour l'exercice ciblé (records force).
-      const rec = ch.condition.exId
-        ? state.records.strength.find((ex) => ex.exId === ch.condition.exId)
-        : undefined;
-      current = rec ? rec.entries.reduce((max, e) => Math.max(max, e.weight), 0) : 0;
-      break;
-    }
-  }
-  return { current, target, pct: target > 0 ? Math.min(100, Math.round((current / target) * 100)) : 0 };
-}
 
 const DAYS = ["Lun", "Mar", "Mer", "Jeu", "Ven", "Sam", "Dim"];
 
@@ -149,17 +100,13 @@ export default function LibraryPage() {
     if (tab !== "challenges") return;
     const challenges = lib.challenges ?? [];
     if (!challenges.length) return;
-    const unlockedIds = new Set((state.badges ?? []).map((b) => b.challengeId));
-    const toUnlock = challenges.filter((ch) => {
-      if (unlockedIds.has(ch.id)) return false;
-      return computeChallengeProgress(ch, state).pct >= 100;
-    });
+    const toUnlock = challengesToUnlock(challenges, state);
     if (!toUnlock.length) return;
     update((d) => {
       if (!d.badges) d.badges = [];
-      toUnlock.forEach((ch) => {
-        if (!d.badges!.find((b) => b.challengeId === ch.id)) {
-          d.badges!.push({ challengeId: ch.id, unlockedAt: today() });
+      toUnlock.forEach((id) => {
+        if (!d.badges!.find((b) => b.challengeId === id)) {
+          d.badges!.push({ challengeId: id, unlockedAt: today() });
         }
       });
     });
