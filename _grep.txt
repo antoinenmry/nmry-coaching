@@ -1,8 +1,0 @@
-/Users/antoinenemery/nmry-coaching/app/auth/callback/route.ts:10: *   `${origin}/auth/callback?next=/auth/reset-password` (reset de mot de passe)
-/Users/antoinenemery/nmry-coaching/app/login/page.tsx:7:type Screen = "signin" | "signup" | "pending" | "forgot" | "forgot_sent";
-/Users/antoinenemery/nmry-coaching/app/login/page.tsx:91:    const { error } = await supabase.auth.resetPasswordForEmail(email, {
-/Users/antoinenemery/nmry-coaching/app/login/page.tsx:92:      redirectTo: `${window.location.origin}/auth/callback?next=/auth/reset-password`,
-/Users/antoinenemery/nmry-coaching/app/login/page.tsx:99:    go("forgot_sent");
-/Users/antoinenemery/nmry-coaching/app/login/page.tsx:129:  if (screen === "forgot_sent") {
-/Users/antoinenemery/nmry-coaching/app/login/page.tsx:155:  if (screen === "forgot") {
-/Users/antoinenemery/nmry-coaching/app/login/page.tsx:243:              onClick={() => go("forgot")}
