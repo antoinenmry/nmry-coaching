@@ -30,6 +30,7 @@ const CONDITION_LABELS: Record<ChallengeConditionType, string> = {
   streak_weeks: "Semaines consécutives",
   goal_achieved: "Objectifs réalisés",
   exercise_weight: "Poids sur un exercice",
+  competition_done: "Compétitions passées",
   badge_set: "Collection de badges",
 };
 

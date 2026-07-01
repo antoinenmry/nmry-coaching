@@ -256,7 +256,9 @@ Document unique par sportif (JSON dans `app_state.data` Supabase) :
   (grande image + « comment l'obtenir » via `conditionText` + date de déblocage + Changer/Retirer).
   Types de condition (`ChallengeConditionType`) :
   `session_count` (séances validées), `pr_count` (records enregistrés), `streak_weeks` (semaines
-  consécutives avec ≥1 séance), `goal_achieved` (objectifs avec une épreuve réalisée), **`exercise_weight`**
+  consécutives avec ≥1 séance), `goal_achieved` (objectifs avec une épreuve **`achieved`** remplie),
+  **`competition_done`** (nombre d'objectifs/compétitions dont la `date` est passée — pour « 1re
+  compétition » = valeur 1 ; ne nécessite PAS de remplir une épreuve, juste une date passée), **`exercise_weight`**
   (PR force = poids max enregistré pour l'exercice `condition.exId` ≥ `value` kg ; sélecteur d'exercice
   dans l'éditeur coach, comparé à `state.records.strength`), **`badge_set`** (collection : débloqué quand
   TOUS les badges `condition.requiredIds` sont obtenus — ex. « GOAT des GOAT » = avoir tous les badges
@@ -550,7 +552,7 @@ pas le blob `app_state` entier de tout le monde.
 | `app/auth/reset-password/` | Page de saisie du nouveau mot de passe |
 | `app/(app)/layout.tsx` | Zone protégée : vérifie session + `NoCoachGate` + `BroadcastPopup` |
 | `app/(app)/page.tsx` | Accueil : cartes nav + bannière Vue d'ensemble + badge urgence |
-| `app/(app)/plan/` | Planning mois/sem/synthèse, banque, glisser-déposer, duplication, bouton 🔔 Notifier |
+| `app/(app)/plan/` | Planning mois/sem/synthèse, banque, glisser-déposer, duplication, bouton 🔔 Notifier. `DuplicateWeekModal` : semaine **source** → **destination** (avant OU arrière, semaine courante incluse) + N semaines consécutives ; les jours de la semaine sont conservés via le décalage au lundi source |
 | `app/(app)/settings/` | Réglages : compte, notifications (NotifPrefsPanel), apparence, couleurs, Sportifs (BroadcastComposer + AthletesManager), Admin |
 | `app/(app)/goals/` | Objectifs + épreuves prévu/réalisé |
 | `app/(app)/profile/` | Profil : photo (**compressée à l'upload via canvas**), nom, naissance, genre, **Instagram**, **localisation** (Nominatim), sports |

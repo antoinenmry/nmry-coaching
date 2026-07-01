@@ -252,6 +252,7 @@ export type ChallengeConditionType =
   | "streak_weeks"     // X semaines consécutives avec ≥1 séance validée
   | "goal_achieved"    // X objectifs avec au moins une épreuve "Réalisé" renseignée
   | "exercise_weight"  // PR (poids max enregistré) d'un exercice ≥ poids cible
+  | "competition_done" // X compétitions/objectifs dont la date est passée (ex. « 1re compétition »)
   | "badge_set";       // collection : débloqué quand tous les badges `requiredIds` sont obtenus
 
 export interface Challenge {

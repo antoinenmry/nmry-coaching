@@ -869,6 +869,7 @@ function DuplicateWeekModal({
 }) {
   const { update } = useData();
   const [sourceMonday, setSourceMonday] = useState(() => getMonday(cursor));
+  const [destMonday, setDestMonday] = useState(() => getMonday(cursor)); // destination (défaut = semaine affichée)
   const [numWeeks, setNumWeeks] = useState(1);
 
   // Séances placées dans la semaine source
@@ -890,13 +891,27 @@ function DuplicateWeekModal({
     });
   }
 
+  function shiftDest(dir: number) {
+    setDestMonday((prev) => {
+      const next = new Date(prev);
+      next.setDate(prev.getDate() + dir * 7);
+      return next;
+    });
+  }
+
+  const srcMonKey = ymd(sourceMonday);
+
   function duplicate() {
     update((d) => {
-      for (let week = 1; week <= numWeeks; week++) {
+      // La destination peut être AVANT ou APRÈS la source (semaine actuelle incluse).
+      // On conserve le jour de la semaine de chaque séance via son décalage à partir du lundi source.
+      for (let week = 0; week < numWeeks; week++) {
         sourceSessions.forEach(({ sourceDay, ...session }) => {
-          const srcDate = new Date(sourceDay);
-          const targetDate = new Date(srcDate);
-          targetDate.setDate(srcDate.getDate() + week * 7);
+          const offset = Math.round(
+            (Date.parse(sourceDay + "T00:00:00") - Date.parse(srcMonKey + "T00:00:00")) / 86400000,
+          );
+          const targetDate = new Date(destMonday);
+          targetDate.setDate(destMonday.getDate() + offset + week * 7);
           const copy: SessionInstance = {
             ...structuredClone(session),
             id: crypto.randomUUID(),
@@ -917,6 +932,8 @@ function DuplicateWeekModal({
     });
     onClose();
   }
+
+  const sameWeek = ymd(sourceMonday) === ymd(destMonday);
 
   return (
     <div className="fixed inset-0 z-50 flex items-end justify-center bg-black/60 sm:items-center" onClick={(e) => e.target === e.currentTarget && onClose()}>
@@ -939,8 +956,19 @@ function DuplicateWeekModal({
             : `${sourceSessions.length} séance${sourceSessions.length > 1 ? "s" : ""} à copier`}
         </p>
 
+        {/* Sélecteur de semaine destination */}
+        <p className="mb-1.5 text-[13px] text-dim">Coller à partir de la semaine</p>
+        <div className="mb-1 flex items-center gap-2">
+          <button onClick={() => shiftDest(-1)} className="grid h-9 w-9 shrink-0 place-items-center rounded-lg bg-surface2 text-lg">‹</button>
+          <span className="flex-1 text-center text-sm font-semibold">{weekLabel(destMonday)}</span>
+          <button onClick={() => shiftDest(1)} className="grid h-9 w-9 shrink-0 place-items-center rounded-lg bg-surface2 text-lg">›</button>
+        </div>
+        <p className="mb-4 text-center text-[12px] text-dim">
+          {sameWeek ? "⚠️ Duplique sur la même semaine (crée des doublons)" : "Les jours de la semaine sont conservés"}
+        </p>
+
         {/* Nombre de semaines */}
-        <p className="mb-2 text-[13px] text-dim">Sur combien de semaines suivantes ?</p>
+        <p className="mb-2 text-[13px] text-dim">Sur combien de semaines consécutives ?</p>
         <div className="mb-5 flex items-center justify-center gap-4">
           <button
             onClick={() => setNumWeeks((n) => Math.max(1, n - 1))}

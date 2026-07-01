@@ -43,6 +43,12 @@ export function computeChallengeProgress(
     case "goal_achieved":
       current = state.goals.filter((g) => (g.events ?? []).some((e) => e.achieved.trim())).length;
       break;
+    case "competition_done": {
+      // Compétitions passées : objectif dont la date est <= aujourd'hui.
+      const todayStr = new Date().toISOString().slice(0, 10);
+      current = state.goals.filter((g) => g.date && g.date <= todayStr).length;
+      break;
+    }
     case "exercise_weight": {
       // PR = poids maximal enregistré pour l'exercice ciblé (records force).
       const rec = ch.condition.exId
@@ -74,6 +80,8 @@ export function conditionText(ch: Challenge, exercises: LibraryExercise[] = []):
       return `${v} semaine${v > 1 ? "s" : ""} consécutive${v > 1 ? "s" : ""} avec une séance`;
     case "goal_achieved":
       return `Réaliser ${v} objectif${v > 1 ? "s" : ""}`;
+    case "competition_done":
+      return `Participer à ${v} compétition${v > 1 ? "s" : ""}`;
     case "exercise_weight": {
       const name = exercises.find((ex) => ex.id === ch.condition.exId)?.name ?? "un exercice";
       return `Atteindre ${v} kg sur ${name}`;
