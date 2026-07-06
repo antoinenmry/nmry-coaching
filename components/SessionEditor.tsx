@@ -244,6 +244,30 @@ export default function SessionEditor({
       [s.exercises[idx], s.exercises[target]] = [s.exercises[target], s.exercises[idx]];
     });
 
+  // Duplique un exercice DANS LA MÊME séance (même exId, juste après l'original) : permet
+  // de prescrire le même mouvement à 2 moments différents avec séries/reps/poids distincts
+  // (ex : échauffement puis travail, ou 2 blocs à charges différentes).
+  const duplicateExercise = (exUid: string) =>
+    update((d) => {
+      const s = d.sessions.find((x) => x.id === sessionId);
+      if (!s) return;
+      const idx = s.exercises.findIndex((e) => e.uid === exUid);
+      if (idx === -1) return;
+      const src = s.exercises[idx];
+      const copy: ExerciseInstance = {
+        ...structuredClone(src),
+        uid: crypto.randomUUID(),
+        // Reset des champs de suivi sportif — la prescription (sets/reps/poids/rpeCoach/comment) est conservée.
+        rpeClient: 0,
+        clientComment: "",
+        weightClient: undefined,
+        failed: undefined,
+        setLogs: undefined,
+        prDismissedWeight: undefined,
+      };
+      s.exercises.splice(idx + 1, 0, copy);
+    });
+
   const deleteSession = () => {
     update((d) => {
       d.sessions = d.sessions.filter((x) => x.id !== sessionId);
@@ -376,6 +400,7 @@ export default function SessionEditor({
               onPatch={(patch) => patchEx(ex.uid, patch)}
               onRemove={() => removeExercise(ex.uid)}
               onMove={(dir) => moveExercise(ex.uid, dir)}
+              onDuplicate={() => duplicateExercise(ex.uid)}
               recordMax={recordsByExId.get(ex.exId)}
               onSaveRecord={(weight, reps) =>
                 update((d) => saveStrengthRecord(d.records, ex.exId, ex.name, weight, reps))
@@ -602,6 +627,7 @@ function ExerciseBlock({
   onPatch,
   onRemove,
   onMove,
+  onDuplicate,
   recordMax,
   onSaveRecord,
 }: {
@@ -615,6 +641,7 @@ function ExerciseBlock({
   onPatch: (patch: Partial<ExerciseInstance>) => void;
   onRemove: () => void;
   onMove: (dir: -1 | 1) => void;
+  onDuplicate: () => void;
   recordMax?: number;
   onSaveRecord: (weight: number, reps: number) => void;
 }) {
@@ -650,6 +677,8 @@ function ExerciseBlock({
               className="grid h-7 w-7 place-items-center rounded text-dim disabled:opacity-20 hover:text-ink" aria-label="Monter">▲</button>
             <button type="button" onClick={() => onMove(1)} disabled={index === total - 1}
               className="grid h-7 w-7 place-items-center rounded text-dim disabled:opacity-20 hover:text-ink" aria-label="Descendre">▼</button>
+            <button type="button" onClick={onDuplicate}
+              className="ml-0.5 grid h-7 w-7 place-items-center rounded text-dim hover:text-ink" aria-label="Dupliquer cet exercice" title="Dupliquer cet exercice dans la séance">⧉</button>
             <button onClick={onRemove}
               className="ml-0.5 rounded-lg bg-surface px-2.5 py-1 text-[13px] text-dim hover:text-danger">✕</button>
           </div>
