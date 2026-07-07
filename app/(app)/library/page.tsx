@@ -97,6 +97,8 @@ export default function LibraryPage() {
   const [badgeImgBusy, setBadgeImgBusy] = useState(false);
   const badgeFileRef = useRef<HTMLInputElement>(null);
   const [editingChallengeId, setEditingChallengeId] = useState<string | null>(null);
+  // Filtre d'affichage des défis (coach) : "" = rien affiché, "all" = tous, sinon un type de condition
+  const [challengeFilter, setChallengeFilter] = useState<ChallengeConditionType | "all" | "">("");
 
   // Auto-unlock : dès que l'onglet Défis est ouvert, on vérifie et on enregistre les badges débloqués
   useEffect(() => {
@@ -684,6 +686,26 @@ export default function LibraryPage() {
             setCIcon("🏆"); setCTitle(""); setCDesc(""); setCCondType("session_count"); setCCondValue("10"); setCCondExId(""); setCCondReqIds([]); setCColor(PRESET_COLORS[0]); setCBadgeImage("");
           }
 
+          // Défis affichés selon le filtre : "" = aucun, "all" = tous, sinon un type de condition.
+          const visibleChallenges =
+            challengeFilter === "" ? [] :
+            challengeFilter === "all" ? challenges :
+            challenges.filter((c) => c.condition.type === challengeFilter);
+
+          // Réordonne en échangeant, dans le tableau GLOBAL, deux défis adjacents de la liste affichée.
+          function moveChallenge(id: string, dir: -1 | 1) {
+            const vIdx = visibleChallenges.findIndex((c) => c.id === id);
+            const neighbor = visibleChallenges[vIdx + dir];
+            if (!neighbor) return;
+            updateLibrary((lib) => {
+              const arr = lib.challenges ?? [];
+              const gi = arr.findIndex((c) => c.id === id);
+              const gj = arr.findIndex((c) => c.id === neighbor.id);
+              if (gi === -1 || gj === -1) return;
+              [arr[gi], arr[gj]] = [arr[gj], arr[gi]];
+            });
+          }
+
           return (
             <div>
               <section className="mb-5 rounded-2xl border border-line bg-surface p-4">
@@ -823,11 +845,32 @@ export default function LibraryPage() {
                 </div>
               </section>
 
+              {/* Filtre d'affichage par condition */}
+              <div className="mb-3">
+                <span className="mb-1.5 block text-[13px] text-dim">Afficher les défis</span>
+                <select
+                  value={challengeFilter}
+                  onChange={(e) => setChallengeFilter(e.target.value as ChallengeConditionType | "all" | "")}
+                  className="w-full"
+                >
+                  <option value="">— Choisir une condition —</option>
+                  <option value="all">Tous les défis ({challenges.length})</option>
+                  {(Object.entries(CONDITION_LABELS) as [ChallengeConditionType, string][]).map(([k, v]) => {
+                    const n = challenges.filter((c) => c.condition.type === k).length;
+                    return <option key={k} value={k}>{v} ({n})</option>;
+                  })}
+                </select>
+              </div>
+
               {challenges.length === 0 ? (
                 <p className="py-10 text-center text-dim">Aucun défi créé pour l&apos;instant.</p>
+              ) : challengeFilter === "" ? (
+                <p className="py-10 text-center text-[13px] text-dim">Choisis une condition ci-dessus pour afficher les défis.</p>
+              ) : visibleChallenges.length === 0 ? (
+                <p className="py-10 text-center text-[13px] text-dim">Aucun défi pour cette condition.</p>
               ) : (
                 <div className="space-y-3">
-                  {challenges.map((ch) => {
+                  {visibleChallenges.map((ch, i) => {
                     const color = ch.color ?? PRESET_COLORS[0];
                     const lighter = lightenHex(color);
                     const isEditing = editingChallengeId === ch.id;
@@ -835,6 +878,13 @@ export default function LibraryPage() {
                       <div key={ch.id} className={`overflow-hidden rounded-2xl transition ${isEditing ? "ring-2 ring-accent/50" : ""}`} style={{ border: `0.5px solid ${color}50` }}>
                         {/* Bandeau gradient pleine largeur */}
                         <div className="flex items-center gap-3 px-4 py-3.5" style={{ background: `linear-gradient(135deg, ${color}, ${lighter})` }}>
+                          {/* Réordonnancement ▲▼ */}
+                          <div className="flex shrink-0 flex-col gap-0.5">
+                            <button onClick={() => moveChallenge(ch.id, -1)} disabled={i === 0}
+                              className="grid h-4 w-6 place-items-center rounded text-[11px] text-white/90 disabled:opacity-25" aria-label="Monter" style={{ background: "rgba(255,255,255,0.18)" }}>▲</button>
+                            <button onClick={() => moveChallenge(ch.id, 1)} disabled={i === visibleChallenges.length - 1}
+                              className="grid h-4 w-6 place-items-center rounded text-[11px] text-white/90 disabled:opacity-25" aria-label="Descendre" style={{ background: "rgba(255,255,255,0.18)" }}>▼</button>
+                          </div>
                           <div className="grid h-11 w-11 shrink-0 place-items-center overflow-hidden rounded-xl text-2xl" style={{ background: "rgba(255,255,255,0.20)" }}>
                             {ch.badgeImage ? (
                               <img src={ch.badgeImage} alt={ch.title} className="h-full w-full object-contain" />
