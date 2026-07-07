@@ -535,7 +535,8 @@ function VacationModal({
 // Modale de création d'une séance (coach) : nom + couleur + exercices → dans la banque.
 // Exercice sélectionné (bibliothèque ou inline) dans ComposeModal.
 interface SelectedEx {
-  id: string;
+  uid: string;   // identifiant unique de CETTE entrée (permet plusieurs fois le même exercice)
+  id: string;    // exId bibliothèque (ou id du custom)
   name: string;
   isInline: boolean;
   tags: Record<string, string[]>;
@@ -581,12 +582,21 @@ function ComposeModal({ onClose, onCreated }: { onClose: () => void; onCreated: 
   // Backdrop — évite la fermeture lors de la sélection de texte
   const backdropDown = useRef(false);
 
-  // Toggle exercice bibliothèque
-  function toggleLibEx(id: string) {
+  // Ajoute UNE occurrence d'un exercice bibliothèque (le même peut être ajouté plusieurs fois)
+  function addLibEx(id: string) {
+    const libEx = library.exercises.find((e) => e.id === id);
+    setExercises((prev) => [...prev, { uid: crypto.randomUUID(), id, name: libEx?.name ?? id, isInline: false, tags: {}, video: "" }]);
+  }
+
+  // Retire UNE occurrence (la dernière) d'un exercice bibliothèque
+  function removeLibEx(id: string) {
     setExercises((prev) => {
-      if (prev.find((e) => e.id === id)) return prev.filter((e) => e.id !== id);
-      const libEx = library.exercises.find((e) => e.id === id);
-      return [...prev, { id, name: libEx?.name ?? id, isInline: false, tags: {}, video: "" }];
+      for (let i = prev.length - 1; i >= 0; i--) {
+        if (!prev[i].isInline && prev[i].id === id) {
+          return [...prev.slice(0, i), ...prev.slice(i + 1)];
+        }
+      }
+      return prev;
     });
   }
 
@@ -601,7 +611,7 @@ function ComposeModal({ onClose, onCreated }: { onClose: () => void; onCreated: 
   function addInline() {
     const trimmed = newName.trim();
     if (!trimmed) return;
-    setExercises((prev) => [...prev, { id: crypto.randomUUID(), name: trimmed, isInline: true, tags: newTags, video: newVideo }]);
+    setExercises((prev) => [...prev, { uid: crypto.randomUUID(), id: crypto.randomUUID(), name: trimmed, isInline: true, tags: newTags, video: newVideo }]);
     setNewName("");
     setNewTags({});
     setNewVideo("");
@@ -720,7 +730,8 @@ function ComposeModal({ onClose, onCreated }: { onClose: () => void; onCreated: 
         </div>
         <ExerciseMultiSelect
           picked={pickedIds}
-          onToggle={toggleLibEx}
+          onAdd={addLibEx}
+          onRemove={removeLibEx}
           showFilters={filtersOpen}
           activeColorFilter={usedColors.length > 0 ? (activeColor ? [activeColor] : []) : undefined}
         />
@@ -810,7 +821,7 @@ function ComposeModal({ onClose, onCreated }: { onClose: () => void; onCreated: 
                   (ex.tags[c.id] ?? []).map((tid) => c.options.find((o) => o.id === tid)?.label).filter(Boolean) as string[]
                 );
                 return (
-                  <li key={ex.id} className="flex items-center gap-2 rounded-lg bg-surface2 px-2.5 py-1.5 text-sm">
+                  <li key={ex.uid} className="flex items-center gap-2 rounded-lg bg-surface2 px-2.5 py-1.5 text-sm">
                     <span className="w-5 shrink-0 text-center text-[11px] text-dim font-bold">{i + 1}</span>
                     <div className="min-w-0 flex-1">
                       <span className="font-medium">{ex.name}</span>
@@ -822,7 +833,7 @@ function ComposeModal({ onClose, onCreated }: { onClose: () => void; onCreated: 
                         className="grid h-7 w-7 place-items-center rounded text-dim disabled:opacity-20 hover:text-ink" aria-label="Monter">▲</button>
                       <button type="button" onClick={() => moveEx(i, 1)} disabled={i === exercises.length - 1}
                         className="grid h-7 w-7 place-items-center rounded text-dim disabled:opacity-20 hover:text-ink" aria-label="Descendre">▼</button>
-                      <button type="button" onClick={() => setExercises((p) => p.filter((e) => e.id !== ex.id))}
+                      <button type="button" onClick={() => setExercises((p) => p.filter((e) => e.uid !== ex.uid))}
                         className="grid h-7 w-7 place-items-center rounded text-dim hover:text-danger" aria-label="Retirer">✕</button>
                     </div>
                   </li>

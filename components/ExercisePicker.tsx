@@ -23,7 +23,7 @@ export default function ExercisePicker({
   const { updateLibrary, library } = useData();
   const { categories } = library;
 
-  const [picked, setPicked] = useState<string[]>([]);
+  const [picked, setPicked] = useState<string[]>([]); // peut contenir plusieurs fois le même id
   const [saveToLib, setSaveToLib] = useState(true);
 
   // État du formulaire de création inline
@@ -35,8 +35,14 @@ export default function ExercisePicker({
   // Liste des exercices inline créés
   const [inlineExercises, setInlineExercises] = useState<InlineExercise[]>([]);
 
-  const toggle = (id: string) =>
-    setPicked((p) => (p.includes(id) ? p.filter((x) => x !== id) : [...p, id]));
+  const addOne = (id: string) => setPicked((p) => [...p, id]);
+  // Retire UNE occurrence (la dernière) de cet id
+  const removeOne = (id: string) =>
+    setPicked((p) => {
+      const idx = p.lastIndexOf(id);
+      if (idx === -1) return p;
+      return [...p.slice(0, idx), ...p.slice(idx + 1)];
+    });
 
   const toggleTag = (catId: string, optId: string) =>
     setNewTags((prev) => {
@@ -98,7 +104,7 @@ export default function ExercisePicker({
 
         {/* Sélection depuis la bibliothèque */}
         <div className="min-h-0 flex-1 overflow-y-auto">
-          <ExerciseMultiSelect picked={picked} onToggle={toggle} />
+          <ExerciseMultiSelect picked={picked} onAdd={addOne} onRemove={removeOne} />
         </div>
 
         {/* Création inline */}

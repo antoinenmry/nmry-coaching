@@ -3,15 +3,18 @@
 import { useMemo, useState } from "react";
 import { useData } from "./DataProvider";
 
-/** Filtres (par catégorie) + liste d'exercices de la bibliothèque à cocher. Contrôlé. */
+/** Filtres (par catégorie) + liste d'exercices de la bibliothèque avec compteur. Contrôlé.
+ *  `picked` peut contenir plusieurs fois le même id (= même exercice ajouté plusieurs fois). */
 export default function ExerciseMultiSelect({
   picked,
-  onToggle,
+  onAdd,
+  onRemove,
   showFilters = true,
   activeColorFilter,
 }: {
   picked: string[];
-  onToggle: (id: string) => void;
+  onAdd: (id: string) => void;
+  onRemove: (id: string) => void;
   showFilters?: boolean;
   /** Si fourni par le parent, ce filtre couleur est utilisé à la place de l'UI interne */
   activeColorFilter?: string[];
@@ -151,25 +154,37 @@ export default function ExerciseMultiSelect({
       ) : (
         <div className="max-h-[42vh] space-y-1.5 overflow-y-auto pr-1">
           {filtered.map((ex) => {
-            const on = picked.includes(ex.id);
+            const count = picked.reduce((n, id) => (id === ex.id ? n + 1 : n), 0);
+            const on = count > 0;
             return (
-              <button
+              <div
                 key={ex.id}
-                onClick={() => onToggle(ex.id)}
-                className={`flex w-full items-center gap-2.5 rounded-lg border p-2.5 text-left ${
+                className={`flex w-full items-center gap-2.5 rounded-lg border p-2 text-left ${
                   on ? "border-ok bg-ok/10" : "border-line bg-surface2"
                 }`}
               >
-                <span
-                  className={`grid h-5 w-5 shrink-0 place-items-center rounded border text-xs font-bold ${
-                    on ? "border-ok bg-ok text-[#06210a]" : "border-line text-transparent"
-                  }`}
-                >
-                  ✓
-                </span>
-                <span className="font-medium">{ex.name}</span>
-                {ex.video && <span className="ml-auto text-[12px] text-accent2">▶</span>}
-              </button>
+                {/* Nom : tap = +1 (ajoute une occurrence) */}
+                <button type="button" onClick={() => onAdd(ex.id)} className="flex min-w-0 flex-1 items-center gap-2.5 py-0.5 text-left">
+                  <span
+                    className={`grid h-6 w-6 shrink-0 place-items-center rounded-full border text-xs font-bold ${
+                      on ? "border-ok bg-ok text-[#06210a]" : "border-line text-dim"
+                    }`}
+                  >
+                    {on ? count : "+"}
+                  </span>
+                  <span className="truncate font-medium">{ex.name}</span>
+                  {ex.video && <span className="text-[12px] text-accent2">▶</span>}
+                </button>
+                {/* Stepper − / + (visible seulement si ≥1) */}
+                {on && (
+                  <div className="flex shrink-0 items-center gap-1">
+                    <button type="button" onClick={() => onRemove(ex.id)} aria-label="Retirer une occurrence"
+                      className="grid h-7 w-7 place-items-center rounded-lg bg-surface text-lg text-dim hover:text-danger">−</button>
+                    <button type="button" onClick={() => onAdd(ex.id)} aria-label="Ajouter une occurrence"
+                      className="grid h-7 w-7 place-items-center rounded-lg bg-surface text-lg text-dim hover:text-ink">+</button>
+                  </div>
+                )}
+              </div>
             );
           })}
         </div>
