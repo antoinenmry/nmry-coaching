@@ -813,7 +813,7 @@ export default function LibraryPage() {
                 {/* Sélecteur de couleur */}
                 <div className="mb-4">
                   <span className="mb-1.5 block text-[13px] text-dim">Couleur du badge</span>
-                  <div className="flex flex-wrap gap-2">
+                  <div className="flex flex-wrap items-center gap-2">
                     {PRESET_COLORS.map((hex) => (
                       <button
                         key={hex}
@@ -824,6 +824,16 @@ export default function LibraryPage() {
                         aria-label={hex}
                       />
                     ))}
+                    {/* Couleur personnalisée */}
+                    <label className="flex h-8 w-8 cursor-pointer items-center justify-center overflow-hidden rounded-full border-2 border-dashed border-line hover:border-ink transition">
+                      <input
+                        type="color"
+                        value={cColor}
+                        onChange={(e) => setCColor(e.target.value)}
+                        className="h-full w-full cursor-pointer"
+                        title="Couleur personnalisée"
+                      />
+                    </label>
                     {/* Aperçu */}
                     <div className="ml-auto flex items-center gap-2 rounded-xl px-3 py-1.5" style={{ background: cColor + "20", border: `1px solid ${cColor}50` }}>
                       {cBadgeImage ? (
