@@ -97,18 +97,18 @@ export default function ExercisePicker({
       onClick={(e) => e.target === e.currentTarget && onClose()}
     >
       <div className="flex max-h-[90vh] w-full max-w-xl flex-col rounded-t-3xl border-t border-line bg-surface p-5 sm:rounded-3xl sm:border">
-        <div className="mb-3 flex items-center justify-between">
+        <div className="mb-3 flex shrink-0 items-center justify-between">
           <h2 className="text-lg font-bold">Ajouter des exercices</h2>
           <button onClick={onClose} className="grid h-9 w-9 place-items-center rounded-lg bg-surface2">✕</button>
         </div>
 
-        {/* Sélection depuis la bibliothèque */}
+        {/* Zone scrollable unique : bibliothèque + création inline. Sur iPhone, le bouton de
+            confirmation doit rester atteignable même quand le formulaire "tags" s'étend. */}
         <div className="min-h-0 flex-1 overflow-y-auto">
           <ExerciseMultiSelect picked={picked} onAdd={addOne} onRemove={removeOne} />
-        </div>
 
         {/* Création inline */}
-        <div className="mt-4 shrink-0 rounded-xl border border-dashed border-line bg-surface2 p-3">
+        <div className="mt-4 rounded-xl border border-dashed border-line bg-surface2 p-3">
           <p className="mb-2 text-[13px] font-semibold text-dim">Nouvel exercice</p>
 
           {/* Nom + bouton Ajouter */}
@@ -231,6 +231,7 @@ export default function ExercisePicker({
               ))}
             </div>
           )}
+        </div>
         </div>
 
         <button

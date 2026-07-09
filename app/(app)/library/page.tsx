@@ -52,6 +52,14 @@ const PRESET_COLORS = [
   "#E24B4A", // rouge
 ];
 
+// Couleurs "métal" fixes (toujours disponibles, non supprimables) — utiles pour les défis paliers.
+const FIXED_METAL_COLORS: { label: string; hex: string }[] = [
+  { label: "Bronze", hex: "#6E4D25" },
+  { label: "Argent", hex: "#C0C0C0" },
+  { label: "Or", hex: "#DAA520" },
+  { label: "GOAT Noir", hex: "#000000" },
+];
+
 const DAYS = ["Lun", "Mar", "Mer", "Jeu", "Ven", "Sam", "Dim"];
 
 export default function LibraryPage() {
@@ -824,7 +832,39 @@ export default function LibraryPage() {
                         aria-label={hex}
                       />
                     ))}
-                    {/* Couleur personnalisée */}
+                    {/* Couleurs "métal" fixes */}
+                    <span className="mx-0.5 h-6 w-px bg-line" />
+                    {FIXED_METAL_COLORS.map(({ label, hex }) => (
+                      <button
+                        key={hex}
+                        type="button"
+                        onClick={() => setCColor(hex)}
+                        title={label}
+                        className="h-8 w-8 rounded-full border border-line/50 transition-transform hover:scale-110"
+                        style={{ background: hex, outline: cColor === hex ? `3px solid ${hex}` : "none", outlineOffset: "2px", transform: cColor === hex ? "scale(1.15)" : undefined }}
+                        aria-label={label}
+                      />
+                    ))}
+                    {/* Couleurs personnalisées sauvegardées */}
+                    {(lib.customBadgeColors ?? []).length > 0 && <span className="mx-0.5 h-6 w-px bg-line" />}
+                    {(lib.customBadgeColors ?? []).map((hex) => (
+                      <div key={hex} className="group relative">
+                        <button
+                          type="button"
+                          onClick={() => setCColor(hex)}
+                          className="h-8 w-8 rounded-full border border-line/50 transition-transform hover:scale-110"
+                          style={{ background: hex, outline: cColor === hex ? `3px solid ${hex}` : "none", outlineOffset: "2px", transform: cColor === hex ? "scale(1.15)" : undefined }}
+                          aria-label={hex}
+                        />
+                        <button
+                          type="button"
+                          onClick={() => updateLibrary((l) => { l.customBadgeColors = (l.customBadgeColors ?? []).filter((c) => c !== hex); })}
+                          title="Retirer cette couleur enregistrée"
+                          className="absolute -right-1 -top-1 hidden h-4 w-4 place-items-center rounded-full bg-danger text-[9px] text-white group-hover:grid"
+                        >✕</button>
+                      </div>
+                    ))}
+                    {/* Nouvelle couleur personnalisée + sauvegarde */}
                     <label className="flex h-8 w-8 cursor-pointer items-center justify-center overflow-hidden rounded-full border-2 border-dashed border-line hover:border-ink transition">
                       <input
                         type="color"
@@ -834,6 +874,16 @@ export default function LibraryPage() {
                         title="Couleur personnalisée"
                       />
                     </label>
+                    {!PRESET_COLORS.includes(cColor) && !FIXED_METAL_COLORS.some((c) => c.hex === cColor) && !(lib.customBadgeColors ?? []).includes(cColor) && (
+                      <button
+                        type="button"
+                        onClick={() => updateLibrary((l) => { l.customBadgeColors = [...(l.customBadgeColors ?? []), cColor]; })}
+                        title="Sauvegarder cette couleur pour la réutiliser"
+                        className="rounded-lg bg-surface2 px-2 py-1.5 text-[11px] font-semibold text-dim hover:text-ink"
+                      >
+                        💾 Enregistrer
+                      </button>
+                    )}
                     {/* Aperçu */}
                     <div className="ml-auto flex items-center gap-2 rounded-xl px-3 py-1.5" style={{ background: cColor + "20", border: `1px solid ${cColor}50` }}>
                       {cBadgeImage ? (

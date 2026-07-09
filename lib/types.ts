@@ -282,6 +282,7 @@ export interface ExerciseLibrary {
   shopTabsVisible?: { merch?: boolean; plan?: boolean; shop: boolean };
   challenges?: Challenge[];
   challengesVisible?: boolean;  // true = carte visible côté client sur l'accueil
+  customBadgeColors?: string[]; // couleurs de badge personnalisées sauvegardées (hex), en plus des presets fixes
   mapVisible?: boolean;         // true = onglet "Ma carte" visible côté sportif (off par défaut → coach/admin seulement)
   cardIcons?: Record<string, string>; // href → emoji ou URL Storage (icône personnalisée des cartes d'accueil, admin uniquement)
 }
