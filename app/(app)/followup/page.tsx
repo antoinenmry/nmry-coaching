@@ -16,6 +16,9 @@ type ConvCache = {
 };
 const chatCache = new Map<string, ConvCache>();
 
+// Réponses rapides en emoji (pouce en l'air, pouce en bas, cœur, rire) : envoi immédiat en 1 tap.
+const QUICK_EMOJIS = ["👍", "👎", "❤️", "😂"];
+
 // Cache des avatars par personne (id → photo base64). Indépendant des messages :
 // les photos (parfois lourdes) sont chargées hors du chemin critique via
 // /api/chat/avatars, et réutilisées d'une conversation à l'autre (instantané).
@@ -835,6 +838,17 @@ function MessagesTab() {
           </div>
         ) : (
           <>
+            {/* Réponses rapides en emoji — envoi immédiat, sans avoir à écrire */}
+            <div className="flex gap-1.5">
+              {QUICK_EMOJIS.map((e) => (
+                <button
+                  key={e}
+                  type="button"
+                  onClick={() => postMessage({ text: e })}
+                  className="grid h-9 w-9 place-items-center rounded-xl border border-line bg-surface2 text-lg hover:bg-surface"
+                >{e}</button>
+              ))}
+            </div>
             <div className="flex gap-2">
               <textarea
                 value={text}
@@ -1064,7 +1078,10 @@ function SanteTab() {
             <div key={f.id} className="rounded-xl border border-line bg-surface p-3.5">
               <div className="flex items-center justify-between">
                 <span className="rounded-full px-2 py-0.5 text-[11px] font-bold text-white" style={{ background: "#f97316" }}>Douleur</span>
-                <button onClick={() => update(d => { d.followups = d.followups.filter(x => x.id !== f.id); })} className="rounded-lg bg-surface2 px-2.5 py-1 text-[12px] text-dim">Suppr.</button>
+                <div className="flex items-center gap-2">
+                  <button onClick={() => setEditingId(f.id)} className="rounded-lg bg-surface2 px-2.5 py-1 text-[12px] text-dim">Modifier</button>
+                  <button onClick={() => update(d => { d.followups = d.followups.filter(x => x.id !== f.id); })} className="rounded-lg bg-surface2 px-2.5 py-1 text-[12px] text-dim">Suppr.</button>
+                </div>
               </div>
               <div className="mt-1.5 text-[12px] text-dim">{frDate(f.date)}</div>
               <p className="mt-2 whitespace-pre-wrap text-sm">{f.text}</p>
@@ -1081,7 +1098,10 @@ function SanteTab() {
             <div key={f.id} className="rounded-xl border border-line bg-surface p-3.5">
               <div className="flex items-center justify-between">
                 <span className="rounded-full bg-accent2/20 px-2 py-0.5 text-[11px] font-bold text-accent2">Note</span>
-                <button onClick={() => update(d => { d.followups = d.followups.filter(x => x.id !== f.id); })} className="rounded-lg bg-surface2 px-2.5 py-1 text-[12px] text-dim">Suppr.</button>
+                <div className="flex items-center gap-2">
+                  <button onClick={() => setEditingId(f.id)} className="rounded-lg bg-surface2 px-2.5 py-1 text-[12px] text-dim">Modifier</button>
+                  <button onClick={() => update(d => { d.followups = d.followups.filter(x => x.id !== f.id); })} className="rounded-lg bg-surface2 px-2.5 py-1 text-[12px] text-dim">Suppr.</button>
+                </div>
               </div>
               <div className="mt-1.5 text-[12px] text-dim">{frDate(f.date)}</div>
               <p className="mt-2 whitespace-pre-wrap text-sm">{f.text}</p>
@@ -1094,14 +1114,14 @@ function SanteTab() {
         <p className="py-8 text-center text-sm text-dim">Aucune entrée pour l&apos;instant.</p>
       )}
 
-      {editing && <EditInjuryModal followup={editing} onClose={() => setEditingId(null)} />}
+      {editing && <EditFollowupModal followup={editing} onClose={() => setEditingId(null)} />}
       </>}
     </div>
   );
 }
 
-// ─── Modal édition blessure ───────────────────────────────────────────────────
-function EditInjuryModal({ followup, onClose }: { followup: Followup; onClose: () => void }) {
+// ─── Modal édition (blessure / douleur / note) ─────────────────────────────────
+function EditFollowupModal({ followup, onClose }: { followup: Followup; onClose: () => void }) {
   const { update } = useData();
   const [dateStart, setDateStart] = useState(followup.date);
   const [dateEnd, setDateEnd]     = useState(followup.dateEnd ?? "");
@@ -1112,7 +1132,7 @@ function EditInjuryModal({ followup, onClose }: { followup: Followup; onClose: (
       const f = d.followups.find(x => x.id === followup.id);
       if (!f) return;
       f.date = dateStart;
-      f.dateEnd = dateEnd || undefined;
+      if (followup.type === "injury") f.dateEnd = dateEnd || undefined;
       f.text = text.trim() || f.text;
     });
     onClose();
@@ -1128,16 +1148,23 @@ function EditInjuryModal({ followup, onClose }: { followup: Followup; onClose: (
           <h2 className="text-lg font-bold">Modifier</h2>
           <button onClick={onClose} className="grid h-9 w-9 place-items-center rounded-lg bg-surface2">✕</button>
         </div>
-        <div className="mb-3 grid grid-cols-2 gap-3">
-          <label className="block">
-            <span className="mb-1.5 block text-[13px] text-dim">Début</span>
+        {followup.type === "injury" ? (
+          <div className="mb-3 grid grid-cols-2 gap-3">
+            <label className="block">
+              <span className="mb-1.5 block text-[13px] text-dim">Début</span>
+              <input type="date" value={dateStart} onChange={e => setDateStart(e.target.value)} />
+            </label>
+            <label className="block">
+              <span className="mb-1.5 block text-[13px] text-dim">Fin <span className="opacity-60">(optionnel)</span></span>
+              <input type="date" value={dateEnd} onChange={e => setDateEnd(e.target.value)} min={dateStart} />
+            </label>
+          </div>
+        ) : (
+          <label className="mb-3 block">
+            <span className="mb-1.5 block text-[13px] text-dim">Date</span>
             <input type="date" value={dateStart} onChange={e => setDateStart(e.target.value)} />
           </label>
-          <label className="block">
-            <span className="mb-1.5 block text-[13px] text-dim">Fin <span className="opacity-60">(optionnel)</span></span>
-            <input type="date" value={dateEnd} onChange={e => setDateEnd(e.target.value)} min={dateStart} />
-          </label>
-        </div>
+        )}
         <label className="mb-4 block">
           <span className="mb-1.5 block text-[13px] text-dim">Détails</span>
           <textarea value={text} onChange={e => setText(e.target.value)} className="min-h-[80px]" />

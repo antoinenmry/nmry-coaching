@@ -177,14 +177,19 @@ export async function POST(req: NextRequest) {
   if (!row) return NextResponse.json({ error: "Erreur d'enregistrement" }, { status: 500 });
 
   // ── Notifications push ──────────────────────────────────────────────────
+  // Le nom de l'expéditeur est mis dans le TITRE (visible même écran verrouillé),
+  // le corps du message dans le body — pas de répétition du nom.
+  const notifBody = text.trim()
+    ? text.trim().slice(0, 100)
+    : attachmentUrl ? "📎 Pièce jointe" : isVoice ? "🎤 Message vocal" : "Nouveau message";
   const senderIsClient = user.id === clientId;
   if (senderIsClient) {
     // Sportif → coach. Si urgent, le push (+ email) est géré par /api/messages/urgent
     // appelé côté client → on évite le double push ici.
     if (!isUrgent) {
       sendPushToUser(coachId, {
-        title: "💬 Nouveau message",
-        body: `${myName} : ${text.trim().slice(0, 80)}`,
+        title: `💬 ${myName}`,
+        body: notifBody,
         url: "/followup",
       }).catch(() => {});
     }
@@ -193,8 +198,8 @@ export async function POST(req: NextRequest) {
     const prefs = await getUserNotifPrefs(clientId);
     if (prefs.newMessage) {
       sendPushToUser(clientId, {
-        title: "💬 Message de votre coach",
-        body: `${myName} : ${text.trim().slice(0, 80)}`,
+        title: `💬 ${myName}`,
+        body: notifBody,
         url: "/followup",
       }).catch(() => {});
     }
