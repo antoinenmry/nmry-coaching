@@ -16,8 +16,8 @@ type ConvCache = {
 };
 const chatCache = new Map<string, ConvCache>();
 
-// Réponses rapides en emoji (pouce en l'air, pouce en bas, cœur, rire) : envoi immédiat en 1 tap.
-const QUICK_EMOJIS = ["👍", "👎", "❤️", "😂"];
+// Emojis de réaction (tapback) proposés sur un message : pouce en l'air, pouce en bas, cœur, rire.
+const REACTION_EMOJIS = ["👍", "👎", "❤️", "😂"];
 
 // Cache des avatars par personne (id → photo base64). Indépendant des messages :
 // les photos (parfois lourdes) sont chargées hors du chemin critique via
@@ -43,6 +43,7 @@ function rowToChatMessage(r: Record<string, unknown>): ChatMessage {
     attachmentType: (r.attachment_type as ChatMessage["attachmentType"]) ?? undefined,
     attachmentPath: (r.attachment_path as string) ?? undefined,
     audioPath: (r.audio_path as string) ?? undefined,
+    reaction: (r.reaction as string) ?? undefined,
   };
 }
 
@@ -639,6 +640,19 @@ function MessagesTab() {
     }).catch(() => {});
   }
 
+  // ── Réaction (tapback) sur un message ──────────────────────────────────────
+  const [reactingId, setReactingId] = useState<string | null>(null);
+
+  async function setReaction(id: string, reaction: string | null) {
+    setReactingId(null);
+    setMessages(prev => prev.map(m => (m.id === id ? { ...m, reaction: reaction ?? undefined } : m))); // optimiste
+    await fetch(`/api/chat/${id}/reaction`, {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ reaction }),
+    }).catch(() => {});
+  }
+
   // État d'attente coach sans client sélectionné
   if (isElevated && clientList.length === 0) return (
     <p className="rounded-xl bg-surface2 px-4 py-3 text-sm text-dim">Aucun sportif affecté.</p>
@@ -743,13 +757,20 @@ function MessagesTab() {
                 <div className="w-[26px] shrink-0" aria-hidden />
               )}
               <div className={`flex max-w-[74%] flex-col ${isMe ? "items-end" : "items-start"}`}>
-              <div className={`rounded-2xl px-3.5 py-2.5 ${
+              <div className={`relative rounded-2xl px-3.5 py-2.5 ${
                 msg.isUrgent
                   ? "border border-danger/60 bg-danger/25"
                   : isMe
                   ? "bg-accent"
                   : "border border-line bg-surface2"
               }`}>
+                {/* Badge de réaction (tapback), accroché au coin bas de la bulle */}
+                {msg.reaction && (
+                  <button
+                    onClick={() => setReactingId(id => (id === msg.id ? null : msg.id))}
+                    className={`absolute -bottom-2.5 ${isMe ? "-left-2" : "-right-2"} grid h-6 w-6 place-items-center rounded-full border-2 border-surface bg-surface2 text-[13px] shadow-sm`}
+                  >{msg.reaction}</button>
+                )}
                 {!isMe && showAvatar && (
                   <p className="mb-1 text-[11px] font-semibold text-dim">{senderName}</p>
                 )}
@@ -804,19 +825,40 @@ function MessagesTab() {
                 </p>
               </div>
 
-              {/* Actions sur ses propres messages */}
-              {isMe && !isEditing && (
-                <div className="mt-0.5 flex gap-2 px-1">
-                  {!msg.isVoice && (
+              {/* Actions (réagir pour tout le monde ; modifier/suppr. sur ses propres messages) */}
+              {!isEditing && (
+                <div className={`flex items-center gap-2 px-1 ${msg.reaction ? "mt-2.5" : "mt-0.5"} ${isMe ? "flex-row-reverse" : ""}`}>
+                  {isMe && !msg.isVoice && (
                     <button
                       onClick={() => { setEditingMsgId(msg.id); setEditText(msg.text); }}
                       className="text-[11px] text-dim hover:text-ink"
                     >✏️ Modifier</button>
                   )}
+                  {isMe && (
+                    <button
+                      onClick={() => deleteMsg(msg.id)}
+                      className="text-[11px] text-dim hover:text-danger"
+                    >🗑️ Supprimer</button>
+                  )}
                   <button
-                    onClick={() => deleteMsg(msg.id)}
-                    className="text-[11px] text-dim hover:text-danger"
-                  >🗑️ Supprimer</button>
+                    onClick={() => setReactingId(id => (id === msg.id ? null : msg.id))}
+                    className="text-[11px] text-dim hover:text-ink"
+                  >🙂 Réagir</button>
+                </div>
+              )}
+
+              {/* Picker de réaction inline */}
+              {reactingId === msg.id && (
+                <div className={`mt-1 flex gap-1 px-1 ${isMe ? "flex-row-reverse" : ""}`}>
+                  {REACTION_EMOJIS.map(e => (
+                    <button
+                      key={e}
+                      onClick={() => setReaction(msg.id, msg.reaction === e ? null : e)}
+                      className={`grid h-8 w-8 place-items-center rounded-full border text-base transition ${
+                        msg.reaction === e ? "border-accent bg-accent/15" : "border-line bg-surface2"
+                      }`}
+                    >{e}</button>
+                  ))}
                 </div>
               )}
               </div>
@@ -838,17 +880,6 @@ function MessagesTab() {
           </div>
         ) : (
           <>
-            {/* Réponses rapides en emoji — envoi immédiat, sans avoir à écrire */}
-            <div className="flex gap-1.5">
-              {QUICK_EMOJIS.map((e) => (
-                <button
-                  key={e}
-                  type="button"
-                  onClick={() => postMessage({ text: e })}
-                  className="grid h-9 w-9 place-items-center rounded-xl border border-line bg-surface2 text-lg hover:bg-surface"
-                >{e}</button>
-              ))}
-            </div>
             <div className="flex gap-2">
               <textarea
                 value={text}

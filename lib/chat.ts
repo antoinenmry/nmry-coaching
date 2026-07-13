@@ -22,6 +22,7 @@ export interface ChatRow {
   attachment_type: string | null;
   attachment_path: string | null;
   audio_path: string | null;
+  reaction: string | null;
 }
 
 /** Convertit une ligne SQL en ChatMessage (forme utilisée par le front). */
@@ -42,6 +43,7 @@ export function rowToMessage(r: ChatRow): ChatMessage {
     attachmentType: (r.attachment_type as ChatMessage["attachmentType"]) ?? undefined,
     attachmentPath: r.attachment_path ?? undefined,
     audioPath: r.audio_path ?? undefined,
+    reaction: r.reaction ?? undefined,
   };
 }
 

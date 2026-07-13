@@ -148,6 +148,7 @@ export interface ChatMessage {
   attachmentType?: "image" | "video";
   attachmentPath?: string;    // chemin Storage pour la suppression
   audioPath?: string;         // chemin Storage pour les vocaux (vide si encore base64 legacy)
+  reaction?: string;          // emoji de réaction (tapback), affecté par n'importe quel participant de la conversation
 }
 
 /** Une note du bloc-notes partagé sportif ↔ coach (stocké dans app_state du sportif). */

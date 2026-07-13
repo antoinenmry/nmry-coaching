@@ -31,6 +31,7 @@ create table if not exists public.app_state (
 alter table public.app_state add column if not exists updated_by_coach_at  timestamptz;
 alter table public.app_state add column if not exists updated_by_client_at timestamptz;
 alter table public.chat_messages add column if not exists audio_path text;
+alter table public.chat_messages add column if not exists reaction text; -- emoji de réaction (tapback)
 
 alter table public.profiles  enable row level security;
 alter table public.app_state enable row level security;
