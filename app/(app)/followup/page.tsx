@@ -672,7 +672,7 @@ function MessagesTab() {
             {clientList.map(c => (
               <button
                 key={c.id}
-                onClick={() => setChatClientId(c.id)}
+                onClick={() => { setChatClientId(c.id); window.scrollTo({ top: 0 }); }}
                 className={`shrink-0 rounded-xl px-3.5 py-2 text-sm font-semibold transition ${
                   c.id === chatClientId
                     ? "bg-accent text-[#1a1500]"

@@ -779,15 +779,15 @@ function ExerciseBlock({
       {(!isCoach || isSelf) && (
         <>
           <div>
-            <span className="mb-1 block text-[13px] text-dim">
+            <span className="mb-1 block text-[14px] font-semibold text-ink">
               {(ex.weightLabel || ex.weight > 0) ? (isPace ? "Mon allure réalisée" : "Mon poids réalisé") : (isPace ? "Allure réalisée" : "Poids utilisé")}
             </span>
             {isPace ? (
-              <PaceInput value={ex.weightClient ?? 0} onChange={(v) => onPatch({ weightClient: v > 0 ? v : undefined })} />
+              <PaceInput value={ex.weightClient ?? 0} onChange={(v) => onPatch({ weightClient: v > 0 ? v : undefined })} placeholder="" />
             ) : (
               <div className="flex items-center gap-2">
                 <input
-                  type="number" inputMode="decimal" min={0} step={0.5} placeholder="ex : 80"
+                  type="number" inputMode="decimal" min={0} step={0.5}
                   value={ex.weightClient ?? ""}
                   onChange={(e) => onPatch({ weightClient: e.target.value !== "" ? +e.target.value : undefined })}
                   className="flex-1"
@@ -885,7 +885,6 @@ function ExerciseBlock({
           <textarea
             value={ex.clientComment}
             onChange={(e) => onPatch({ clientComment: e.target.value })}
-            placeholder="Ressenti, douleur, charge trop lourde/légère…"
             className="min-h-[60px]"
           />
         </label>

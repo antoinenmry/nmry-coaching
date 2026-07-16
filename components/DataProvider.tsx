@@ -430,6 +430,11 @@ export function DataProvider({ children }: { children: React.ReactNode }) {
       if (typeof window !== "undefined") localStorage.setItem(COACH_CLIENT_KEY, userId);
       await loadStateFor(userId);
       setLoading(false);
+      // Changer de sportif actif ne navigue pas vers une nouvelle page (même route,
+      // juste un autre `activeUserId`) → le scroll restait où il était avant le switch.
+      // Ex : /followup scrollé dans les messages d'un sportif, puis bascule vers un
+      // autre → les onglets Messages/Santé/Bloc-notes du haut restaient masqués.
+      if (typeof window !== "undefined") window.scrollTo({ top: 0 });
     },
     [loadStateFor, pushNow],
   );
