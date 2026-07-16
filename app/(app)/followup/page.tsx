@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useRef, useEffect, useCallback, memo } from "react";
+import { useState, useRef, useEffect, useLayoutEffect, useCallback, memo } from "react";
 import { useData } from "@/components/DataProvider";
 import { createClient } from "@/lib/supabase/client";
 import { type BlockNote, type ChatMessage, type Followup } from "@/lib/types";
@@ -1381,6 +1381,18 @@ export default function FollowupPage() {
   const { loading } = useData();
   const [tab, setTab] = useState<"messages" | "sante" | "notes">("messages");
   const [unreadCount, setUnreadCount] = useState(0);
+
+  // Ouvre TOUJOURS la page en haut (onglets Messages/Santé/Bloc-notes visibles),
+  // jamais scrollée dans le chat comme avant. Sans le `scrollRestoration = "manual"`,
+  // le navigateur peut réappliquer sa propre restauration de scroll (visite précédente
+  // laissée tout en bas du chat) APRÈS notre scrollTo, et annuler l'effet.
+  useLayoutEffect(() => {
+    if (typeof window === "undefined") return;
+    const prevRestoration = window.history.scrollRestoration;
+    window.history.scrollRestoration = "manual";
+    window.scrollTo(0, 0);
+    return () => { window.history.scrollRestoration = prevRestoration; };
+  }, []);
 
   // Compteur de messages non lus (rafraîchi à l'ouverture et à chaque changement d'onglet)
   useEffect(() => {
