@@ -268,6 +268,10 @@ export default function MetricsTab() {
   const [addingEntryFor, setAddingEntryFor] = useState<string | null>(null);
   const [entryDate, setEntryDate] = useState(todayKey());
   const [entryValue, setEntryValue] = useState("");
+  const [entryNote, setEntryNote] = useState("");
+  // Note d'une entrée déjà enregistrée : { metricId, entryId } en cours d'édition
+  const [editingEntryNote, setEditingEntryNote] = useState<{ metricId: string; entryId: string } | null>(null);
+  const [editingNoteText, setEditingNoteText] = useState("");
   const [editingMetricId, setEditingMetricId] = useState<string | null>(null);
   const [editName, setEditName] = useState("");
   const [editUnit, setEditUnit] = useState("");
@@ -285,11 +289,12 @@ export default function MetricsTab() {
       if (!m) return;
       // Remplace l'entrée du même jour si elle existe
       m.entries = m.entries.filter(e => e.date !== entryDate);
-      m.entries.push({ id: uid(), date: entryDate, value: v });
+      m.entries.push({ id: uid(), date: entryDate, value: v, note: entryNote.trim() || undefined });
       m.entries.sort((a, b) => a.date.localeCompare(b.date));
     });
     setAddingEntryFor(null);
     setEntryValue("");
+    setEntryNote("");
     setEntryDate(todayKey());
   }
 
@@ -298,6 +303,16 @@ export default function MetricsTab() {
       const m = (d.metrics ?? []).find(x => x.id === metricId);
       if (m) m.entries = m.entries.filter(e => e.id !== entryId);
     });
+  }
+
+  function saveEntryNote(metricId: string, entryId: string) {
+    update(d => {
+      const m = (d.metrics ?? []).find(x => x.id === metricId);
+      const e = m?.entries.find(x => x.id === entryId);
+      if (e) e.note = editingNoteText.trim() || undefined;
+    });
+    setEditingEntryNote(null);
+    setEditingNoteText("");
   }
 
   function saveMetricEdit(metricId: string) {
@@ -446,19 +461,58 @@ export default function MetricsTab() {
 
                     {/* Historique (3 dernières entrées) */}
                     {sorted.length > 1 && (
-                      <div className="mb-3 space-y-1 rounded-xl bg-surface2 px-3 py-2">
-                        {sorted.slice(0, 3).map(e => (
-                          <div key={e.id} className="flex items-center justify-between text-[12px]">
-                            <span className="text-dim">{fmtDate(e.date)}</span>
-                            <span className="font-semibold text-ink">{e.value} {m.unit}</span>
-                            <button
-                              onClick={() => deleteEntry(m.id, e.id)}
-                              className="text-[10px] text-dim hover:text-danger"
-                            >
-                              ✕
-                            </button>
-                          </div>
-                        ))}
+                      <div className="mb-3 space-y-1.5 rounded-xl bg-surface2 px-3 py-2">
+                        {sorted.slice(0, 3).map(e => {
+                          const isEditingNote = editingEntryNote?.metricId === m.id && editingEntryNote?.entryId === e.id;
+                          return (
+                            <div key={e.id} className="text-[12px]">
+                              <div className="flex items-center justify-between">
+                                <span className="text-dim">{fmtDate(e.date)}</span>
+                                <span className="font-semibold text-ink">{e.value} {m.unit}</span>
+                                <div className="flex items-center gap-2">
+                                  <button
+                                    onClick={() => {
+                                      setEditingEntryNote({ metricId: m.id, entryId: e.id });
+                                      setEditingNoteText(e.note ?? "");
+                                    }}
+                                    className="text-[10px] text-dim hover:text-accent"
+                                  >
+                                    {e.note ? "📝" : "+ note"}
+                                  </button>
+                                  <button
+                                    onClick={() => deleteEntry(m.id, e.id)}
+                                    className="text-[10px] text-dim hover:text-danger"
+                                  >
+                                    ✕
+                                  </button>
+                                </div>
+                              </div>
+                              {isEditingNote ? (
+                                <div className="mt-1 space-y-1.5">
+                                  <textarea
+                                    value={editingNoteText}
+                                    onChange={ev => setEditingNoteText(ev.target.value)}
+                                    autoFocus
+                                    rows={2}
+                                    className="w-full resize-none rounded-lg border border-line bg-surface px-2 py-1.5 text-[12px] outline-none focus:border-accent"
+                                  />
+                                  <div className="flex gap-1.5">
+                                    <button
+                                      onClick={() => saveEntryNote(m.id, e.id)}
+                                      className="rounded-lg bg-accent px-2.5 py-1 text-[11px] font-semibold text-[#1a1500]"
+                                    >✓ Enregistrer</button>
+                                    <button
+                                      onClick={() => setEditingEntryNote(null)}
+                                      className="rounded-lg bg-surface px-2.5 py-1 text-[11px] text-dim"
+                                    >Annuler</button>
+                                  </div>
+                                </div>
+                              ) : e.note ? (
+                                <p className="mt-0.5 text-[11px] italic text-dim">{e.note}</p>
+                              ) : null}
+                            </div>
+                          );
+                        })}
                       </div>
                     )}
 
@@ -487,6 +541,15 @@ export default function MetricsTab() {
                             />
                           </label>
                         </div>
+                        <label className="block">
+                          <span className="mb-1 block text-[12px] text-dim">Note (optionnel)</span>
+                          <textarea
+                            value={entryNote}
+                            onChange={e => setEntryNote(e.target.value)}
+                            rows={2}
+                            className="w-full resize-none"
+                          />
+                        </label>
                         <div className="flex gap-2">
                           <button
                             onClick={() => saveEntry(m.id)}
@@ -496,7 +559,7 @@ export default function MetricsTab() {
                             ✓ Enregistrer
                           </button>
                           <button
-                            onClick={() => { setAddingEntryFor(null); setEntryValue(""); }}
+                            onClick={() => { setAddingEntryFor(null); setEntryValue(""); setEntryNote(""); }}
                             className="rounded-xl bg-surface px-4 py-2 text-[13px] text-dim"
                           >
                             Annuler
@@ -509,6 +572,7 @@ export default function MetricsTab() {
                           setAddingEntryFor(m.id);
                           setEntryDate(todayKey());
                           setEntryValue("");
+                          setEntryNote("");
                         }}
                         className="mt-1 flex w-full items-center justify-center gap-1.5 rounded-xl border border-dashed border-line py-2 text-[13px] font-semibold text-dim transition hover:border-accent/40 hover:text-accent"
                       >

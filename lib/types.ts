@@ -45,6 +45,7 @@ export interface MetricEntry {
   id: string;
   date: string;   // YYYY-MM-DD
   value: number;
+  note?: string;  // remarque libre sur cette entrée (contexte, ressenti…)
 }
 
 /** Une métrique personnalisable (Poids, Taille, Tour de taille…). */
