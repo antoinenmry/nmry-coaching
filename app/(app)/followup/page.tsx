@@ -308,6 +308,8 @@ function MessagesTab() {
   const [avatarPhotos, setAvatarPhotos] = useState<Record<string, string>>({});
   const [chatLoading, setChatLoading] = useState(false);
   const [hasMore, setHasMore] = useState(false);
+  // Non-lus par sportif (coach/admin) — badge sur chaque bouton "Conversation avec :".
+  const [unreadByClient, setUnreadByClient] = useState<Record<string, number>>({});
   const [loadingMore, setLoadingMore] = useState(false);
   const scrollRef = useRef<HTMLDivElement>(null);
   const isPrependingRef = useRef(false);
@@ -394,6 +396,17 @@ function MessagesTab() {
     loadMessages(convClientId);   // messages (rapide)
     loadAvatars(convClientId);    // photos (en parallèle, hors chemin critique)
   }, [convClientId, loadMessages, loadAvatars]);
+
+  // Badge non-lus par sportif : au montage + après chaque changement de conversation
+  // (l'ouverture d'une conversation marque ses messages lus côté serveur → son badge
+  // doit retomber à 0 juste après).
+  useEffect(() => {
+    if (!isElevated) return;
+    fetch("/api/chat/unread")
+      .then(r => r.ok ? r.json() : null)
+      .then(d => { if (d?.byClient) setUnreadByClient(d.byClient); })
+      .catch(() => {});
+  }, [isElevated, convClientId, messages.length]);
 
   // Seed instantané des avatars déjà connus (cache module) dès que les
   // participants (ids) sont résolus → pas de clignotement au retour.
@@ -669,19 +682,27 @@ function MessagesTab() {
         <div className="space-y-1.5">
           <p className="text-[12px] font-semibold text-dim">Conversation avec :</p>
           <div className="flex gap-2 overflow-x-auto pb-1">
-            {clientList.map(c => (
-              <button
-                key={c.id}
-                onClick={() => { setChatClientId(c.id); window.scrollTo({ top: 0 }); }}
-                className={`shrink-0 rounded-xl px-3.5 py-2 text-sm font-semibold transition ${
-                  c.id === chatClientId
-                    ? "bg-accent text-[#1a1500]"
-                    : "border border-line bg-surface2 text-dim"
-                }`}
-              >
-                {c.name || c.email}
-              </button>
-            ))}
+            {clientList.map(c => {
+              const unread = unreadByClient[c.id] ?? 0;
+              return (
+                <button
+                  key={c.id}
+                  onClick={() => { setChatClientId(c.id); window.scrollTo({ top: 0 }); }}
+                  className={`relative shrink-0 rounded-xl px-3.5 py-2 text-sm font-semibold transition ${
+                    c.id === chatClientId
+                      ? "bg-accent text-[#1a1500]"
+                      : "border border-line bg-surface2 text-dim"
+                  }`}
+                >
+                  {c.name || c.email}
+                  {unread > 0 && c.id !== chatClientId && (
+                    <span className="absolute -right-1.5 -top-1.5 flex h-4 min-w-4 items-center justify-center rounded-full bg-danger px-1 text-[10px] font-bold text-white">
+                      {unread > 9 ? "9+" : unread}
+                    </span>
+                  )}
+                </button>
+              );
+            })}
           </div>
         </div>
       )}
