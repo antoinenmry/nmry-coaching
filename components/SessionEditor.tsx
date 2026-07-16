@@ -766,10 +766,19 @@ function ExerciseBlock({
         </>
       )}
 
+      {/* Séparation visuelle prescription coach ↔ suivi sportif — discrète mais visible */}
+      {(!isCoach || isSelf) && (
+        <div className="my-3 flex items-center gap-2" aria-hidden>
+          <div className="h-px flex-1 bg-gradient-to-r from-transparent to-accent2/50" />
+          <span className="text-[10px] font-semibold uppercase tracking-wide text-accent2/70">Suivi sportif</span>
+          <div className="h-px flex-1 bg-gradient-to-l from-transparent to-accent2/50" />
+        </div>
+      )}
+
       {/* Poids/allure réalisée + bannière PR — sportif, ou coach/admin sur sa propre séance (auto-suivi) */}
       {(!isCoach || isSelf) && (
         <>
-          <div className="mt-2.5">
+          <div>
             <span className="mb-1 block text-[13px] text-dim">
               {(ex.weightLabel || ex.weight > 0) ? (isPace ? "Mon allure réalisée" : "Mon poids réalisé") : (isPace ? "Allure réalisée" : "Poids utilisé")}
             </span>

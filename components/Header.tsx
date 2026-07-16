@@ -23,7 +23,7 @@ const TITLES: Record<string, string> = {
 export default function Header() {
   const pathname = usePathname();
   const router = useRouter();
-  const { saving, role, me, activeUserId, previewAsClient, setPreviewAsClient, library } = useData();
+  const { saving, syncError, role, me, activeUserId, previewAsClient, setPreviewAsClient, library } = useData();
   const { theme } = useTheme();
   const isHome = pathname === "/";
   const realRole = me?.role;
@@ -65,8 +65,8 @@ export default function Header() {
             TITLES[pathname] ?? "NMRY"
           )}
         </h1>
-        <div className="grid h-10 w-10 place-items-center text-xs text-dim">
-          {saving ? "…" : ""}
+        <div className="grid h-10 w-10 place-items-center text-xs" title={syncError ? "Sauvegarde impossible (hors ligne ?) — nouvelle tentative automatique" : undefined}>
+          {syncError ? <span className="text-base text-danger">⚠️</span> : saving ? <span className="text-dim">…</span> : ""}
         </div>
       </div>
 

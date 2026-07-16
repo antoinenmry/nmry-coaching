@@ -465,7 +465,11 @@ function MessagesTab() {
   useEffect(() => {
     // En remontant l'historique, on conserve la position (pas de scroll vers le bas).
     if (isPrependingRef.current) { isPrependingRef.current = false; return; }
-    bottomRef.current?.scrollIntoView({ behavior: "smooth" });
+    // ⚠️ On scrolle UNIQUEMENT le conteneur interne (scrollRef), jamais scrollIntoView() :
+    // celui-ci remonte aussi les ancêtres (toute la page) pour rendre le marqueur visible,
+    // ce qui masquait les onglets Messages/Santé/Bloc-notes en haut de page à l'ouverture.
+    const scroller = scrollRef.current;
+    if (scroller) scroller.scrollTop = scroller.scrollHeight;
   }, [messages.length]);
 
   // Envoie un message (texte, vocal ou media) via l'API chat, puis recharge la conversation.

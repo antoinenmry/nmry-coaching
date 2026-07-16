@@ -64,6 +64,8 @@ interface DataContextValue {
   updateTemplates: (recipe: (draft: TemplateLibrary) => void) => void;
   loading: boolean;
   saving: boolean;
+  /** true = la dernière tentative de sauvegarde a échoué (ex : hors ligne) et sera réessayée */
+  syncError: boolean;
   activeUserId: string | null;
   clients: Profile[];
   switchClient: (userId: string) => Promise<void>;
@@ -100,6 +102,7 @@ export function DataProvider({ children }: { children: React.ReactNode }) {
   const [templates, setTemplates] = useState<TemplateLibrary>(EMPTY_TEMPLATES);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
+  const [syncError, setSyncError] = useState(false);
   const [role, setRoleState] = useState<Role>("client");
   const [previewAsClient, setPreviewAsClient] = useState(false);
   const [hasCoach, setHasCoach] = useState(true); // optimiste par défaut
@@ -113,6 +116,8 @@ export function DataProvider({ children }: { children: React.ReactNode }) {
   const saveTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const libraryTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const templatesTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  // Nouvelle tentative programmée après un échec réseau (ex : mode avion) — cf. pushNow.
+  const retryTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   // Dédoublonnage des sauvegardes app_state : on mémorise le dernier blob écrit
   // (par profil) pour ne pas réécrire un état identique → ↓ Disk IO.
   const lastSavedJson = useRef<string | null>(null);
@@ -290,19 +295,31 @@ export function DataProvider({ children }: { children: React.ReactNode }) {
     setSaving(true);
     const now = new Date().toISOString();
     const isCoachSaving = ["coach","admin"].includes(meRef.current?.role ?? "");
-    const { error } = await supabase.from("app_state").upsert({
-      user_id: userId,
-      data: stateRef.current,
-      updated_at: now,
-      ...(isCoachSaving
-        ? { updated_by_coach_at: now }
-        : { updated_by_client_at: now }),
-    });
-    if (error) {
-      console.error("Sauvegarde échouée", error);
-    } else {
+    try {
+      const { error } = await supabase.from("app_state").upsert({
+        user_id: userId,
+        data: stateRef.current,
+        updated_at: now,
+        ...(isCoachSaving
+          ? { updated_by_coach_at: now }
+          : { updated_by_client_at: now }),
+      });
+      if (error) throw error;
       lastSavedJson.current = json;
       lastSavedUserId.current = userId;
+      setSyncError(false);
+    } catch (e) {
+      // ⚠️ Panne réseau (ex : mode avion) : SANS ce catch+retry, l'erreur se
+      // perdait silencieusement (aucun throw géré) et la modif locale n'était
+      // JAMAIS réécrite → au prochain chargement, loadStateFor() récupère
+      // l'ancien blob serveur et écrase l'édition faite hors-ligne, sur TOUS
+      // les appareils. On retente donc automatiquement (5s) tant que ce
+      // profil reste actif, + immédiatement au retour réseau (cf. listener
+      // "online" plus bas) — jusqu'à ce que la sauvegarde aboutisse.
+      console.error("Sauvegarde échouée, nouvelle tentative programmée", e);
+      setSyncError(true);
+      if (retryTimer.current) clearTimeout(retryTimer.current);
+      retryTimer.current = setTimeout(() => pushNow(expectedUserId), 5000);
     }
     setSaving(false);
   }, [supabase]);
@@ -373,6 +390,33 @@ export function DataProvider({ children }: { children: React.ReactNode }) {
     [pushTemplatesNow],
   );
 
+  // Filet de sécurité anti-perte de données (mode avion / coupure réseau / app mise en
+  // arrière-plan) :
+  // 1) dès que la connexion revient, on retente aussitôt la sauvegarde en attente
+  //    (au lieu d'attendre le prochain debounce, qui ne se redéclenche que sur une
+  //    NOUVELLE modification — s'il n'y en a pas, l'ancienne restait bloquée) ;
+  // 2) quand l'onglet/app passe en arrière-plan (verrouillage tél., changement d'appli),
+  //    on flushe immédiatement le debounce en attente plutôt que d'attendre 2s au risque
+  //    que l'app soit tuée avant.
+  useEffect(() => {
+    function handleOnline() {
+      if (modeRef.current === "auth" && activeRef.current) pushNow(activeRef.current);
+    }
+    function handleVisibility() {
+      if (document.visibilityState === "hidden" && saveTimer.current) {
+        clearTimeout(saveTimer.current);
+        saveTimer.current = null;
+        pushNow(activeRef.current ?? undefined);
+      }
+    }
+    window.addEventListener("online", handleOnline);
+    document.addEventListener("visibilitychange", handleVisibility);
+    return () => {
+      window.removeEventListener("online", handleOnline);
+      document.removeEventListener("visibilitychange", handleVisibility);
+    };
+  }, [pushNow]);
+
   const switchClient = useCallback(
     async (userId: string) => {
       // Flush la sauvegarde en attente du profil COURANT avant de charger le suivant :
@@ -405,7 +449,7 @@ export function DataProvider({ children }: { children: React.ReactNode }) {
         me, state, update,
         library, updateLibrary, flushLibrary: pushLibraryNow,
         templates, updateTemplates,
-        loading, saving,
+        loading, saving, syncError,
         activeUserId, clients, switchClient, signOut,
         role: previewAsClient ? "client" : role,
         setRole, previewAsClient, setPreviewAsClient,

@@ -51,7 +51,7 @@ export default function PlanPage() {
     setTimeout(() => setNotifSent(false), 3000);
   }
 
-  const [mode, setMode] = useState<"month" | "week" | "synthesis">("month");
+  const [mode, setMode] = useState<"month" | "week" | "synthesis">("week");
   const [cursor, setCursor] = useState(() => new Date());
   const [pending, setPending] = useState<string | null>(null); // séance à placer (tap-to-place)
   const [editing, setEditing] = useState<string | null>(null); // sessionId
