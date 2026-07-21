@@ -23,6 +23,11 @@ export default function ExerciseMultiSelect({
   const { categories, exercises } = library;
   const [sel, setSel] = useState<Record<string, string[]>>({});
   const [search, setSearch] = useState("");
+  // Liste repliée par défaut (mur d'exercices évité) — la recherche/les filtres
+  // restent natifs et toujours visibles. Se déroule au tap du bouton, ou
+  // automatiquement dès qu'on tape une recherche.
+  const [listOpen, setListOpen] = useState(false);
+  const showList = listOpen || search.trim() !== "";
   // Filtre couleur interne (utilisé seulement si activeColorFilter n'est pas fourni)
   const [colorFilter, setColorFilter] = useState<string[]>([]);
 
@@ -146,8 +151,21 @@ export default function ExerciseMultiSelect({
         ))}
       </div>}
 
+      {/* Toggle liste — recherche/filtres restent natifs, seule la liste se replie */}
+      <button
+        type="button"
+        onClick={() => setListOpen((v) => !v)}
+        className="mb-1.5 flex w-full items-center justify-between rounded-xl border border-line bg-surface2 px-3.5 py-2.5 text-sm font-semibold text-ink"
+      >
+        <span>
+          📚 Voir la bibliothèque
+          {picked.length > 0 ? ` (${picked.length} sélectionné${picked.length > 1 ? "s" : ""})` : ""}
+        </span>
+        <span className="text-dim">{showList ? "▲" : "▼"}</span>
+      </button>
+
       {/* Liste */}
-      {filtered.length === 0 ? (
+      {!showList ? null : filtered.length === 0 ? (
         <p className="py-6 text-center text-sm text-dim">
           Aucun exercice. Crée-en dans l&apos;onglet Bibliothèque.
         </p>

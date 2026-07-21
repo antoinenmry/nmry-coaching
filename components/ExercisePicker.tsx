@@ -25,9 +25,6 @@ export default function ExercisePicker({
 
   const [picked, setPicked] = useState<string[]>([]); // peut contenir plusieurs fois le même id
   const [saveToLib, setSaveToLib] = useState(true);
-  // Bibliothèque repliée par défaut : évite le mur d'exercices dès l'ouverture,
-  // ne se déroule qu'au tap sur "Voir la bibliothèque".
-  const [libraryOpen, setLibraryOpen] = useState(false);
 
   // État du formulaire de création inline
   const [newName, setNewName] = useState("");
@@ -108,20 +105,7 @@ export default function ExercisePicker({
         {/* Zone scrollable unique : bibliothèque + création inline. Sur iPhone, le bouton de
             confirmation doit rester atteignable même quand le formulaire "tags" s'étend. */}
         <div className="min-h-0 flex-1 overflow-y-auto">
-          <button
-            type="button"
-            onClick={() => setLibraryOpen((v) => !v)}
-            className="mb-3 flex w-full items-center justify-between rounded-xl border border-line bg-surface2 px-3.5 py-2.5 text-sm font-semibold text-ink"
-          >
-            <span>
-              📚 Voir la bibliothèque
-              {picked.length > 0 ? ` (${picked.length} sélectionné${picked.length > 1 ? "s" : ""})` : ""}
-            </span>
-            <span className="text-dim">{libraryOpen ? "▲" : "▼"}</span>
-          </button>
-          {libraryOpen && (
-            <ExerciseMultiSelect picked={picked} onAdd={addOne} onRemove={removeOne} />
-          )}
+          <ExerciseMultiSelect picked={picked} onAdd={addOne} onRemove={removeOne} />
 
         {/* Création inline */}
         <div className="mt-4 rounded-xl border border-dashed border-line bg-surface2 p-3">
