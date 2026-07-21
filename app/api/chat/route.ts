@@ -196,7 +196,21 @@ export async function POST(req: NextRequest) {
   } else {
     // Coach → sportif (respecte la préférence du sportif)
     const prefs = await getUserNotifPrefs(clientId);
-    if (prefs.newMessage) {
+    if (isUrgent) {
+      // ⚠️ Message urgent DU COACH : il faut une notif urgente dédiée. Avant, le flag
+      // `isUrgent` était ignoré dans ce sens (seul le cas sportif→coach déclenchait un
+      // traitement urgent via /api/messages/urgent) → le sportif ne recevait qu'une notif
+      // banale, voire rien s'il avait coupé les messages ordinaires. On la conditionne
+      // désormais à la préférence dédiée `urgentMessage` (≠ `newMessage`), pour qu'une
+      // urgence passe même si les notifs de messages courants sont désactivées.
+      if (prefs.urgentMessage) {
+        sendPushToUser(clientId, {
+          title: `🚨 Message urgent — ${myName}`,
+          body: notifBody,
+          url: "/followup",
+        }).catch(() => {});
+      }
+    } else if (prefs.newMessage) {
       sendPushToUser(clientId, {
         title: `💬 ${myName}`,
         body: notifBody,
