@@ -574,6 +574,9 @@ function ComposeModal({ onClose, onCreated }: { onClose: () => void; onCreated: 
   const [saveToLib, setSaveToLib] = useState(true);
   // Filtres visibles/masqués
   const [filtersOpen, setFiltersOpen] = useState(false);
+  // Bibliothèque repliée par défaut : évite le mur d'exercices dès l'ouverture,
+  // ne se déroule qu'au tap sur "Voir la bibliothèque".
+  const [libraryOpen, setLibraryOpen] = useState(false);
   // Formulaire exercice custom
   const [newName, setNewName] = useState("");
   const [newTags, setNewTags] = useState<Record<string, string[]>>({});
@@ -715,26 +718,38 @@ function ComposeModal({ onClose, onCreated }: { onClose: () => void; onCreated: 
           )}
         </div>
 
-        {/* Bibliothèque : en-tête + toggle filtres */}
-        <div className="mb-1.5 flex items-center justify-between">
-          <span className="text-[13px] text-dim">
-            Bibliothèque ({pickedIds.length} sélectionné{pickedIds.length > 1 ? "s" : ""})
+        {/* Bibliothèque : repliée par défaut, se déroule au tap */}
+        <button
+          type="button"
+          onClick={() => setLibraryOpen((v) => !v)}
+          className="mb-3 flex w-full items-center justify-between rounded-xl border border-line bg-surface2 px-3.5 py-2.5 text-sm font-semibold text-ink"
+        >
+          <span>
+            📚 Voir la bibliothèque
+            {pickedIds.length > 0 ? ` (${pickedIds.length} sélectionné${pickedIds.length > 1 ? "s" : ""})` : ""}
           </span>
-          <button
-            type="button"
-            onClick={() => setFiltersOpen((v) => !v)}
-            className="rounded-lg bg-surface2 px-2.5 py-1 text-[12px] font-medium text-dim hover:text-ink"
-          >
-            {filtersOpen ? "▲ Masquer les filtres" : "▼ Filtres"}
-          </button>
-        </div>
-        <ExerciseMultiSelect
-          picked={pickedIds}
-          onAdd={addLibEx}
-          onRemove={removeLibEx}
-          showFilters={filtersOpen}
-          activeColorFilter={usedColors.length > 0 ? (activeColor ? [activeColor] : []) : undefined}
-        />
+          <span className="text-dim">{libraryOpen ? "▲" : "▼"}</span>
+        </button>
+        {libraryOpen && (
+          <>
+            <div className="mb-1.5 flex items-center justify-end">
+              <button
+                type="button"
+                onClick={() => setFiltersOpen((v) => !v)}
+                className="rounded-lg bg-surface2 px-2.5 py-1 text-[12px] font-medium text-dim hover:text-ink"
+              >
+                {filtersOpen ? "▲ Masquer les filtres" : "▼ Filtres"}
+              </button>
+            </div>
+            <ExerciseMultiSelect
+              picked={pickedIds}
+              onAdd={addLibEx}
+              onRemove={removeLibEx}
+              showFilters={filtersOpen}
+              activeColorFilter={usedColors.length > 0 ? (activeColor ? [activeColor] : []) : undefined}
+            />
+          </>
+        )}
 
         {/* Exercice personnalisé */}
         <div className="mt-4 rounded-xl border border-dashed border-line bg-surface2 p-3">
