@@ -31,11 +31,13 @@ const shortName = (n: string) => {
 const EMOJIS = ["😫", "😕", "😐", "🙂", "🤩"];
 const emojiOf = (n: number) => (n >= 1 && n <= 5 ? EMOJIS[n - 1] + " " : "");
 
-// Barre d'actions coach : géométrie identique pour tous les boutons (hauteur fixe,
-// pas de retour à la ligne) → rangée régulière quelle que soit la longueur du libellé.
-const TOOLBAR_BTN =
-  "h-9 shrink-0 whitespace-nowrap rounded-lg px-3 text-[13px] font-semibold transition";
-const TOOLBAR_BTN_SECONDARY = "border border-line bg-surface2 text-ink hover:bg-surface";
+// Barre d'actions coach : tuiles compactes tenant toutes sur UNE ligne, sans scroll.
+// Les colonnes se partagent la largeur à parts égales (auto-cols-fr) quel que soit le
+// nombre d'actions réellement visibles. 10px est la taille qui tient encore sur les
+// écrans les plus étroits (375px) : au-delà, « Séance » déborde de sa tuile.
+const TILE =
+  "grid h-10 place-items-center rounded-lg border px-px text-center text-[10px] font-semibold leading-tight tracking-tight transition";
+const TILE_SECONDARY = "border-line bg-surface2 text-ink hover:bg-surface";
 
 export default function PlanPage() {
   const { state, update, role, setRole, loading, clients, activeUserId, me, recordPlanNotif, templates } = useData();
@@ -257,37 +259,44 @@ export default function PlanPage() {
             Hiérarchie de couleur réduite à 3 niveaux : action principale (créer),
             actions secondaires (neutres), envoi (accent). */}
         {isCoach && (
-          <div className="mb-2.5 -mx-1 flex gap-2 overflow-x-auto px-1 pb-1">
-            <button onClick={() => setComposing(true)} className={`${TOOLBAR_BTN} bg-ok text-[#06210a]`}>
-              + Créer une séance
+          <div className="mb-2.5 grid auto-cols-fr grid-flow-col gap-1">
+            <button onClick={() => setComposing(true)} title="Créer une séance"
+              className={`${TILE} border-ok/50 bg-ok/20 text-ok`}>
+              Créer
             </button>
             {(templates.sessionTemplates ?? []).length > 0 && (
-              <button onClick={() => setPlacing(true)} className={`${TOOLBAR_BTN} ${TOOLBAR_BTN_SECONDARY}`}>
-                Séance type
+              <button onClick={() => setPlacing(true)} title="Placer une séance type"
+                className={`${TILE} ${TILE_SECONDARY}`}>
+                Séance<br />type
               </button>
             )}
-            <button onClick={() => setDuplicating(true)} className={`${TOOLBAR_BTN} ${TOOLBAR_BTN_SECONDARY}`}>
-              Dupliquer la semaine
+            <button onClick={() => setDuplicating(true)} title="Dupliquer la semaine"
+              className={`${TILE} ${TILE_SECONDARY}`}>
+              Copier<br />sem
             </button>
-            <button onClick={() => setDuplicatingSessions(true)} className={`${TOOLBAR_BTN} ${TOOLBAR_BTN_SECONDARY}`}>
-              Dupliquer des séances
+            <button onClick={() => setDuplicatingSessions(true)} title="Dupliquer des séances"
+              className={`${TILE} ${TILE_SECONDARY}`}>
+              Copier<br />séance
             </button>
             {(templates.programs ?? []).length > 0 && (
-              <button onClick={() => setInjecting(true)} className={`${TOOLBAR_BTN} ${TOOLBAR_BTN_SECONDARY}`}>
-                Programme
+              <button onClick={() => setInjecting(true)} title="Injecter un programme"
+                className={`${TILE} ${TILE_SECONDARY}`}>
+                Prog
               </button>
             )}
             {hasOtherClients && (
-              <button onClick={() => setTransferring(true)} className={`${TOOLBAR_BTN} ${TOOLBAR_BTN_SECONDARY}`}>
-                Copier vers →
+              <button onClick={() => setTransferring(true)} title="Copier vers un autre sportif"
+                className={`${TILE} ${TILE_SECONDARY}`}>
+                Copier<br />vers
               </button>
             )}
             <button
               onClick={notifyNewPlan}
               disabled={notifying}
-              className={`${TOOLBAR_BTN} bg-accent/15 text-accent hover:bg-accent/25 disabled:opacity-50`}
+              title="Notifier le sportif d'une mise à jour"
+              className={`${TILE} border-accent/40 bg-accent/15 text-accent hover:bg-accent/25 disabled:opacity-50`}
             >
-              {notifying ? "Envoi…" : notifSent ? "Envoyé ✓" : "Notifier"}
+              {notifying ? "…" : notifSent ? "Envoyé" : "Notif"}
             </button>
           </div>
         )}
