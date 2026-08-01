@@ -3,10 +3,13 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import dynamic from "next/dynamic";
 import { useData } from "@/components/DataProvider";
-import SessionEditor from "@/components/SessionEditor";
-import ExerciseMultiSelect from "@/components/ExerciseMultiSelect";
 
 // Modales chargées à la demande (à l'ouverture) → bundle initial de /plan allégé.
+// SessionEditor (~900 lignes) et ExerciseMultiSelect ne s'affichent que dans une
+// modale (editing / composing) : les charger à la demande sort aussi ExercisePicker,
+// tiré par SessionEditor, du bundle initial. Comportement inchangé.
+const SessionEditor = dynamic(() => import("@/components/SessionEditor"));
+const ExerciseMultiSelect = dynamic(() => import("@/components/ExerciseMultiSelect"));
 const GoalInfoModal = dynamic(() => import("@/components/GoalInfoModal"));
 const InjectProgramModal = dynamic(() => import("@/components/plan/InjectProgramModal"));
 const PlaceSessionModal = dynamic(() => import("@/components/plan/PlaceSessionModal"));
@@ -27,6 +30,12 @@ const shortName = (n: string) => {
 };
 const EMOJIS = ["😫", "😕", "😐", "🙂", "🤩"];
 const emojiOf = (n: number) => (n >= 1 && n <= 5 ? EMOJIS[n - 1] + " " : "");
+
+// Barre d'actions coach : géométrie identique pour tous les boutons (hauteur fixe,
+// pas de retour à la ligne) → rangée régulière quelle que soit la longueur du libellé.
+const TOOLBAR_BTN =
+  "h-9 shrink-0 whitespace-nowrap rounded-lg px-3 text-[13px] font-semibold transition";
+const TOOLBAR_BTN_SECONDARY = "border border-line bg-surface2 text-ink hover:bg-surface";
 
 export default function PlanPage() {
   const { state, update, role, setRole, loading, clients, activeUserId, me, recordPlanNotif, templates } = useData();
@@ -88,6 +97,12 @@ export default function PlanPage() {
       setOtherGoals(goals);
     })();
   }, [isCoach, loading, clients, activeUserId]);
+
+  // Y a-t-il d'autres sportifs vers qui copier ? (évite de refiltrer la liste à chaque rendu)
+  const hasOtherClients = useMemo(
+    () => (clients ?? []).some((c) => c.id !== activeUserId),
+    [clients, activeUserId],
+  );
 
   const bank = useMemo(() => state.sessions.filter((s) => !s.date), [state.sessions]);
   const sessionsByDate = useMemo(() => {
@@ -236,42 +251,46 @@ export default function PlanPage() {
       >
         <div className="mb-2 flex items-center justify-between">
           <span className="text-sm font-bold">À placer ({bank.length})</span>
-          {isCoach && (
-            <div className="flex gap-2">
-              <button onClick={() => setComposing(true)} className="rounded-lg bg-ok px-3 py-1.5 text-[13px] font-semibold text-[#06210a]">
-                + Créer une séance
-              </button>
-              {(templates.sessionTemplates ?? []).length > 0 && (
-                <button onClick={() => setPlacing(true)} className="rounded-lg px-3 py-1.5 text-[13px] font-semibold text-white" style={{ background: "#f97316" }}>
-                  📌 Séance type
-                </button>
-              )}
-              <button onClick={() => setDuplicating(true)} className="rounded-lg px-3 py-1.5 text-[13px] font-semibold text-white" style={{ background: "#a855f7" }}>
-                Dupliquer la semaine
-              </button>
-              <button onClick={() => setDuplicatingSessions(true)} className="rounded-lg px-3 py-1.5 text-[13px] font-semibold text-white" style={{ background: "#8b5cf6" }}>
-                Dupliquer des séances
-              </button>
-              {(templates.programs ?? []).length > 0 && (
-                <button onClick={() => setInjecting(true)} className="rounded-lg px-3 py-1.5 text-[13px] font-semibold text-white" style={{ background: "#0ea5e9" }}>
-                  📋 Programme
-                </button>
-              )}
-              {clients && clients.filter((c) => c.id !== activeUserId).length > 0 && (
-                <button onClick={() => setTransferring(true)} className="rounded-lg bg-surface2 px-3 py-1.5 text-[13px] font-semibold text-ink hover:bg-surface">
-                  Copier vers →
-                </button>
-              )}
-              <button
-                onClick={notifyNewPlan}
-                disabled={notifying}
-                className="rounded-lg bg-accent/15 px-3 py-1.5 text-[13px] font-semibold text-accent hover:bg-accent/25 disabled:opacity-50"
-              >
-                {notifying ? "…" : notifSent ? "✅ Envoyé !" : "🔔 Notifier"}
-              </button>
-            </div>
-          )}
         </div>
+        {/* Barre d'actions coach — géométrie uniforme (même hauteur, pas de retour à
+            la ligne) sur une rangée défilante : le titre ne comprime plus les boutons.
+            Hiérarchie de couleur réduite à 3 niveaux : action principale (créer),
+            actions secondaires (neutres), envoi (accent). */}
+        {isCoach && (
+          <div className="mb-2.5 -mx-1 flex gap-2 overflow-x-auto px-1 pb-1">
+            <button onClick={() => setComposing(true)} className={`${TOOLBAR_BTN} bg-ok text-[#06210a]`}>
+              + Créer une séance
+            </button>
+            {(templates.sessionTemplates ?? []).length > 0 && (
+              <button onClick={() => setPlacing(true)} className={`${TOOLBAR_BTN} ${TOOLBAR_BTN_SECONDARY}`}>
+                Séance type
+              </button>
+            )}
+            <button onClick={() => setDuplicating(true)} className={`${TOOLBAR_BTN} ${TOOLBAR_BTN_SECONDARY}`}>
+              Dupliquer la semaine
+            </button>
+            <button onClick={() => setDuplicatingSessions(true)} className={`${TOOLBAR_BTN} ${TOOLBAR_BTN_SECONDARY}`}>
+              Dupliquer des séances
+            </button>
+            {(templates.programs ?? []).length > 0 && (
+              <button onClick={() => setInjecting(true)} className={`${TOOLBAR_BTN} ${TOOLBAR_BTN_SECONDARY}`}>
+                Programme
+              </button>
+            )}
+            {hasOtherClients && (
+              <button onClick={() => setTransferring(true)} className={`${TOOLBAR_BTN} ${TOOLBAR_BTN_SECONDARY}`}>
+                Copier vers →
+              </button>
+            )}
+            <button
+              onClick={notifyNewPlan}
+              disabled={notifying}
+              className={`${TOOLBAR_BTN} bg-accent/15 text-accent hover:bg-accent/25 disabled:opacity-50`}
+            >
+              {notifying ? "Envoi…" : notifSent ? "Envoyé ✓" : "Notifier"}
+            </button>
+          </div>
+        )}
         {bank.length === 0 ? (
           <p className="py-2 text-[13px] text-dim">
             {isCoach ? "Crée des séances ; elles apparaîtront ici à placer sur les jours." : "Aucune séance à placer pour l'instant."}
@@ -293,8 +312,16 @@ export default function PlanPage() {
                   <span className="text-sm font-semibold">{s.name}</span>
                   {isCoach && (
                     <>
-                      <button onClick={(e) => { e.stopPropagation(); setEditing(s.id); }} className="rounded bg-surface px-1.5 text-[12px]">✏️</button>
-                      <button onClick={(e) => { e.stopPropagation(); deleteBankSession(s.id); }} className="rounded bg-surface px-1.5 text-[12px]">🗑️</button>
+                      <button
+                        onClick={(e) => { e.stopPropagation(); setEditing(s.id); }}
+                        aria-label="Modifier la séance"
+                        className="grid h-6 w-6 shrink-0 place-items-center rounded-md bg-surface text-[12px]"
+                      >✏️</button>
+                      <button
+                        onClick={(e) => { e.stopPropagation(); deleteBankSession(s.id); }}
+                        aria-label="Supprimer la séance"
+                        className="grid h-6 w-6 shrink-0 place-items-center rounded-md bg-surface text-[12px]"
+                      >🗑️</button>
                     </>
                   )}
                 </div>
