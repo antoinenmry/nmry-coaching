@@ -10,6 +10,7 @@ import ExerciseMultiSelect from "@/components/ExerciseMultiSelect";
 const GoalInfoModal = dynamic(() => import("@/components/GoalInfoModal"));
 const InjectProgramModal = dynamic(() => import("@/components/plan/InjectProgramModal"));
 const PlaceSessionModal = dynamic(() => import("@/components/plan/PlaceSessionModal"));
+const DuplicateSessionsModal = dynamic(() => import("@/components/plan/DuplicateSessionsModal"));
 import { AUTH_ENABLED } from "@/lib/config";
 import { SESSION_COLORS, newSession, exerciseInstanceFromLibrary } from "@/lib/data";
 import { countdownLabel } from "@/lib/dates";
@@ -57,6 +58,7 @@ export default function PlanPage() {
   const [editing, setEditing] = useState<string | null>(null); // sessionId
   const [composing, setComposing] = useState(false);
   const [duplicating, setDuplicating] = useState(false);
+  const [duplicatingSessions, setDuplicatingSessions] = useState(false);
   const [transferring, setTransferring] = useState(false);
   const [injecting, setInjecting] = useState(false);
   const [placing, setPlacing] = useState(false);
@@ -247,6 +249,9 @@ export default function PlanPage() {
               <button onClick={() => setDuplicating(true)} className="rounded-lg px-3 py-1.5 text-[13px] font-semibold text-white" style={{ background: "#a855f7" }}>
                 Dupliquer la semaine
               </button>
+              <button onClick={() => setDuplicatingSessions(true)} className="rounded-lg px-3 py-1.5 text-[13px] font-semibold text-white" style={{ background: "#8b5cf6" }}>
+                Dupliquer des séances
+              </button>
               {(templates.programs ?? []).length > 0 && (
                 <button onClick={() => setInjecting(true)} className="rounded-lg px-3 py-1.5 text-[13px] font-semibold text-white" style={{ background: "#0ea5e9" }}>
                   📋 Programme
@@ -390,6 +395,14 @@ export default function PlanPage() {
           cursor={cursor}
           sessionsByDate={sessionsByDate}
           onClose={() => setDuplicating(false)}
+        />
+      )}
+
+      {duplicatingSessions && (
+        <DuplicateSessionsModal
+          cursor={cursor}
+          sessionsByDate={sessionsByDate}
+          onClose={() => setDuplicatingSessions(false)}
         />
       )}
 
