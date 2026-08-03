@@ -3,6 +3,7 @@
 import { useState } from "react";
 import ExerciseMultiSelect from "./ExerciseMultiSelect";
 import { useData } from "./DataProvider";
+import { findDuplicateExercise } from "@/lib/data";
 import type { LibraryExercise } from "@/lib/types";
 
 export interface InlineExercise {
@@ -53,9 +54,15 @@ export default function ExercisePicker({
       };
     });
 
+  // Nom déjà pris — dans la bibliothèque ou parmi les exercices créés à l'instant.
+  const duplicate = findDuplicateExercise(
+    [...library.exercises, ...inlineExercises],
+    newName,
+  );
+
   function addInline() {
     const name = newName.trim();
-    if (!name) return;
+    if (!name || duplicate) return;
     const id = crypto.randomUUID();
     setInlineExercises((prev) => [...prev, { id, name, tags: newTags, video: newVideo }]);
     setNewName("");
@@ -118,21 +125,27 @@ export default function ExercisePicker({
               onChange={(e) => setNewName(e.target.value)}
               onKeyDown={(e) => e.key === "Enter" && addInline()}
               placeholder="Nom de l'exercice…"
-              className="flex-1"
+              aria-invalid={!!duplicate}
+              className={`flex-1 ${duplicate ? "!border-danger" : ""}`}
             />
             <button
               onClick={() => {
-                if (newName.trim()) setShowTagsForm(true);
+                if (newName.trim() && !duplicate) setShowTagsForm(true);
               }}
-              disabled={!newName.trim()}
+              disabled={!newName.trim() || !!duplicate}
               className="rounded-lg bg-accent px-3 py-2 text-sm font-semibold text-[#1a1500] disabled:opacity-40"
             >
               Détails →
             </button>
           </div>
+          {duplicate && (
+            <p className="mt-1 text-[12px] text-danger">
+              « {duplicate.name} » existe déjà — coche-le dans la bibliothèque ci-dessus.
+            </p>
+          )}
 
           {/* Formulaire étendu (tags + vidéo) */}
-          {showTagsForm && newName.trim() && (
+          {showTagsForm && newName.trim() && !duplicate && (
             <div className="mt-3 space-y-3 border-t border-line/50 pt-3">
               {/* Tags par catégorie */}
               {categories.map((cat) => (

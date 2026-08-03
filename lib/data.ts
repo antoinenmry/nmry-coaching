@@ -148,6 +148,29 @@ export function newSession(name: string, color: string): SessionInstance {
   return { id: uid(), tplId: "", name, color, emoji: 0, done: false, coachComment: "", date: null, exercises: [] };
 }
 
+/** Clé de comparaison d'un nom d'exercice : insensible à la casse, aux accents,
+ *  et aux espaces superflus. « Développé couché » ≡ « developpe  COUCHE ». */
+export function normalizeExerciseName(name: string): string {
+  return name
+    .trim()
+    .toLowerCase()
+    .normalize("NFD")
+    .replace(/[̀-ͯ]/g, "")
+    .replace(/\s+/g, " ");
+}
+
+/** Renvoie l'exercice de la bibliothèque portant déjà ce nom, sinon undefined.
+ *  `exceptId` permet d'ignorer l'exercice en cours d'édition (renommage sur lui-même). */
+export function findDuplicateExercise<T extends { id: string; name: string }>(
+  exercises: T[],
+  name: string,
+  exceptId?: string,
+): T | undefined {
+  const key = normalizeExerciseName(name);
+  if (!key) return undefined;
+  return exercises.find((e) => e.id !== exceptId && normalizeExerciseName(e.name) === key);
+}
+
 /** Transforme un exercice de la bibliothèque en instance prescriptible (valeurs par défaut). */
 export function exerciseInstanceFromLibrary(ex: { id: string; name: string }): ExerciseInstance {
   return {

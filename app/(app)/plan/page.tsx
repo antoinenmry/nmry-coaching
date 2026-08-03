@@ -14,9 +14,9 @@ const GoalInfoModal = dynamic(() => import("@/components/GoalInfoModal"));
 const InjectProgramModal = dynamic(() => import("@/components/plan/InjectProgramModal"));
 const PlaceSessionModal = dynamic(() => import("@/components/plan/PlaceSessionModal"));
 import { AUTH_ENABLED } from "@/lib/config";
-import { SESSION_COLORS, newSession, exerciseInstanceFromLibrary } from "@/lib/data";
+import { SESSION_COLORS, newSession, exerciseInstanceFromLibrary, findDuplicateExercise } from "@/lib/data";
 import { countdownLabel } from "@/lib/dates";
-import type { Followup, Goal, SessionInstance } from "@/lib/types";
+import type { Followup, Goal, SessionInstance, SessionTemplate, WeekTemplateDay } from "@/lib/types";
 import { createClient } from "@/lib/supabase/client";
 
 const MONTHS = ["Janvier","Février","Mars","Avril","Mai","Juin","Juillet","Août","Septembre","Octobre","Novembre","Décembre"];
@@ -97,12 +97,6 @@ export default function PlanPage() {
       setOtherGoals(goals);
     })();
   }, [isCoach, loading, clients, activeUserId]);
-
-  // Y a-t-il d'autres sportifs vers qui copier ? (évite de refiltrer la liste à chaque rendu)
-  const hasOtherClients = useMemo(
-    () => (clients ?? []).some((c) => c.id !== activeUserId),
-    [clients, activeUserId],
-  );
 
   const bank = useMemo(() => state.sessions.filter((s) => !s.date), [state.sessions]);
   const sessionsByDate = useMemo(() => {
@@ -278,12 +272,11 @@ export default function PlanPage() {
                 Prog
               </button>
             )}
-            {hasOtherClients && (
-              <button onClick={() => setTransferring(true)} title="Copier vers un autre sportif"
-                className={`${TILE} ${TILE_SECONDARY}`}>
-                Copier<br />vers
-              </button>
-            )}
+            <button onClick={() => setTransferring(true)}
+              title="Copier la semaine vers un autre sportif ou l'enregistrer en semaine type"
+              className={`${TILE} ${TILE_SECONDARY}`}>
+              Copier<br />vers
+            </button>
             <button
               onClick={notifyNewPlan}
               disabled={notifying}
@@ -642,10 +635,16 @@ function ComposeModal({ onClose, onCreated }: { onClose: () => void; onCreated: 
       return { ...prev, [catId]: cur.includes(optId) ? cur.filter((x) => x !== optId) : [...cur, optId] };
     });
 
+  // Nom déjà pris — dans la bibliothèque ou parmi les exercices custom déjà ajoutés ici.
+  const duplicateEx = findDuplicateExercise(
+    [...library.exercises, ...exercises.filter((e) => e.isInline)],
+    newName,
+  );
+
   // Ajouter l'exercice custom à la liste
   function addInline() {
     const trimmed = newName.trim();
-    if (!trimmed) return;
+    if (!trimmed || duplicateEx) return;
     setExercises((prev) => [...prev, { uid: crypto.randomUUID(), id: crypto.randomUUID(), name: trimmed, isInline: true, tags: newTags, video: newVideo }]);
     setNewName("");
     setNewTags({});
@@ -781,22 +780,28 @@ function ComposeModal({ onClose, onCreated }: { onClose: () => void; onCreated: 
             <input
               value={newName}
               onChange={(e) => setNewName(e.target.value)}
-              onKeyDown={(e) => { if (e.key === "Enter" && newName.trim()) { e.preventDefault(); setShowTagsForm(true); } }}
+              onKeyDown={(e) => { if (e.key === "Enter" && newName.trim() && !duplicateEx) { e.preventDefault(); setShowTagsForm(true); } }}
               placeholder="Nom de l'exercice…"
-              className="flex-1"
+              aria-invalid={!!duplicateEx}
+              className={`flex-1 ${duplicateEx ? "!border-danger" : ""}`}
             />
             <button
               type="button"
-              onClick={() => { if (newName.trim()) setShowTagsForm(true); }}
-              disabled={!newName.trim()}
+              onClick={() => { if (newName.trim() && !duplicateEx) setShowTagsForm(true); }}
+              disabled={!newName.trim() || !!duplicateEx}
               className="rounded-lg bg-accent px-3 py-2 text-sm font-semibold text-[#1a1500] disabled:opacity-40"
             >
               Détails →
             </button>
           </div>
+          {duplicateEx && (
+            <p className="mt-1 text-[12px] text-danger">
+              « {duplicateEx.name} » existe déjà — ajoute-le depuis la bibliothèque ci-dessus.
+            </p>
+          )}
 
           {/* Formulaire étendu tags + vidéo */}
-          {showTagsForm && newName.trim() && (
+          {showTagsForm && newName.trim() && !duplicateEx && (
             <div className="mt-3 space-y-2.5 border-t border-line/50 pt-3">
               {categories.map((cat) => (
                 <div key={cat.id}>
@@ -1054,13 +1059,20 @@ function TransferWeekModal({
   activeUserId: string | null;
   onClose: () => void;
 }) {
-  const { clients } = useData();
+  const { clients, templates, updateTemplates } = useData();
   const [sourceMonday, setSourceMonday] = useState(() => getMonday(cursor));
   const [targetClientId, setTargetClientId] = useState<string>("");
   const [withDates, setWithDates] = useState(true);
   const [loading, setLoading] = useState(false);
   const [done, setDone] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  // Destination : un autre sportif, ou l'enregistrement en semaine type réutilisable.
+  // Sans autre sportif à qui copier, seule la semaine type a du sens → on l'ouvre dessus.
+  const [target, setTarget] = useState<"client" | "weekTemplate">(
+    (clients ?? []).some((c) => c.id !== activeUserId) ? "client" : "weekTemplate",
+  );
+  const [tplName, setTplName] = useState("");
+  const [savedTplName, setSavedTplName] = useState("");
 
   // Autres sportifs du coach (excl. celui actuellement affiché)
   const otherClients = useMemo(
@@ -1068,16 +1080,20 @@ function TransferWeekModal({
     [clients, activeUserId],
   );
 
-  // Séances placées dans la semaine source
-  const sourceSessions = useMemo(() => {
-    const days: string[] = [];
-    for (let i = 0; i < 7; i++) {
+  // Séances de la semaine source, regroupées par jour (0=Lun … 6=Dim) — l'indice du
+  // jour est nécessaire pour reconstituer une semaine type.
+  const sourceByDay = useMemo(() => {
+    return Array.from({ length: 7 }, (_, i) => {
       const d = new Date(sourceMonday);
       d.setDate(sourceMonday.getDate() + i);
-      days.push(ymd(d));
-    }
-    return days.flatMap((day) => sessionsByDate[day] ?? []);
+      return { dayIndex: i, sessions: sessionsByDate[ymd(d)] ?? [] };
+    });
   }, [sourceMonday, sessionsByDate]);
+
+  const sourceSessions = useMemo(
+    () => sourceByDay.flatMap((d) => d.sessions),
+    [sourceByDay],
+  );
 
   function shiftSource(dir: number) {
     setSourceMonday((prev) => {
@@ -1109,6 +1125,53 @@ function TransferWeekModal({
     }
   }
 
+  // Enregistre la semaine affichée comme semaine type réutilisable.
+  // WeekTemplate.days ne stocke que des RÉFÉRENCES à des SessionTemplate : chaque séance
+  // de la semaine doit donc exister en séance type. On réutilise celle d'origine quand la
+  // séance en vient (tplId encore valide), sinon on en crée une à la volée.
+  function saveAsWeekTemplate() {
+    const name = tplName.trim();
+    if (!name || sourceSessions.length === 0) return;
+    const existingTplIds = new Set((templates.sessionTemplates ?? []).map((t) => t.id));
+    const newSessionTemplates: SessionTemplate[] = [];
+    const days: WeekTemplateDay[] = [];
+
+    sourceByDay.forEach(({ dayIndex, sessions }) => {
+      if (sessions.length === 0) return;
+      const refs = sessions.map((s) => {
+        if (s.tplId && existingTplIds.has(s.tplId)) return { tplId: s.tplId };
+        const tpl: SessionTemplate = {
+          id: crypto.randomUUID(),
+          name: s.name,
+          color: s.color,
+          description: "",
+          exercises: s.exercises.map((ex) => ({
+            uid: crypto.randomUUID(),
+            exId: ex.exId,
+            name: ex.name,
+            sets: ex.sets,
+            setsLabel: ex.setsLabel,
+            reps: ex.reps,
+            repsLabel: ex.repsLabel,
+            weight: ex.weight,
+            rpeCoach: ex.rpeCoach,
+            coachComment: ex.coachComment,
+          })),
+        };
+        newSessionTemplates.push(tpl);
+        return { tplId: tpl.id };
+      });
+      days.push({ dayIndex, sessions: refs });
+    });
+
+    updateTemplates((t) => {
+      if (newSessionTemplates.length > 0) t.sessionTemplates.push(...newSessionTemplates);
+      t.weekTemplates.unshift({ id: crypto.randomUUID(), name, description: "", days });
+    });
+    setSavedTplName(name);
+    setDone(true);
+  }
+
   const targetName = otherClients.find((c) => c.id === targetClientId)?.name ?? "";
 
   return (
@@ -1118,15 +1181,26 @@ function TransferWeekModal({
     >
       <div className="w-full max-w-sm rounded-t-3xl border-t border-line bg-surface p-5 sm:rounded-3xl sm:border">
         <div className="mb-4 flex items-center justify-between">
-          <h2 className="text-lg font-bold">Copier vers un sportif</h2>
+          <h2 className="text-lg font-bold">Copier la semaine</h2>
           <button onClick={onClose} className="grid h-9 w-9 place-items-center rounded-lg bg-surface2">✕</button>
         </div>
 
         {done ? (
           <div className="py-6 text-center">
             <p className="mb-1 text-2xl">✅</p>
-            <p className="font-semibold">{sourceSessions.length} séance{sourceSessions.length > 1 ? "s" : ""} copiée{sourceSessions.length > 1 ? "s" : ""}</p>
-            <p className="mt-1 text-[13px] text-dim">Vers {targetName}{withDates ? " · mêmes dates" : " · banque (sans date)"}</p>
+            {savedTplName ? (
+              <>
+                <p className="font-semibold">Semaine type enregistrée</p>
+                <p className="mt-1 text-[13px] text-dim">
+                  « {savedTplName} » · {sourceSessions.length} séance{sourceSessions.length > 1 ? "s" : ""} — réutilisable depuis « Programme » ou la bibliothèque
+                </p>
+              </>
+            ) : (
+              <>
+                <p className="font-semibold">{sourceSessions.length} séance{sourceSessions.length > 1 ? "s" : ""} copiée{sourceSessions.length > 1 ? "s" : ""}</p>
+                <p className="mt-1 text-[13px] text-dim">Vers {targetName}{withDates ? " · mêmes dates" : " · banque (sans date)"}</p>
+              </>
+            )}
             <button onClick={onClose} className="mt-5 w-full rounded-xl bg-surface2 py-3 font-semibold">Fermer</button>
           </div>
         ) : (
@@ -1144,6 +1218,54 @@ function TransferWeekModal({
                 : `${sourceSessions.length} séance${sourceSessions.length > 1 ? "s" : ""} à copier`}
             </p>
 
+            {/* Destination : sportif, ou semaine type réutilisable */}
+            <p className="mb-2 text-[13px] text-dim">Copier vers</p>
+            <div className="mb-4 flex rounded-xl bg-surface2 p-1">
+              {([
+                { id: "client", label: "Un sportif" },
+                { id: "weekTemplate", label: "Semaine type" },
+              ] as const).map((t) => (
+                <button
+                  key={t.id}
+                  type="button"
+                  onClick={() => setTarget(t.id)}
+                  disabled={t.id === "client" && otherClients.length === 0}
+                  title={t.id === "client" && otherClients.length === 0 ? "Aucun autre sportif" : undefined}
+                  className={`flex-1 rounded-lg py-2 text-[13px] font-semibold transition disabled:opacity-40 ${
+                    target === t.id ? "bg-accent text-[#1a1500]" : "text-dim"
+                  }`}
+                >
+                  {t.label}
+                </button>
+              ))}
+            </div>
+
+            {target === "weekTemplate" ? (
+              <>
+                <p className="mb-1.5 text-[13px] text-dim">Nom de la semaine type</p>
+                <input
+                  value={tplName}
+                  onChange={(e) => setTplName(e.target.value)}
+                  onKeyDown={(e) => { if (e.key === "Enter") saveAsWeekTemplate(); }}
+                  placeholder="Ex : Semaine de reprise"
+                  className="mb-2 w-full"
+                  autoFocus
+                />
+                <p className="mb-5 text-[12px] text-dim">
+                  Les séances de la semaine sont enregistrées comme séances types, puis
+                  assemblées en semaine type — à replacer plus tard via « Programme ».
+                </p>
+                <button
+                  onClick={saveAsWeekTemplate}
+                  disabled={!tplName.trim() || sourceSessions.length === 0}
+                  className="w-full rounded-xl py-3 font-semibold text-white transition disabled:opacity-40"
+                  style={{ background: "#a855f7" }}
+                >
+                  Enregistrer la semaine type
+                </button>
+              </>
+            ) : (
+            <>
             {/* Cible */}
             <p className="mb-1.5 text-[13px] text-dim">Sportif cible</p>
             <select
@@ -1193,6 +1315,8 @@ function TransferWeekModal({
             >
               {loading ? "Copie en cours…" : `Copier ${sourceSessions.length} séance${sourceSessions.length > 1 ? "s" : ""}`}
             </button>
+            </>
+            )}
           </>
         )}
       </div>

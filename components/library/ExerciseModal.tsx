@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 import { useData } from "@/components/DataProvider";
+import { findDuplicateExercise } from "@/lib/data";
 import type { FilterCategory, LibraryExercise } from "@/lib/types";
 
 const uid = () => Math.random().toString(36).slice(2, 9);
@@ -25,8 +26,10 @@ export default function ExerciseModal({
   readOnly?: boolean;
   onClose: () => void;
 }) {
-  const { updateLibrary } = useData();
+  const { updateLibrary, library } = useData();
   const [draft, setDraft] = useState<LibraryExercise>(exercise ? structuredClone(exercise) : blank());
+  // Un nom déjà porté par un AUTRE exercice bloque l'enregistrement (pas de doublons).
+  const duplicate = findDuplicateExercise(library.exercises, draft.name, draft.id);
   const set = <K extends keyof LibraryExercise>(key: K, value: LibraryExercise[K]) =>
     setDraft((d) => ({ ...d, [key]: value }));
 
@@ -47,7 +50,7 @@ export default function ExerciseModal({
   };
 
   function save() {
-    if (!draft.name.trim()) return;
+    if (!draft.name.trim() || duplicate) return;
     updateLibrary((lib) => {
       const i = lib.exercises.findIndex((e) => e.id === draft.id);
       if (i >= 0) lib.exercises[i] = draft;
@@ -77,7 +80,14 @@ export default function ExerciseModal({
               onChange={(e) => set("name", e.target.value)}
               placeholder="Ex : Développé incliné haltères"
               autoFocus
+              aria-invalid={!!duplicate}
+              className={duplicate ? "!border-danger" : ""}
             />
+            {duplicate && (
+              <span className="mt-1 block text-[12px] text-danger">
+                « {duplicate.name} » existe déjà dans la bibliothèque.
+              </span>
+            )}
           </Label>
         )}
 
@@ -170,7 +180,11 @@ export default function ExerciseModal({
               Les séries, répétitions, RPE et commentaires se règlent dans le plan, au moment d&apos;ajouter
               l&apos;exercice à une séance.
             </p>
-            <button onClick={save} className="mt-1 w-full rounded-xl bg-accent py-3 font-semibold text-[#1a1500]">
+            <button
+              onClick={save}
+              disabled={!draft.name.trim() || !!duplicate}
+              className="mt-1 w-full rounded-xl bg-accent py-3 font-semibold text-[#1a1500] disabled:opacity-40"
+            >
               {isCreating ? "Créer l'exercice" : "Enregistrer"}
             </button>
           </>
