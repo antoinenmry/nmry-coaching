@@ -6,7 +6,8 @@ import { useState } from "react";
 // Lundi en tête (cohérent avec MonthView de /plan). Clic sur un jour = toggle
 // (surbrillance ajoutée/retirée) ; plusieurs jours peuvent être sélectionnés
 // pour placer/dupliquer des séances sur chacun d'eux en un seul geste.
-// Partagé entre PlaceSessionModal (séance type) et DuplicateSessionsModal.
+// Partagé entre PlaceSessionModal (séance type) et SessionEditor (duplication
+// d'une séance sur plusieurs jours depuis son détail).
 
 const pad = (n: number) => String(n).padStart(2, "0");
 const ymd = (d: Date) => `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`;
@@ -17,15 +18,19 @@ export default function MiniCalendar({
   selected,
   onToggle,
   initialMonth,
+  marked = [],
 }: {
   selected: string[];
   onToggle: (date: string) => void;
   initialMonth: string; // "YYYY-MM-DD" — mois initialement affiché
+  /** Jours déjà occupés (ex : date actuelle de la séance) — affichés en relief, non cliquables */
+  marked?: string[];
 }) {
   const initial = new Date(initialMonth + "T00:00:00");
   const [monthCursor, setMonthCursor] = useState(new Date(initial.getFullYear(), initial.getMonth(), 1));
   const todayStr = ymd(new Date());
   const selectedSet = new Set(selected);
+  const markedSet = new Set(marked);
 
   const first = new Date(monthCursor.getFullYear(), monthCursor.getMonth(), 1);
   const startOffset = (first.getDay() + 6) % 7;
@@ -36,14 +41,19 @@ export default function MiniCalendar({
   for (let day = 1; day <= daysInMonth; day++) {
     const date = ymd(new Date(monthCursor.getFullYear(), monthCursor.getMonth(), day));
     const isSelected = selectedSet.has(date);
+    const isMarked = markedSet.has(date);
     const isToday = date === todayStr;
     cells.push(
       <button
         key={date}
         type="button"
+        disabled={isMarked}
+        title={isMarked ? "La séance est déjà placée ce jour-là" : undefined}
         onClick={() => onToggle(date)}
         className={`grid h-9 place-items-center rounded-lg text-[13px] font-semibold transition ${
-          isSelected
+          isMarked
+            ? "cursor-default bg-ok/20 text-ok ring-1 ring-ok/50"
+            : isSelected
             ? "bg-accent text-[#1a1500]"
             : isToday
             ? "border border-accent text-accent"

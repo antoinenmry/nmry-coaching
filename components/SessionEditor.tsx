@@ -3,6 +3,7 @@
 import { useMemo, useRef, useState } from "react";
 import { useData } from "./DataProvider";
 import ExercisePicker, { type InlineExercise } from "./ExercisePicker";
+import MiniCalendar from "./plan/MiniCalendar";
 import { exerciseInstanceFromLibrary, SESSION_COLORS } from "@/lib/data";
 import type { ExerciseInstance, Role } from "@/lib/types";
 import { getMaxRecord, saveStrengthRecord } from "@/lib/prDetection";
@@ -168,6 +169,9 @@ export default function SessionEditor({
   const { update, state, library, activeUserId, me } = useData();
   const session = state.sessions.find((s) => s.id === sessionId);
   const [picking, setPicking] = useState(false);
+  // Dates supplémentaires cochées dans le calendrier → une copie de la séance par date.
+  const [copyDates, setCopyDates] = useState<string[]>([]);
+  const [copiedCount, setCopiedCount] = useState(0);
 
   const videoById = Object.fromEntries(library.exercises.map((e) => [e.id, e.video]));
 
@@ -230,6 +234,41 @@ export default function SessionEditor({
         s.exercises.push(exerciseInstanceFromLibrary({ id, name: libEx?.name ?? name }));
       });
     });
+
+  // Duplique la séance sur chaque date cochée : nouvelle instance par date, prescription
+  // conservée (nom, couleur, commentaire coach, exercices) et suivi sportif remis à zéro.
+  const duplicateToDates = () => {
+    // ⚠️ On clone depuis `session` (état simple) et NON depuis le brouillon immer :
+    // structuredClone() sur un Proxy de brouillon n'est pas fiable.
+    const src = session;
+    if (!src || copyDates.length === 0) return;
+    const copies = copyDates.map((date) => ({
+      ...structuredClone(src),
+      id: crypto.randomUUID(),
+      date,
+      done: false,
+      emoji: 0,
+      exercises: src.exercises.map((ex) => ({
+        ...structuredClone(ex),
+        uid: crypto.randomUUID(),
+        rpeClient: 0,
+        clientComment: "",
+        weightClient: undefined,
+        failed: undefined,
+        setLogs: undefined,
+        prDismissedWeight: undefined,
+      })),
+    }));
+    update((d) => { d.sessions.push(...copies); });
+  };
+
+  const confirmDuplicate = () => {
+    if (copyDates.length === 0) return;
+    duplicateToDates();
+    setCopiedCount(copyDates.length);
+    setCopyDates([]);
+    setTimeout(() => setCopiedCount(0), 4000);
+  };
 
   const removeExercise = (exUid: string) =>
     update((d) => {
@@ -308,6 +347,48 @@ export default function SessionEditor({
             className={session.done && !isCoach ? "opacity-60 cursor-not-allowed" : ""}
           />
         </label>
+
+        {/* Dupliquer sur d'autres dates (coach) — coche plusieurs jours d'un coup */}
+        {isCoach && (
+          <div className="mt-3">
+            <span className="mb-1.5 flex items-center justify-between text-[13px] text-dim">
+              <span>
+                Dupliquer sur d&apos;autres dates
+                {copyDates.length > 0 && ` · ${copyDates.length} sélectionnée${copyDates.length > 1 ? "s" : ""}`}
+              </span>
+              {copyDates.length > 0 && (
+                <button type="button" onClick={() => setCopyDates([])} className="text-[12px] underline">
+                  Effacer
+                </button>
+              )}
+            </span>
+            <MiniCalendar
+              selected={copyDates}
+              marked={session.date ? [session.date] : []}
+              initialMonth={session.date ?? new Date().toISOString().slice(0, 10)}
+              onToggle={(d) =>
+                setCopyDates((prev) => (prev.includes(d) ? prev.filter((x) => x !== d) : [...prev, d].sort()))
+              }
+            />
+            {copiedCount > 0 ? (
+              <p className="mt-2 rounded-xl bg-ok/15 px-3 py-2 text-[13px] font-semibold text-ok">
+                ✅ {copiedCount} copie{copiedCount > 1 ? "s" : ""} créée{copiedCount > 1 ? "s" : ""}
+              </p>
+            ) : (
+              <button
+                type="button"
+                onClick={confirmDuplicate}
+                disabled={copyDates.length === 0}
+                className="mt-2 w-full rounded-xl py-2.5 text-sm font-semibold text-white disabled:opacity-40"
+                style={{ background: "#a855f7" }}
+              >
+                {copyDates.length === 0
+                  ? "Coche un ou plusieurs jours"
+                  : `Dupliquer sur ${copyDates.length} date${copyDates.length > 1 ? "s" : ""}`}
+              </button>
+            )}
+          </div>
+        )}
 
         {/* Commentaire coach (séance globale) */}
         {isCoach ? (

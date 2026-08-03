@@ -13,7 +13,6 @@ const ExerciseMultiSelect = dynamic(() => import("@/components/ExerciseMultiSele
 const GoalInfoModal = dynamic(() => import("@/components/GoalInfoModal"));
 const InjectProgramModal = dynamic(() => import("@/components/plan/InjectProgramModal"));
 const PlaceSessionModal = dynamic(() => import("@/components/plan/PlaceSessionModal"));
-const DuplicateSessionsModal = dynamic(() => import("@/components/plan/DuplicateSessionsModal"));
 import { AUTH_ENABLED } from "@/lib/config";
 import { SESSION_COLORS, newSession, exerciseInstanceFromLibrary } from "@/lib/data";
 import { countdownLabel } from "@/lib/dates";
@@ -69,7 +68,6 @@ export default function PlanPage() {
   const [editing, setEditing] = useState<string | null>(null); // sessionId
   const [composing, setComposing] = useState(false);
   const [duplicating, setDuplicating] = useState(false);
-  const [duplicatingSessions, setDuplicatingSessions] = useState(false);
   const [transferring, setTransferring] = useState(false);
   const [injecting, setInjecting] = useState(false);
   const [placing, setPlacing] = useState(false);
@@ -274,10 +272,6 @@ export default function PlanPage() {
               className={`${TILE} ${TILE_SECONDARY}`}>
               Copier<br />sem
             </button>
-            <button onClick={() => setDuplicatingSessions(true)} title="Dupliquer des séances"
-              className={`${TILE} ${TILE_SECONDARY}`}>
-              Copier<br />séance
-            </button>
             {(templates.programs ?? []).length > 0 && (
               <button onClick={() => setInjecting(true)} title="Injecter un programme"
                 className={`${TILE} ${TILE_SECONDARY}`}>
@@ -431,14 +425,6 @@ export default function PlanPage() {
           cursor={cursor}
           sessionsByDate={sessionsByDate}
           onClose={() => setDuplicating(false)}
-        />
-      )}
-
-      {duplicatingSessions && (
-        <DuplicateSessionsModal
-          cursor={cursor}
-          sessionsByDate={sessionsByDate}
-          onClose={() => setDuplicatingSessions(false)}
         />
       )}
 
