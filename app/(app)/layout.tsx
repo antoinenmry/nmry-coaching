@@ -5,6 +5,7 @@ import Header from "@/components/Header";
 import BroadcastPopup from "@/components/BroadcastPopup";
 import NoCoachGate from "@/components/NoCoachGate";
 import ServiceWorkerRegistrar from "@/components/ServiceWorkerRegistrar";
+import RouteRestore from "@/components/RouteRestore";
 import BgColorSyncer from "@/components/BgColorSyncer";
 import PullToRefresh from "@/components/PullToRefresh";
 import { AUTH_ENABLED } from "@/lib/config";
@@ -22,6 +23,8 @@ export default async function AppLayout({ children }: { children: React.ReactNod
       <BgColorSyncer />
       {/* Enregistre le SW dès l'ouverture de l'app — pas seulement depuis Settings */}
       <ServiceWorkerRegistrar />
+      {/* PWA iOS : ramène sur la dernière page vue après un court passage en arrière-plan */}
+      <RouteRestore />
       <NoCoachGate>
         <PullToRefresh>
           <Header />
