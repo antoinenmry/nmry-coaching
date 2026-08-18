@@ -70,7 +70,7 @@ export interface ExerciseInstance {
   rpeClient: number;         // RPE ressenti par le client (0 = non renseigné)
   coachComment: string; // consigne/note du coach pour cet exercice
   clientComment: string; // retour libre du client
-  weightLabel?: string;  // texte libre pour l'allure CAP (ex: "4:30 à 4:35") — remplace weight côté affichage
+  weightLabel?: string;  // prescription en texte libre : charge ("80", "70%", "RPE 8") ou allure CAP ("4:30 à 4:35") — prime sur weight à l'affichage
   weightClient?: number; // poids réellement utilisé par le sportif (indépendant de la prescription)
   failed?: boolean; // true si le sportif a marqué l'exercice comme raté
   setsLabel?: string; // surcharge d'affichage pour sets (ex: "3-4")
@@ -301,6 +301,7 @@ export interface TemplateExercise {
   reps: number;
   repsLabel?: string;    // ex: "8-12"
   weight: number;        // 0 = non prescrit
+  weightLabel?: string;  // prescription en texte libre ("70%", "RPE 8", "80") — prime sur weight
   rpeCoach: string | number; // "" ou 0 = non prescrit
   coachComment: string;
 }

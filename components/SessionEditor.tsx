@@ -704,6 +704,8 @@ function ExerciseBlock({
 }) {
   const [savedWeight, setSavedWeight] = useState<number | null>(null);
 
+  const hasRealized = (ex.weightClient ?? 0) > 0;
+
   const workLogs = (ex.setLogs ?? []).filter((l) => l.kind !== "warmup");
   const maxLogWeight = workLogs.length > 0 ? Math.max(...workLogs.map((l) => l.w)) : 0;
   const effectiveWeight = Math.max(ex.weightClient ?? 0, maxLogWeight);
@@ -769,46 +771,25 @@ function ExerciseBlock({
               />
             </label>
             <label className="block">
-              <span className="mb-1 block text-[13px] font-semibold text-ink">{isPace ? "Allure" : "Poids (kg)"}</span>
-              {isPace ? (
-                <input
-                  type="text"
-                  value={ex.weightLabel ?? ""}
-                  onChange={(e) => onPatch({ weightLabel: e.target.value || undefined })}
-                  placeholder="ex : 4:30 à 4:35"
-                />
-              ) : (
-                <input type="number" min={0} step={1} placeholder="0"
-                  value={ex.weight || ""}
-                  onChange={(e) => onPatch({ weight: +e.target.value || 0 })}
-                />
-              )}
+              <span className="mb-1 block text-[13px] font-semibold text-ink">{isPace ? "Allure" : "kg/RPE/%"}</span>
+              {/* Champ libre : le coach peut prescrire "80", "70%", "RPE 8", "au ressenti"…
+                  On garde `weight` (numerique) synchronise quand le texte est un nombre simple,
+                  pour les affichages et exports qui s'appuient encore dessus. */}
+              <input
+                type="text"
+                value={ex.weightLabel ?? (ex.weight ? String(ex.weight) : "")}
+                onChange={(e) => {
+                  const raw = e.target.value;
+                  const num = parseFloat(raw.replace(",", "."));
+                  onPatch({
+                    weightLabel: raw || undefined,
+                    weight: /^\s*\d+([.,]\d+)?\s*$/.test(raw) && !isNaN(num) ? num : 0,
+                  });
+                }}
+                placeholder=""
+              />
             </label>
           </div>
-
-          {/* RPE coach compact */}
-          <div className="mt-2 flex items-center gap-2">
-            <span className="shrink-0 text-[12px] font-semibold text-ink">RPE coach</span>
-            <input
-              type="text" inputMode="decimal" placeholder=""
-              value={ex.rpeCoach ?? ""}
-              onChange={(e) => onPatch({ rpeCoach: e.target.value })}
-              className="flex-1"
-            />
-            {ex.rpeCoach ? (
-              <span className="shrink-0 rounded-lg bg-accent/15 px-2.5 py-1 text-sm font-bold text-accent">{ex.rpeCoach}</span>
-            ) : null}
-          </div>
-          <RpeGauge value={ex.rpeCoach} />
-
-          {(ex.weightClient ?? 0) > 0 && (
-            <div className="mt-1.5 flex items-center gap-2 rounded-lg bg-ok/10 px-3 py-1.5">
-              <span className="text-[12px] text-dim">Réalisé par le sportif :</span>
-              <span className="text-sm font-bold text-ok">
-                {isPace ? fmtPaceDisplay(ex.weightClient ?? 0) : `${ex.weightClient} kg`}
-              </span>
-            </div>
-          )}
 
           <label className="mt-2.5 block">
             <span className="mb-1 block text-[13px] font-semibold text-ink">Commentaire coach</span>
@@ -825,34 +806,36 @@ function ExerciseBlock({
           {/* Vue client — prescription en lecture seule */}
           <div className="flex flex-wrap gap-x-4 gap-y-1 text-sm">
             <span><strong>{ex.setsLabel ?? ex.sets}</strong> × <strong>{ex.repsLabel ?? ex.reps}</strong> reps</span>
-            {(isPace ? (ex.weightLabel || ex.weight > 0) : ex.weight > 0) && (
+            {(ex.weightLabel || ex.weight > 0) && (
               <span className="rounded-md bg-surface px-2 py-0.5 text-[12px] font-semibold text-dim">
-                Prescrit : {isPace ? (ex.weightLabel ?? fmtPaceDisplay(ex.weight)) : `${ex.weight} kg`}
+                Prescrit : {ex.weightLabel ?? (isPace ? fmtPaceDisplay(ex.weight) : `${ex.weight} kg`)}
               </span>
             )}
           </div>
           {(ex.coachComment ?? "") && (
             <p className="mt-1.5 rounded-lg bg-surface p-2 text-[13px]"><span className="text-dim">Coach : </span>{ex.coachComment}</p>
           )}
-          {/* RPE prescrit */}
-          {!!ex.rpeCoach && ex.rpeCoach !== 0 && (
-            <div className="mt-2 rounded-xl border border-line bg-surface p-3">
-              <div className="mb-1.5 flex items-center gap-2">
-                <span className="text-[13px] text-dim">RPE prescrit</span>
-                <span className="rounded-lg bg-accent/15 px-2.5 py-1 text-sm font-bold text-accent">{ex.rpeCoach}</span>
-              </div>
-              <RpeGauge value={ex.rpeCoach} />
-            </div>
-          )}
         </>
       )}
 
-      {/* Séparation visuelle prescription coach ↔ suivi sportif — discrète mais visible */}
-      {(!isCoach || isSelf) && (
+      {/* Séparation visuelle prescription coach ↔ suivi sportif — discrète mais visible.
+          Affichée aussi au coach qui consulte un sportif dès qu'il y a un réalisé à montrer,
+          sinon le bloc « Réalisé par le sportif » se retrouverait sans en-tête. */}
+      {(!isCoach || isSelf || hasRealized) && (
         <div className="my-3 flex items-center gap-2" aria-hidden>
           <div className="h-px flex-1 bg-gradient-to-r from-transparent to-accent2/50" />
           <span className="text-[10px] font-semibold uppercase tracking-wide text-accent2/70">Suivi sportif</span>
           <div className="h-px flex-1 bg-gradient-to-l from-transparent to-accent2/50" />
+        </div>
+      )}
+
+      {/* Réalisé par le sportif — juste sous le séparateur, avant le poids utilisé */}
+      {hasRealized && (
+        <div className="mb-2.5 flex items-center gap-2 rounded-lg bg-ok/10 px-3 py-1.5">
+          <span className="text-[12px] text-dim">Réalisé par le sportif S-1 :</span>
+          <span className="text-sm font-bold text-ok">
+            {isPace ? fmtPaceDisplay(ex.weightClient ?? 0) : `${ex.weightClient} kg`}
+          </span>
         </div>
       )}
 

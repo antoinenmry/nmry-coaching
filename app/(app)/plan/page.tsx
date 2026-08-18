@@ -1154,6 +1154,7 @@ function TransferWeekModal({
             reps: ex.reps,
             repsLabel: ex.repsLabel,
             weight: ex.weight,
+            weightLabel: ex.weightLabel,
             rpeCoach: ex.rpeCoach,
             coachComment: ex.coachComment,
           })),
@@ -1586,8 +1587,7 @@ function SynthesisView({ cursor, todayKey, sessionsByDate, goalsByDate, injuries
                           {s.exercises.map((ex) => {
                             const prescription = [
                               ex.sets ? `${ex.setsLabel ?? ex.sets} × ${(ex.repsLabel ?? ex.reps) || "?"}` : null,
-                              ex.weight ? `${ex.weight} kg` : null,
-                              ex.rpeCoach ? `RPE coach ${ex.rpeCoach}` : null,
+                              ex.weightLabel ?? (ex.weight ? `${ex.weight} kg` : null),
                             ].filter(Boolean).join(" · ");
 
                             return (

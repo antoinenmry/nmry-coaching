@@ -57,6 +57,7 @@ export default function PlaceSessionModal({
         sets: ex.sets,
         reps: ex.reps,
         weight: ex.weight,
+        weightLabel: ex.weightLabel,
         rpeCoach: ex.rpeCoach,
         rpeClient: 0,
         coachComment: ex.coachComment,
