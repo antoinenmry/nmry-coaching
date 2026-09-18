@@ -14,6 +14,9 @@
   --color-danger: #ef5350;
 
   --radius-xl2: 16px;
+
+  /* Lato (next/font, cf. app/layout.tsx) devient la police par défaut de toute l'app */
+  --font-sans: var(--font-lato), ui-sans-serif, system-ui, -apple-system, "Segoe UI", sans-serif;
 }
 
 /* Thème clair */

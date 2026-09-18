@@ -1,6 +1,16 @@
 import type { Metadata, Viewport } from "next";
+import { Lato } from "next/font/google";
 import "./globals.css";
 import { ThemeProvider } from "@/components/ThemeProvider";
+
+// Police de l'app, auto-hébergée par next/font au build (aucun appel à Google au runtime,
+// pas de saut d'affichage). Exposée en variable CSS, reprise par --font-sans dans globals.css.
+const lato = Lato({
+  subsets: ["latin"],
+  weight: ["400", "700", "900"],
+  display: "swap",
+  variable: "--font-lato",
+});
 
 export const metadata: Metadata = {
   title: "NMRY Coaching",
@@ -22,7 +32,7 @@ export const viewport: Viewport = {
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {
   return (
-    <html lang="fr">
+    <html lang="fr" className={lato.variable}>
       <head>
         {/* Applique le thème avant hydratation pour éviter le flash */}
         <script dangerouslySetInnerHTML={{ __html: `try{var t=localStorage.getItem('nmry-theme');if(t)document.documentElement.setAttribute('data-theme',t);}catch(e){}` }} />
