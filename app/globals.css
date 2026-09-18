@@ -3,9 +3,13 @@
 /* Thème NMRY (sombre) — tokens dispo en utilitaires : bg-surface, text-dim... */
 @theme {
   --color-bg: #0f1115;
-  --color-surface: #1a1d24;
-  --color-surface2: #242832;
-  --color-line: #2e3340;
+  /* Thème sombre : cartes, champs et bordures sont DÉRIVÉS du fond → avec une couleur
+     de fond personnalisée, tout l'écran en prend la teinte. Avec le fond par défaut,
+     on retombe à ±3 niveaux près sur les anciennes valeurs fixes (#1a1d24/#242832/#2e3340).
+     La lisibilité est garantie par lib/themeColor.ts, qui borne la clarté du fond. */
+  --color-surface: color-mix(in srgb, var(--color-bg), white 5%);
+  --color-surface2: color-mix(in srgb, var(--color-bg), white 9%);
+  --color-line: color-mix(in srgb, var(--color-bg), white 14%);
   --color-ink: #e7eaf0;
   --color-dim: #9aa3b2;
   --color-accent: #ffb300;
@@ -32,6 +36,56 @@
   --color-ok: #43a047;
   --color-danger: #e53935;
 }
+
+/* ─── Thème Aurora (verre dépoli) ─────────────────────────────────────────────
+   Réglages CALCULÉS pour la lisibilité (pire cas : texte sur la zone la plus
+   lumineuse de l'aurore, deux halos superposés) :
+   - halos à 22 % d'opacité → texte secondaire ≥ 4,8:1 même hors carte ;
+   - verre SOMBRE (et non blanc) : un voile blanc éclaircissait le fond et faisait
+     tomber le texte à 1,5:1 ; le voile sombre le remonte à ≥ 6,6:1 ;
+   - textes rouge/vert/bleu éclaircis : rouge et vert d'eau ont une luminosité voisine,
+     le rouge standard tombait à 2,6:1 sur l'aurore. Les FONDS de ces couleurs (pastilles,
+     boutons) gardent leur teinte d'origine, pour que le texte blanc posé dessus reste lisible. */
+[data-theme="aurora"] {
+  --color-bg: #060a14;
+  --color-surface: rgba(8, 12, 24, 0.55);
+  --color-surface2: rgba(24, 30, 50, 0.62);
+  --color-line: rgba(255, 255, 255, 0.14);
+  --color-ink: #f1f4ff;
+  --color-dim: #b3bdd3;
+  color-scheme: dark;
+}
+html[data-theme="aurora"] { background: #060a14; }
+/* Le fond doit être porté par <html> : un calque en z-index négatif se peint DERRIÈRE
+   le fond de <body> — avec un body opaque, l'aurore resterait invisible. */
+[data-theme="aurora"] body { background: transparent; }
+[data-theme="aurora"] body::before {
+  content: "";
+  position: fixed;
+  inset: -15%;
+  z-index: -1;
+  pointer-events: none;
+  background:
+    radial-gradient(ellipse 55% 40% at 15% 12%, rgba(45, 212, 191, 0.22), transparent 62%),
+    radial-gradient(ellipse 50% 42% at 88% 30%, rgba(139, 92, 246, 0.22), transparent 62%),
+    radial-gradient(ellipse 60% 40% at 40% 88%, rgba(56, 189, 248, 0.22), transparent 64%);
+  animation: aurora-drift 30s ease-in-out infinite alternate;
+}
+@keyframes aurora-drift { to { transform: translate3d(-4%, 3%, 0) scale(1.06); } }
+@media (prefers-reduced-motion: reduce) {
+  [data-theme="aurora"] body::before { animation: none; }
+}
+/* Verre dépoli limité aux grandes cartes et aux panneaux : le flou coûte au GPU,
+   inutile de l'appliquer à chaque petit champ. */
+[data-theme="aurora"] :is(.rounded-2xl, .rounded-3xl, .rounded-t-3xl).bg-surface {
+  -webkit-backdrop-filter: blur(18px) saturate(1.3);
+  backdrop-filter: blur(18px) saturate(1.3);
+}
+/* Modales et panneaux du bas : presque opaques, rien ne doit transparaître dessous. */
+[data-theme="aurora"] :is(.rounded-3xl, .rounded-t-3xl).bg-surface { background: rgba(10, 14, 28, 0.9); }
+[data-theme="aurora"] .text-danger { color: #ffa198; }
+[data-theme="aurora"] .text-ok { color: #86d58a; }
+[data-theme="aurora"] .text-accent2 { color: #7cc3f8; }
 
 html, body {
   margin: 0;

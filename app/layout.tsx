@@ -31,8 +31,10 @@ export const viewport: Viewport = {
 };
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {
+  // suppressHydrationWarning : le script anti-flash ci-dessous pose data-theme sur <html>
+  // AVANT l'hydratation — écart attendu, que React signalerait à tort.
   return (
-    <html lang="fr" className={lato.variable}>
+    <html lang="fr" className={lato.variable} suppressHydrationWarning>
       <head>
         {/* Applique le thème avant hydratation pour éviter le flash */}
         <script dangerouslySetInnerHTML={{ __html: `try{var t=localStorage.getItem('nmry-theme');if(t)document.documentElement.setAttribute('data-theme',t);}catch(e){}` }} />

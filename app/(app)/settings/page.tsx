@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useState } from "react";
 import { useData } from "@/components/DataProvider";
 import { useTheme } from "@/components/ThemeProvider";
+import { clampBgForTheme } from "@/lib/themeColor";
 import NotifPrefsPanel from "@/components/NotifPrefsPanel";
 import type { AthleteAdminData, AthleteStatus, AdminOverview, CoachWithClients, Profile, CardInfoOption } from "@/lib/types";
 
@@ -470,7 +471,7 @@ function BroadcastComposer() {
 // ─── Page principale ──────────────────────────────────────────────────────────
 export default function SettingsPage() {
   const { me, role, signOut, state, update } = useData();
-  const { theme, toggleTheme, bgColor, setBgColor, resetBgColor } = useTheme();
+  const { theme, setTheme, bgColor, setBgColor, resetBgColor } = useTheme();
   const [tab, setTab] = useState<"affichage" | "sportifs" | "admin">("affichage");
 
   // Mode vacances — dates de début/fin (null = pas en vacances)
@@ -644,22 +645,42 @@ export default function SettingsPage() {
         <>
           <section className="rounded-2xl border border-line bg-surface p-4">
             <h2 className="mb-3 font-bold">Apparence</h2>
-            <div className="flex items-center justify-between">
-              <span className="text-sm">Mode d&apos;affichage</span>
-              <button
-                onClick={toggleTheme}
-                className="rounded-xl border border-line bg-surface2 px-4 py-2 text-sm font-semibold"
-              >
-                {theme === "dark" ? "🌙 Sombre" : "☀️ Clair"}
-              </button>
+            <p className="mb-2 text-sm">Thème</p>
+            <div className="flex rounded-xl bg-surface2 p-1" role="group" aria-label="Thème">
+              {([
+                { id: "dark", label: "🌙 Sombre" },
+                { id: "light", label: "☀️ Clair" },
+                { id: "aurora", label: "✦ Aurora" },
+              ] as const).map((t) => (
+                <button
+                  key={t.id}
+                  onClick={() => setTheme(t.id)}
+                  aria-pressed={theme === t.id}
+                  className={`flex-1 rounded-lg py-2 text-sm font-semibold transition ${
+                    theme === t.id ? "bg-accent text-[#1a1500]" : "text-dim"
+                  }`}
+                >
+                  {t.label}
+                </button>
+              ))}
             </div>
-            {isElevated && (
+            {isElevated && theme === "aurora" && (
+              <p className="mt-3 text-[12px] text-dim">
+                En Aurora, l&apos;aurore sert de fond : la couleur de fond personnalisée ne s&apos;applique pas.
+              </p>
+            )}
+            {isElevated && theme !== "aurora" && (
               <>
                 <hr className="my-3 border-line" />
                 <div className="flex items-center justify-between">
                   <div>
                     <p className="text-sm font-medium">Couleur de fond</p>
                     <p className="text-[12px] text-dim">Différenciation visuelle coach / sportif</p>
+                    {clampBgForTheme(bgColor, theme) !== bgColor && (
+                      <p className="mt-0.5 text-[12px] text-dim">
+                        Couleur {theme === "light" ? "éclaircie" : "assombrie"} à l&apos;affichage pour que le texte reste lisible.
+                      </p>
+                    )}
                   </div>
                   <div className="flex items-center gap-2">
                     <input

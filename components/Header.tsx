@@ -54,7 +54,7 @@ export default function Header() {
         <h1 className="flex-1 text-center text-lg font-bold tracking-[0.15em]">
           {isHome ? (
             <Image
-              src={theme === "dark" ? "/logo-dark.png" : "/logo-light.png"}
+              src={theme === "light" ? "/logo-light.png" : "/logo-dark.png"}
               alt="NMRY Coaching"
               width={140}
               height={48}
