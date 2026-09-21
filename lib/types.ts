@@ -77,6 +77,7 @@ export interface ExerciseInstance {
   repsLabel?: string; // surcharge d'affichage pour reps (ex: "8-12")
   setLogs?: { w: number; r: number; kind?: "warmup" | "fail" }[]; // log par série — w=poids, r=reps, kind: échauffement 🔥 / échec ❌ (undefined = série de travail)
   prDismissedWeight?: number; // poids pour lequel la bannière "nouveau record" a déjà été traitée (enregistrée ou ignorée) → ne pas la re-proposer
+  linkNext?: "superset" | "circuit"; // relié à l'exercice SUIVANT (superset / circuit) — cf. lib/exerciseLinks.ts
 }
 
 /** Une séance. `date` = null tant qu'elle est dans la banque « À placer ». */
@@ -304,6 +305,7 @@ export interface TemplateExercise {
   weightLabel?: string;  // prescription en texte libre ("70%", "RPE 8", "80") — prime sur weight
   rpeCoach: string | number; // "" ou 0 = non prescrit
   coachComment: string;
+  linkNext?: "superset" | "circuit"; // relié à l'exercice suivant — cf. lib/exerciseLinks.ts
 }
 
 /** Séance type : un modèle réutilisable de séance (coach/admin only). */

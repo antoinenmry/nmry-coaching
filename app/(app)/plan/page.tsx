@@ -1153,6 +1153,7 @@ function TransferWeekModal({
             setsLabel: ex.setsLabel,
             reps: ex.reps,
             repsLabel: ex.repsLabel,
+            linkNext: ex.linkNext,
             weight: ex.weight,
             weightLabel: ex.weightLabel,
             rpeCoach: ex.rpeCoach,

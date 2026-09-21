@@ -7,6 +7,7 @@ import MiniCalendar from "./plan/MiniCalendar";
 import { exerciseInstanceFromLibrary, SESSION_COLORS } from "@/lib/data";
 import type { ExerciseInstance, Role } from "@/lib/types";
 import { getMaxRecord, saveStrengthRecord } from "@/lib/prDetection";
+import { beforeRemove, cutAt, groupExercises, linkAt, moveWithLinks, toggleGroupType } from "@/lib/exerciseLinks";
 
 const EMOJIS = ["😫", "😕", "😐", "🙂", "🤩"]; // ressenti 1 → 5
 
@@ -273,17 +274,25 @@ export default function SessionEditor({
   const removeExercise = (exUid: string) =>
     update((d) => {
       const s = d.sessions.find((x) => x.id === sessionId);
-      if (s) s.exercises = s.exercises.filter((e) => e.uid !== exUid);
+      if (!s) return;
+      // Sort l'exercice de son superset/circuit sans casser le reste du groupe.
+      beforeRemove(s.exercises, s.exercises.findIndex((e) => e.uid === exUid));
+      s.exercises = s.exercises.filter((e) => e.uid !== exUid);
     });
 
   const moveExercise = (exUid: string, dir: -1 | 1) =>
     update((d) => {
       const s = d.sessions.find((x) => x.id === sessionId);
       if (!s) return;
-      const idx = s.exercises.findIndex((e) => e.uid === exUid);
-      const target = idx + dir;
-      if (target < 0 || target >= s.exercises.length) return;
-      [s.exercises[idx], s.exercises[target]] = [s.exercises[target], s.exercises[idx]];
+      // Déplacé, l'exercice quitte son groupe : un lien n'existe qu'entre voisins.
+      moveWithLinks(s.exercises, s.exercises.findIndex((e) => e.uid === exUid), dir);
+    });
+
+  // Supersets & circuits (cf. lib/exerciseLinks.ts) — `idx` = lien entre idx et idx + 1.
+  const editLinks = (fn: (list: ExerciseInstance[], idx: number) => void, idx: number) =>
+    update((d) => {
+      const s = d.sessions.find((x) => x.id === sessionId);
+      if (s) fn(s.exercises, idx);
     });
 
   const deleteSession = () => {
@@ -446,26 +455,108 @@ export default function SessionEditor({
           </button>
         )}
 
-        <div className="mt-3 space-y-2.5">
-          {session.exercises.map((ex, idx) => (
-            <ExerciseBlock
-              key={ex.uid}
-              ex={ex}
-              index={idx}
-              total={session.exercises.length}
-              video={videoById[ex.exId]}
-              isCoach={isCoach}
-              isSelf={isSelf}
-              isPace={paceExIds.has(ex.exId)}
-              onPatch={(patch) => patchEx(ex.uid, patch)}
-              onRemove={() => removeExercise(ex.uid)}
-              onMove={(dir) => moveExercise(ex.uid, dir)}
-              recordMax={recordsByExId.get(ex.exId)}
-              onSaveRecord={(weight, reps) =>
-                update((d) => saveStrengthRecord(d.records, ex.exId, ex.name, weight, reps))
-              }
-            />
-          ))}
+        <div className="mt-3">
+          {(() => {
+            const renderEx = (idx: number) => {
+              const ex = session.exercises[idx];
+              return (
+                <ExerciseBlock
+                  key={ex.uid}
+                  ex={ex}
+                  index={idx}
+                  total={session.exercises.length}
+                  video={videoById[ex.exId]}
+                  isCoach={isCoach}
+                  isSelf={isSelf}
+                  isPace={paceExIds.has(ex.exId)}
+                  onPatch={(patch) => patchEx(ex.uid, patch)}
+                  onRemove={() => removeExercise(ex.uid)}
+                  onMove={(dir) => moveExercise(ex.uid, dir)}
+                  recordMax={recordsByExId.get(ex.exId)}
+                  onSaveRecord={(weight, reps) =>
+                    update((d) => saveStrengthRecord(d.records, ex.exId, ex.name, weight, reps))
+                  }
+                />
+              );
+            };
+            const groups = groupExercises(session.exercises);
+            return groups.map((g, gi) => {
+              const last = g.indices[g.indices.length - 1];
+              const label = g.type === "circuit" ? "CIRCUIT" : "SUPERSET";
+              return (
+                <div key={session.exercises[g.indices[0]].uid}>
+                  {g.type ? (
+                    // Groupe relié : trait jaune à gauche, type écrit à la verticale le long du trait.
+                    // Le trait est coupé en deux segments autour du mot (plutôt que masqué par un
+                    // fond) pour rester propre sur les thèmes translucides comme Aurora.
+                    <div className="grid grid-cols-[22px_minmax(0,1fr)] gap-x-2">
+                      <div className="flex flex-col items-center py-1.5">
+                        <span className="w-[3px] flex-1 rounded-full bg-accent" />
+                        {isCoach ? (
+                          <button
+                            type="button"
+                            onClick={() => editLinks(toggleGroupType, g.indices[0])}
+                            title="Basculer SUPERSET / CIRCUIT"
+                            aria-label={`${label} — basculer en ${g.type === "circuit" ? "superset" : "circuit"}`}
+                            className="my-1.5 rotate-180 rounded-md py-1 text-[11px] font-black leading-[22px] tracking-[0.22em] text-accent [writing-mode:vertical-rl] focus-visible:outline focus-visible:outline-2 focus-visible:outline-accent"
+                          >
+                            {label}
+                          </button>
+                        ) : (
+                          <span className="my-1.5 rotate-180 py-1 text-[11px] font-black leading-[22px] tracking-[0.22em] text-accent [writing-mode:vertical-rl]">
+                            {label}
+                          </span>
+                        )}
+                        <span className="w-[3px] flex-1 rounded-full bg-accent" />
+                      </div>
+                      <div className="min-w-0">
+                        {g.indices.map((idx, k) => (
+                          <div key={session.exercises[idx].uid}>
+                            {renderEx(idx)}
+                            {k < g.indices.length - 1 && (
+                              isCoach ? (
+                                <div className="flex h-6 items-center justify-center">
+                                  <button
+                                    type="button"
+                                    onClick={() => editLinks(cutAt, idx)}
+                                    title="Couper le groupe ici"
+                                    aria-label="Délier ces deux exercices"
+                                    className="rounded-full border border-dashed border-accent/40 px-2.5 text-[11px] font-bold leading-4 text-accent/80 transition hover:border-danger hover:text-danger"
+                                  >
+                                    ✂
+                                  </button>
+                                </div>
+                              ) : (
+                                <div className="h-2.5" />
+                              )
+                            )}
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  ) : (
+                    renderEx(g.indices[0])
+                  )}
+                  {gi < groups.length - 1 && (
+                    isCoach ? (
+                      <div className="flex h-[34px] items-center justify-center">
+                        <button
+                          type="button"
+                          onClick={() => editLinks(linkAt, last)}
+                          aria-label={`Lier ${session.exercises[last].name} et ${session.exercises[last + 1].name}`}
+                          className="rounded-full border border-dashed border-line px-3 py-0.5 text-[11.5px] font-bold text-dim opacity-75 transition hover:border-accent hover:text-accent hover:opacity-100"
+                        >
+                          + lier
+                        </button>
+                      </div>
+                    ) : (
+                      <div className="h-2.5" />
+                    )
+                  )}
+                </div>
+              );
+            });
+          })()}
           {session.exercises.length === 0 && (
             <p className="py-3 text-center text-[13px] text-dim">Aucun exercice.</p>
           )}

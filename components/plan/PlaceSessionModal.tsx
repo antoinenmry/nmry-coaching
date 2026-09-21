@@ -64,6 +64,7 @@ export default function PlaceSessionModal({
         clientComment: "",
         setsLabel: ex.setsLabel,
         repsLabel: ex.repsLabel,
+        linkNext: ex.linkNext,
       })),
     }));
     update((d) => { d.sessions.push(...newSessions); });

@@ -44,6 +44,7 @@ function sessionFromTemplate(tpl: SessionTemplate, dateISO: string): SessionInst
       clientComment: "",
       setsLabel: ex.setsLabel,
       repsLabel: ex.repsLabel,
+      linkNext: ex.linkNext,
     })),
   };
 }
