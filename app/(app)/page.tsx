@@ -139,7 +139,7 @@ function DashboardSkeleton() {
   return (
     <div className="animate-pulse">
       {/* Placeholder bannière Vue d'ensemble */}
-      <div className="mb-3.5 h-[72px] rounded-2xl bg-surface2" />
+      <div className="mb-3.5 h-[104px] rounded-[20px] bg-surface2" />
       {/* Grille 2×3 */}
       <div className="grid grid-cols-2 gap-3 sm:grid-cols-3">
         {Array.from({ length: 6 }).map((_, i) => (
@@ -284,34 +284,45 @@ export default function Dashboard() {
         );
       })()}
 
-      {/* Carte Vue d'ensemble (coach uniquement) */}
+      {/* Bannière Vue d'ensemble (coach uniquement) — photo panoramique, même langage que les tuiles */}
       {isCoach && (
         <Link
           href="/overview"
-          className={`relative mb-3.5 flex items-center gap-3 overflow-hidden rounded-2xl border p-4 transition active:scale-95 ${
-            coachUrgent > 0
-              ? "border-danger/50 bg-danger/5"
-              : "border-line bg-surface"
+          className={`relative isolate mb-3.5 flex h-[104px] items-center overflow-hidden rounded-[20px] text-white transition active:scale-[0.98] sm:h-[132px] ${
+            coachUrgent > 0 ? "ring-2 ring-danger shadow-[0_8px_26px_-10px_rgba(239,83,80,0.8)]" : ""
           }`}
         >
-          <span className="absolute inset-0 opacity-10" style={{ background: coachUrgent > 0 ? "#ef4444" : "#a855f7" }} />
-          <div className="relative shrink-0">
-            <span className="text-3xl">{coachUrgent > 0 ? "🚨" : "👁️"}</span>
-            {coachUrgent > 0 && (
-              <span className="absolute -right-1 -top-1 flex h-5 w-5 animate-pulse items-center justify-center rounded-full bg-danger text-[10px] font-bold text-white">
-                {coachUrgent > 9 ? "9+" : coachUrgent}
+          <Image
+            src="/tiles/overview.jpg"
+            alt=""
+            fill
+            priority
+            sizes="(min-width: 768px) 720px, 100vw"
+            className="-z-20 object-cover"
+            style={{ objectPosition: "18% 55%" }}
+          />
+          {/* Voile : sombre à droite pour le texte, le phare reste lumineux à gauche */}
+          <span
+            aria-hidden
+            className={`absolute inset-0 -z-10 ${
+              coachUrgent > 0
+                ? "bg-[linear-gradient(to_left,rgba(60,6,6,.9)_0%,rgba(60,6,6,.6)_45%,rgba(0,0,0,.05)_80%)]"
+                : "bg-[linear-gradient(to_left,rgba(0,0,0,.82)_0%,rgba(0,0,0,.5)_45%,rgba(0,0,0,0)_80%)]"
+            }`}
+          />
+          <span className="ml-auto flex flex-col items-end gap-1 px-4 text-right">
+            <span className="text-[22px] font-black uppercase leading-[.95] tracking-[-0.02em] [text-shadow:0_2px_12px_rgba(0,0,0,.45)] sm:text-[28px]">
+              Vue d&apos;ensemble
+            </span>
+            {coachUrgent > 0 ? (
+              <span className="flex items-center gap-1.5 rounded-full bg-danger px-2.5 py-0.5 text-[11.5px] font-black">
+                <span className="h-1.5 w-1.5 animate-pulse rounded-full bg-white" />
+                {coachUrgent} message{coachUrgent > 1 ? "s" : ""} urgent{coachUrgent > 1 ? "s" : ""}
               </span>
+            ) : (
+              <span className="text-[11.5px] font-bold text-white/90">Blessures &amp; objectifs de tous les sportifs ›</span>
             )}
-          </div>
-          <div>
-            <p className={`font-semibold ${coachUrgent > 0 ? "text-danger" : ""}`}>Vue d&apos;ensemble</p>
-            <p className="text-[12px] text-dim">
-              {coachUrgent > 0
-                ? `${coachUrgent} message${coachUrgent > 1 ? "s" : ""} urgent${coachUrgent > 1 ? "s" : ""} non lu${coachUrgent > 1 ? "s" : ""}`
-                : "Blessures & objectifs de tous les sportifs"}
-            </p>
-          </div>
-          <span className="ml-auto text-dim">›</span>
+          </span>
         </Link>
       )}
 
