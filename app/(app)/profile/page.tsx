@@ -12,6 +12,23 @@ const SPORTS = [
   "Powerbuilding", "Préparation physique",
 ];
 
+// ─── Styles partagés (même esthétique que /plan : dégradés légers, pilules) ───
+const CARD =
+  "rounded-[20px] border border-line p-4 bg-[radial-gradient(120%_80%_at_0%_0%,rgba(255,179,0,0.09),transparent_60%),var(--color-surface)]";
+const LABEL = "mb-1.5 block text-[10.5px] font-black uppercase tracking-[0.12em] text-dim";
+const PILL_ON =
+  "border-transparent bg-gradient-to-br from-[#ffc53d] to-[#ff9f00] text-[#1a1500] shadow-[0_6px_18px_-8px_rgba(255,170,0,0.7)]";
+const PILL_OFF =
+  "border-line bg-[linear-gradient(180deg,color-mix(in_srgb,var(--color-surface2)_100%,white_4%),var(--color-surface2))] text-dim";
+
+function PinIcon({ className = "" }: { className?: string }) {
+  return (
+    <svg aria-hidden width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round" className={className}>
+      <path d="M12 21s-7-6.2-7-11.5A7 7 0 0 1 19 9.5C19 14.8 12 21 12 21z" /><circle cx="12" cy="9.5" r="2.5" />
+    </svg>
+  );
+}
+
 // ─── Localisation (Nominatim / OpenStreetMap) ─────────────────────────────────
 interface GeoResult {
   label: string;
@@ -60,9 +77,10 @@ function LocationPicker({
 
   if (value) {
     return (
-      <div className="flex items-center gap-2 rounded-xl border border-line bg-surface2 px-3 py-2.5">
-        <span className="flex-1 text-sm">📍 {value.label}</span>
-        <button onClick={() => onChange(null)} className="shrink-0 text-dim hover:text-danger">✕</button>
+      <div className="flex items-center gap-2.5 rounded-xl border border-accent/30 bg-[linear-gradient(105deg,rgba(255,179,0,0.14),var(--color-surface2)_75%)] px-3 py-2.5">
+        <PinIcon className="shrink-0 text-accent" />
+        <span className="flex-1 text-sm font-semibold">{value.label}</span>
+        <button onClick={() => onChange(null)} aria-label="Retirer la localisation" className="grid h-7 w-7 shrink-0 place-items-center rounded-full bg-black/25 text-[12px] text-dim hover:text-danger">✕</button>
       </div>
     );
   }
@@ -90,9 +108,10 @@ function LocationPicker({
                 setOpen(false);
                 setResults([]);
               }}
-              className="w-full px-3 py-2.5 text-left text-sm hover:bg-surface2 border-b border-line/50 last:border-0"
+              className="flex w-full items-center gap-2 border-b border-line/50 px-3 py-2.5 text-left text-sm last:border-0 hover:bg-surface2"
             >
-              📍 {r.label}
+              <PinIcon className="shrink-0 text-dim" />
+              {r.label}
             </button>
           ))}
         </div>
@@ -252,36 +271,44 @@ export default function ProfilePage() {
 
   return (
     <div className="space-y-3.5">
-      <section className="rounded-2xl border border-line bg-surface p-4">
-        <h2 className="mb-4 text-xl font-bold">Informations</h2>
+      <section className={CARD}>
+        <h2 className="mb-4 text-xl font-black">Informations</h2>
 
         {/* Nom + Photo */}
         <div className="mb-4 flex items-center gap-4">
           <label className="min-w-0 flex-1 block">
-            <span className="mb-1.5 block text-[13px] text-dim">Prénom Nom</span>
+            <span className={LABEL}>Prénom Nom</span>
             <input value={p.name} onChange={set("name")} placeholder="Prénom Nom" />
           </label>
 
           {/* Photo */}
-          <div className="flex shrink-0 flex-col items-center gap-1">
+          <div className="flex shrink-0 flex-col items-center gap-1.5">
             <button
               onClick={() => fileRef.current?.click()}
               disabled={photoBusy}
-              className="relative flex h-16 w-16 items-center justify-center overflow-hidden rounded-full border-2 border-dashed border-line bg-surface2 transition hover:border-accent disabled:opacity-60"
+              className={`relative grid h-[72px] w-[72px] place-items-center rounded-full p-[3px] transition active:scale-95 disabled:opacity-60 ${
+                p.photo
+                  ? "bg-gradient-to-br from-[#ffc53d] to-[#ff9f00] shadow-[0_6px_20px_-8px_rgba(255,170,0,0.8)]"
+                  : "border-2 border-dashed border-line hover:border-accent"
+              }`}
               title="Changer la photo"
             >
-              {photoBusy ? (
-                <span className="text-xl animate-pulse">⏳</span>
-              ) : p.photo ? (
-                <img src={p.photo} alt="photo" className="h-full w-full object-cover" />
-              ) : (
-                <span className="text-2xl">📷</span>
-              )}
+              <span className="grid h-full w-full place-items-center overflow-hidden rounded-full bg-surface2">
+                {photoBusy ? (
+                  <span className="h-5 w-5 animate-spin rounded-full border-2 border-accent border-t-transparent" />
+                ) : p.photo ? (
+                  <img src={p.photo} alt="photo" className="h-full w-full object-cover" />
+                ) : (
+                  <svg aria-hidden width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="text-accent">
+                    <path d="M4 8h3l2-3h6l2 3h3v11H4z" /><circle cx="12" cy="13" r="3.5" />
+                  </svg>
+                )}
+              </span>
             </button>
             {p.photo ? (
-              <button onClick={removePhoto} className="text-[11px] text-dim">Retirer</button>
+              <button onClick={removePhoto} className="rounded-full bg-surface2 px-2.5 py-0.5 text-[10.5px] font-bold text-dim">Retirer</button>
             ) : (
-              <span className="text-[11px] text-dim">Photo</span>
+              <span className="text-[10.5px] font-bold text-dim">Photo</span>
             )}
             <input ref={fileRef} type="file" accept="image/*" className="hidden" onChange={handlePhoto} />
           </div>
@@ -290,27 +317,34 @@ export default function ProfilePage() {
         {/* Date de naissance + Genre */}
         <div className="mb-4 flex flex-col gap-3">
           <label className="block">
-            <span className="mb-1.5 block text-[13px] text-dim">Date de naissance</span>
+            <span className={LABEL}>Date de naissance</span>
             <input
               type="date"
               value={p.birthDate ?? ""}
               onChange={set("birthDate")}
             />
           </label>
-          <label className="block">
-            <span className="mb-1.5 block text-[13px] text-dim">Genre</span>
-            <select value={p.gender ?? ""} onChange={set("gender")}>
-              <option value="">—</option>
-              <option value="homme">Homme</option>
-              <option value="femme">Femme</option>
-            </select>
-          </label>
+          <div>
+            <span className={LABEL}>Genre</span>
+            <div className="grid grid-cols-2 gap-1 rounded-full border border-line bg-surface p-1">
+              {(["homme", "femme"] as const).map((g) => (
+                <button
+                  key={g}
+                  type="button"
+                  onClick={() => setGender(g)}
+                  className={`rounded-full border py-2 text-[13px] font-black transition ${p.gender === g ? PILL_ON : "border-transparent text-dim"}`}
+                >
+                  {g === "homme" ? "Homme" : "Femme"}
+                </button>
+              ))}
+            </div>
+          </div>
         </div>
 
         {/* Instagram + Localisation */}
         <div className="mb-4 flex flex-col gap-3">
           <label className="block">
-            <span className="mb-1.5 block text-[13px] text-dim">📸 Instagram</span>
+            <span className={LABEL}>Instagram</span>
             <div className="flex items-center overflow-hidden rounded-[10px] border border-[var(--color-line)] bg-[var(--color-surface2)]">
               <span className="shrink-0 select-none pl-3 text-base text-dim" aria-hidden="true">@</span>
               <input
@@ -335,7 +369,7 @@ export default function ProfilePage() {
             </div>
           </label>
           <div>
-            <span className="mb-1.5 block text-[13px] text-dim">📍 Localisation</span>
+            <span className={LABEL}>Localisation</span>
             <LocationPicker
               value={p.location}
               onChange={loc =>
@@ -351,20 +385,30 @@ export default function ProfilePage() {
             <button
               type="button"
               onClick={() => update((d) => { d.profile.mapConsent = !d.profile.mapConsent; })}
-              className="mt-2 flex w-fit items-center gap-2 rounded-lg border border-line bg-surface2 px-3 py-2 text-left transition hover:border-accent/40"
+              role="switch"
+              aria-checked={!!p.mapConsent}
+              className="mt-2 flex w-full items-center gap-3 rounded-xl border border-line bg-surface2 px-3 py-2.5 text-left"
             >
-              <span className={`grid h-5 w-5 shrink-0 place-items-center rounded-md border-2 text-[12px] font-bold transition ${p.mapConsent ? "border-accent bg-accent text-[#1a1500]" : "border-dim text-transparent"}`}>
-                ✓
+              <span className="flex-1">
+                <span className="block text-[13px] font-bold text-ink">Visible sur la carte</span>
+                <span className="block text-[11px] text-dim">Carte de la communauté</span>
               </span>
-              <span className="text-[13px] font-semibold text-ink">Visible</span>
+              <span className={`relative h-6 w-11 shrink-0 rounded-full transition ${p.mapConsent ? "bg-gradient-to-br from-[#ffc53d] to-[#ff9f00]" : "bg-line"}`}>
+                <span className={`absolute top-0.5 h-5 w-5 rounded-full bg-white shadow transition-all ${p.mapConsent ? "left-[22px]" : "left-0.5"}`} />
+              </span>
             </button>
           </div>
         </div>
 
         {/* Sports */}
         <div>
-          <span className="mb-2 block text-[13px] text-dim">
-            Sport{sports.length > 0 ? ` (${sports.length} sélectionné${sports.length > 1 ? "s" : ""})` : ""}
+          <span className={`${LABEL} flex items-center gap-1.5`}>
+            Sports
+            {sports.length > 0 && (
+              <span className="inline-grid h-[18px] min-w-[18px] place-items-center rounded-full bg-accent/20 px-1 text-[10px] tracking-normal text-accent">
+                {sports.length}
+              </span>
+            )}
           </span>
           <div className="flex flex-wrap gap-2">
             {SPORTS.map((sport) => {
@@ -373,10 +417,8 @@ export default function ProfilePage() {
                 <button
                   key={sport}
                   onClick={() => toggleSport(sport)}
-                  className={`rounded-full border px-3 py-1.5 text-[13px] font-medium transition ${
-                    active
-                      ? "border-accent bg-accent/15 text-accent"
-                      : "border-line bg-surface2 text-dim"
+                  className={`rounded-full border px-3.5 py-1.5 text-[13px] font-bold transition active:scale-95 ${
+                    active ? PILL_ON : PILL_OFF
                   }`}
                 >
                   {sport}
@@ -389,8 +431,8 @@ export default function ProfilePage() {
 
       {/* Badges épinglés — visible si des défis existent */}
       {challenges.length > 0 && (
-        <section className="rounded-2xl border border-line bg-surface p-4">
-          <h2 className="mb-4 text-xl font-bold">Mes badges</h2>
+        <section className={CARD}>
+          <h2 className="mb-4 text-xl font-black">Mes badges</h2>
 
           <div className="flex justify-center gap-6">
             {[0, 1, 2].map((slot) => {
@@ -409,11 +451,17 @@ export default function ProfilePage() {
                         openPicker(slot);
                       }
                     }}
-                    style={ch ? { borderColor: `${color}90` } : {}}
-                    className={`flex h-[72px] w-[72px] items-center justify-center rounded-full transition ${
+                    style={
                       ch
-                        ? "border-2 bg-surface2"
-                        : "border-2 border-dashed border-line bg-surface2 hover:border-accent/60"
+                        ? {
+                            background: `radial-gradient(circle at 30% 25%, color-mix(in srgb, ${color} 45%, var(--color-surface2)), var(--color-surface2) 70%)`,
+                            borderColor: `color-mix(in srgb, ${color} 60%, transparent)`,
+                            boxShadow: `0 8px 22px -10px ${color}`,
+                          }
+                        : {}
+                    }
+                    className={`flex h-[76px] w-[76px] items-center justify-center rounded-full border-2 transition active:scale-95 ${
+                      ch ? "" : "border-dashed border-line bg-surface2 hover:border-accent/60"
                     }`}
                   >
                     {ch ? (
@@ -423,12 +471,12 @@ export default function ProfilePage() {
                         <span style={{ fontSize: 30 }}>{ch.icon}</span>
                       )
                     ) : (
-                      <span className="text-[28px] text-dim opacity-30">+</span>
+                      <span className="text-[28px] font-black text-accent/60">+</span>
                     )}
                   </button>
 
-                  <p className="max-w-[80px] text-center text-[11px] leading-tight text-dim">
-                    {ch ? ch.title : <span className="opacity-40">Choisir</span>}
+                  <p className="max-w-[84px] text-center text-[11px] font-bold leading-tight text-dim">
+                    {ch ? ch.title : <span className="opacity-60">Choisir</span>}
                   </p>
                 </div>
               );
