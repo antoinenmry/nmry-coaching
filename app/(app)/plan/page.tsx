@@ -1641,6 +1641,8 @@ function WeekView({ cursor, todayKey, sessionsByDate, goalsByDate, injuries, vac
   const monday = new Date(cursor);
   monday.setDate(cursor.getDate() - ((cursor.getDay() + 6) % 7));
 
+  // Frise : date à gauche reliée par un fil, séances en cartes à dégradé léger.
+  // Un jour de repos n'occupe qu'une ligne discrète → la semaine tient en un écran.
   return (
     <div className="space-y-2.5">
       {Array.from({ length: 7 }).map((_, i) => {
@@ -1650,58 +1652,119 @@ function WeekView({ cursor, todayKey, sessionsByDate, goalsByDate, injuries, vac
         const sessions = sessionsByDate[key] ?? [];
         const goals = goalsByDate[key] ?? [];
         const dayInjuries = injuriesForDate(key, injuries);
-        const isGoal = goals.length > 0;
-        const isInjury = dayInjuries.length > 0;
         const isVacation = isVacationDay(key, vacationStart, vacationEnd);
+        const isToday = key === todayKey;
+        const isPast = key < todayKey;
+        const isEmpty = sessions.length === 0 && goals.length === 0 && dayInjuries.length === 0;
         return (
           <div
             key={key}
             {...dayDrop(key, pending, onPlace)}
-            className={`rounded-xl border p-3 ${
-              isGoal
-                ? "border-ok bg-ok/10"
-                : isInjury
-                ? "border-danger/40 bg-danger/5"
-                : isVacation
-                ? "border-orange-500/40 bg-orange-500/5"
-                : `bg-surface ${key === todayKey ? "border-accent" : "border-line"}`
-            } ${pending ? "cursor-pointer" : ""}`}
+            className={`relative grid grid-cols-[48px_minmax(0,1fr)] gap-3 ${pending ? "cursor-pointer" : ""}`}
           >
-            <h3 className="mb-2 flex justify-between text-sm font-semibold">
-              <span className="flex items-center gap-1.5">
-                {isVacation && !isInjury && !isGoal && <span>🏖️</span>}
+            {i < 6 && (
+              <span aria-hidden className="absolute bottom-[-12px] left-[23px] top-11 w-0.5 bg-gradient-to-b from-line to-transparent" />
+            )}
+            <div className="flex flex-col items-center pt-1">
+              <span className={`text-[10.5px] font-black uppercase tracking-[0.12em] ${isToday ? "text-accent" : "text-dim"}`}>
                 {DOW[i]}
               </span>
-              <span className="font-normal text-dim">{date.getDate()} {MONTHS[date.getMonth()].slice(0, 3)}</span>
-            </h3>
-            {goals.map((g) => (
-              <button
-                key={g.id}
-                onClick={(e) => { e.stopPropagation(); onOpenGoal([g]); }}
-                className="mb-1.5 flex w-full items-center gap-1.5 rounded-md bg-ok/20 px-2 py-1 text-left text-[13px] font-semibold text-ok"
+              <span
+                className={`mt-0.5 grid h-[34px] w-[34px] place-items-center rounded-full text-base font-black ${
+                  isToday
+                    ? "bg-accent text-[#1a1500] shadow-[0_0_0_4px_rgba(255,179,0,0.18)]"
+                    : isPast ? "text-dim" : ""
+                }`}
+                aria-label={isToday ? `Aujourd'hui, ${date.getDate()} ${MONTHS[date.getMonth()]}` : undefined}
               >
-                🎯
-                {g.clientName && <span className="font-bold text-accent">{g.clientName.split(" ")[0]}</span>}
-                <span className={g.clientName ? "font-normal" : ""}>{g.competition}</span>
-                {g.place && <span className="font-normal opacity-80">· {g.place}</span>}
-                <span className="ml-auto text-[11px] opacity-80">{countdownLabel(g.date)}</span>
-              </button>
-            ))}
-            {dayInjuries.map((f) => (
-              <div key={f.id} className="mb-1.5 flex items-center gap-1.5 rounded-md bg-danger/15 px-2 py-1 text-[13px] font-semibold text-danger">
-                🩹 {f.text.split("\n")[0].slice(0, 60)}
-              </div>
-            ))}
-            <div className="flex flex-col gap-1.5">
-              {sessions.length === 0 ? (
-                <span className="text-[13px] italic text-dim">Repos / rien de prévu</span>
-              ) : (
-                sessions.map((s) => <SessionPill key={s.id} s={s} onOpen={onOpen} big todayKey={todayKey} />)
+                {date.getDate()}
+              </span>
+              {isVacation && <span className="mt-1 text-xs" title="Vacances">🏖️</span>}
+            </div>
+
+            <div className="flex min-w-0 flex-col gap-2">
+              {goals.map((g) => (
+                <button
+                  key={g.id}
+                  onClick={(e) => { e.stopPropagation(); onOpenGoal([g]); }}
+                  className="relative overflow-hidden rounded-2xl border border-ok/40 px-3.5 py-3 text-left"
+                  style={{ background: "linear-gradient(105deg, color-mix(in srgb, var(--color-ok) 30%, var(--color-surface)) 0%, color-mix(in srgb, var(--color-ok) 8%, var(--color-surface)) 60%, var(--color-surface) 100%)" }}
+                >
+                  <span aria-hidden className="absolute inset-y-0 left-0 w-1 bg-ok" />
+                  <span className="flex items-center justify-between gap-2">
+                    <span className="min-w-0 truncate text-[15px] font-black">
+                      🎯 {g.clientName && <span className="text-accent">{g.clientName.split(" ")[0]} · </span>}{g.competition}
+                    </span>
+                    <span className="shrink-0 rounded-full bg-ok/15 px-2 py-0.5 text-[11px] font-black text-ok">{countdownLabel(g.date)}</span>
+                  </span>
+                  {g.place && <span className="mt-0.5 block truncate text-xs text-ink/70">{g.place}</span>}
+                </button>
+              ))}
+              {dayInjuries.map((f) => (
+                <div key={f.id} className="truncate rounded-lg bg-danger/15 px-2.5 py-1.5 text-[13px] font-semibold text-danger">
+                  🩹 {f.text.split("\n")[0].slice(0, 60)}
+                </div>
+              ))}
+              {sessions.map((s) => (
+                <WeekSessionCard key={s.id} s={s} onOpen={onOpen} todayKey={todayKey} />
+              ))}
+              {isEmpty && (
+                <span className="flex min-h-10 items-center text-[13px] italic text-dim">
+                  {isVacation ? "Vacances" : "Repos"}
+                </span>
               )}
             </div>
           </div>
         );
       })}
     </div>
+  );
+}
+
+/** Carte de séance de la vue Semaine : dégradé léger de la couleur de la séance vers
+ *  le fond + liseré à gauche. Le texte reste celui du thème (clair sur sombre), donc
+ *  lisible quelle que soit la couleur choisie par le coach, en sombre, clair ou Aurora. */
+function WeekSessionCard({ s, onOpen, todayKey }: { s: SessionInstance; onOpen: (id: string) => void; todayKey: string }) {
+  const isToday = s.date === todayKey;
+  const missed = !s.done && !!s.date && s.date < todayKey;
+  const rpes = s.exercises.map((e) => e.rpeClient).filter((r) => r > 0);
+  const avgRpe = rpes.length > 0 ? Math.round(rpes.reduce((a, b) => a + b, 0) / rpes.length) : 0;
+  const n = s.exercises.length;
+
+  return (
+    <button
+      draggable={!s.done}
+      onDragStart={(e) => {
+        if (s.done) { e.preventDefault(); return; }
+        e.stopPropagation();
+        e.dataTransfer.setData("text/session", s.id);
+      }}
+      onClick={(e) => { e.stopPropagation(); onOpen(s.id); }}
+      className={`relative w-full overflow-hidden rounded-2xl border px-3.5 py-3 text-left transition active:scale-[0.99] ${
+        s.done ? "opacity-80" : ""
+      }`}
+      style={{
+        background: `linear-gradient(105deg, color-mix(in srgb, ${s.color} 34%, var(--color-surface)) 0%, color-mix(in srgb, ${s.color} 10%, var(--color-surface)) 55%, var(--color-surface) 100%)`,
+        borderColor: `color-mix(in srgb, ${s.color} 38%, transparent)`,
+        boxShadow: isToday ? `0 8px 26px -10px color-mix(in srgb, ${s.color} 70%, transparent)` : undefined,
+      }}
+    >
+      <span aria-hidden className="absolute inset-y-0 left-0 w-1" style={{ background: s.color }} />
+      <span className="flex items-center justify-between gap-2">
+        <span className="min-w-0 truncate text-base font-black">{s.name}</span>
+        {s.done ? (
+          <span className="shrink-0 rounded-full bg-ok/15 px-2 py-0.5 text-[11px] font-black text-ok">
+            ✓{avgRpe > 0 ? ` RPE ${avgRpe}` : ""}{s.emoji > 0 ? ` ${EMOJIS[s.emoji - 1]}` : ""}
+          </span>
+        ) : missed ? (
+          <span className="shrink-0 rounded-full bg-danger/15 px-2 py-0.5 text-[11px] font-black text-danger">✕ manquée</span>
+        ) : isToday ? (
+          <span className="shrink-0 rounded-full bg-accent px-2 py-0.5 text-[11px] font-black text-[#1a1500]">Aujourd&apos;hui</span>
+        ) : null}
+      </span>
+      <span className="mt-0.5 block text-xs text-ink/70">
+        {n} exercice{n > 1 ? "s" : ""}
+      </span>
+    </button>
   );
 }
