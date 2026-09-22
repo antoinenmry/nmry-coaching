@@ -37,6 +37,11 @@ async function resolveParticipants(
   });
 }
 
+/** Chemin Storage sous le préfixe attendu, sans remontée de dossier. */
+function isSafeStoragePath(path: unknown, prefix: string): boolean {
+  return typeof path === "string" && path.startsWith(prefix) && !path.includes("..") && path.length < 300;
+}
+
 // ─── GET ────────────────────────────────────────────────────────────────────
 export async function GET(req: NextRequest) {
   const supabase = await createClient();
@@ -151,6 +156,17 @@ export async function POST(req: NextRequest) {
     }
   } else {
     clientId = user.id;
+  }
+
+  // Chemins Storage : uniquement dans les dossiers de CETTE conversation / de l'expéditeur.
+  // Sinon, en supprimant son propre message, on ferait effacer par le serveur le fichier
+  // d'un autre (la suppression passe par le service role). Conventions d'upload :
+  //   pièces jointes → chat/<clientId>/…   vocaux → <senderId>/…
+  if (attachmentPath !== undefined && !isSafeStoragePath(attachmentPath, `chat/${clientId}/`)) {
+    return NextResponse.json({ error: "Pièce jointe invalide" }, { status: 400 });
+  }
+  if (audioPath !== undefined && !isSafeStoragePath(audioPath, `${user.id}/`)) {
+    return NextResponse.json({ error: "Vocal invalide" }, { status: 400 });
   }
 
   // coach_id = coach affecté au client (sinon, si l'envoyeur est élevé, lui-même)

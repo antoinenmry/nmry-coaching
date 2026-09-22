@@ -55,13 +55,17 @@ export async function DELETE(_req: NextRequest, { params }: { params: Promise<{ 
   if (!row) return NextResponse.json({ error: "Introuvable" }, { status: 404 });
   if (!allowed) return NextResponse.json({ error: "Forbidden" }, { status: 403 });
 
-  // Supprime les fichiers Storage associés au message
+  // Supprime les fichiers Storage associés au message — seulement s'ils sont bien
+  // rangés dans les dossiers de cette conversation / de l'expéditeur (défense en
+  // profondeur : un chemin forgé ne doit jamais faire effacer le fichier d'un autre).
+  const safe = (p: string | null | undefined, prefix: string): p is string =>
+    !!p && p.startsWith(prefix) && !p.includes("..");
   const attachPath = (row as { attachment_path?: string | null }).attachment_path;
-  if (attachPath) {
+  if (safe(attachPath, `chat/${row.client_id}/`)) {
     await admin.storage.from("chat-attachments").remove([attachPath]).catch(() => {});
   }
   const audioPath = (row as { audio_path?: string | null }).audio_path;
-  if (audioPath) {
+  if (safe(audioPath, `${row.sender_id}/`)) {
     await admin.storage.from("chat-attachments").remove([audioPath]).catch(() => {});
   }
   await admin.from("chat_messages").delete().eq("id", id);
