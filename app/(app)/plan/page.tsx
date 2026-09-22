@@ -27,8 +27,6 @@ const shortName = (n: string) => {
   const beforeParen = n.split("(")[0].trim();
   return beforeParen.length >= 4 ? beforeParen : n;
 };
-const EMOJIS = ["😫", "😕", "😐", "🙂", "🤩"];
-const emojiOf = (n: number) => (n >= 1 && n <= 5 ? EMOJIS[n - 1] + " " : "");
 
 // Barre d'actions coach : tuiles compactes tenant toutes sur UNE ligne, sans scroll.
 // Les colonnes se partagent la largeur à parts égales (auto-cols-fr) quel que soit le
@@ -72,6 +70,9 @@ export default function PlanPage() {
   const [cursor, setCursor] = useState(() => new Date());
   const [pending, setPending] = useState<string | null>(null); // séance à placer (tap-to-place)
   const [editing, setEditing] = useState<string | null>(null); // sessionId
+  // Séance tout juste créée par le coach : l'éditeur reste en mode prescription,
+  // même sur son propre profil (pas de ressenti / séries réalisées / validation).
+  const [freshId, setFreshId] = useState<string | null>(null);
   const [composing, setComposing] = useState(false);
   const [duplicating, setDuplicating] = useState(false);
   const [transferring, setTransferring] = useState(false);
@@ -228,7 +229,9 @@ export default function PlanPage() {
                       : "opacity-40 hover:opacity-70"
                   }`}
                 >
-                  🏖️
+                  <svg aria-hidden width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" className={onVacation ? "text-orange-400" : "text-dim"}>
+                    <circle cx="12" cy="12" r="4" /><path d="M12 2v2M12 20v2M4.9 4.9l1.4 1.4M17.7 17.7l1.4 1.4M2 12h2M20 12h2M4.9 19.1l1.4-1.4M17.7 6.3l1.4-1.4" />
+                  </svg>
                 </button>
               </>
             );
@@ -248,7 +251,8 @@ export default function PlanPage() {
         <button onClick={() => shiftPeriod(1)} aria-label="Période suivante" className="h-9 w-9 rounded-full bg-surface2 text-lg">›</button>
       </div>
 
-      {/* Zone "À placer" */}
+      {/* Zone "À placer" — masquée quand elle est vide (le coach garde ses actions) */}
+      {(isCoach || bank.length > 0) && (
       <div
         className="mb-3.5 rounded-[20px] border border-line bg-[radial-gradient(120%_80%_at_0%_0%,rgba(255,179,0,0.10),transparent_60%),var(--color-surface)] p-3.5"
         onDragOver={(e) => e.preventDefault()}
@@ -258,18 +262,20 @@ export default function PlanPage() {
           if (id) place(id, null);
         }}
       >
+        {bank.length > 0 && (
         <div className="mb-3 flex items-center">
           <span className="text-[15px] font-black">À placer</span>
           <span className="ml-1.5 inline-grid h-[22px] min-w-[22px] place-items-center rounded-full bg-surface2 px-1.5 text-[11px] font-black">
             {bank.length}
           </span>
         </div>
+        )}
         {/* Barre d'actions coach — géométrie uniforme (même hauteur, pas de retour à
             la ligne) sur une rangée défilante : le titre ne comprime plus les boutons.
             Hiérarchie de couleur réduite à 3 niveaux : action principale (créer),
             actions secondaires (neutres), envoi (accent). */}
         {isCoach && (
-          <div className="mb-3 grid auto-cols-fr grid-flow-col gap-[5px]">
+          <div className={`grid auto-cols-fr grid-flow-col gap-[5px] ${bank.length > 0 ? "mb-3" : ""}`}>
             <button onClick={() => setComposing(true)} title="Créer une séance"
               className={`${TILE} ${TILE_CREATE}`}>
               Créer
@@ -305,12 +311,7 @@ export default function PlanPage() {
             </button>
           </div>
         )}
-        {bank.length === 0 ? (
-          <div className="flex items-center gap-2.5 rounded-[14px] border-[1.5px] border-dashed border-line p-3 text-[12.5px] leading-snug text-dim">
-            <span className="grid h-[30px] w-[30px] shrink-0 place-items-center rounded-full bg-surface2 font-black text-accent">+</span>
-            {isCoach ? "Crée des séances : elles apparaîtront ici, prêtes à glisser sur un jour." : "Aucune séance à placer pour l'instant."}
-          </div>
-        ) : (
+        {bank.length === 0 ? null : (
           <div className="flex gap-2.5 overflow-x-auto pb-1">
             {bank.map((s) => (
               <div
@@ -335,12 +336,12 @@ export default function PlanPage() {
                         onClick={(e) => { e.stopPropagation(); setEditing(s.id); }}
                         aria-label="Modifier la séance"
                         className="grid h-6 w-6 shrink-0 place-items-center rounded-md bg-black/25 text-[12px]"
-                      >✏️</button>
+                      ><svg aria-hidden width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round"><path d="M4 20h4L19 9l-4-4L4 16z" /></svg></button>
                       <button
                         onClick={(e) => { e.stopPropagation(); deleteBankSession(s.id); }}
                         aria-label="Supprimer la séance"
                         className="grid h-6 w-6 shrink-0 place-items-center rounded-md bg-black/25 text-[12px]"
-                      >🗑️</button>
+                      ><svg aria-hidden width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round"><path d="M4 7h16M9 7V4h6v3M6 7l1 13h10l1-13" /></svg></button>
                     </>
                   )}
                 </div>
@@ -350,10 +351,13 @@ export default function PlanPage() {
           </div>
         )}
       </div>
+      )}
 
+      {(bank.length > 0 || pending) && (
       <p className="mb-2.5 text-xs text-dim">
         {pending ? "Touche un jour pour y placer la séance sélectionnée." : "Glisse une séance sur un jour (ou touche-la puis touche le jour)."}
       </p>
+      )}
 
       {/* Calendrier */}
       {mode === "month" ? (
@@ -399,24 +403,30 @@ export default function PlanPage() {
       )}
 
       <div className="mt-3 flex flex-col gap-1">
+        {mode === "month" && (
+          <p className="flex items-center gap-1.5 text-xs text-dim">
+            <span className="inline-block h-3 w-3 rounded border border-accent2 bg-accent2" /> Séance validée
+            <span className="ml-2 inline-block h-3 w-3 rounded border border-accent2/60 bg-accent2/15" /> À faire
+          </p>
+        )}
         {state.goals.some((g) => g.date) && (
           <p className="flex items-center gap-1.5 text-xs text-dim">
-            <span className="inline-block h-3 w-3 rounded border border-ok bg-ok/20" /> 🎯 Jour de compétition
+            <span className="inline-block h-3 w-3 rounded border border-ok bg-ok/20" /> Jour de compétition
           </p>
         )}
         {injuries.length > 0 && (
           <p className="flex items-center gap-1.5 text-xs text-dim">
-            <span className="inline-block h-3 w-3 rounded border border-danger bg-danger/20" /> 🩹 Blessure active
+            <span className="inline-block h-3 w-3 rounded border border-danger bg-danger/20" /> Blessure active
           </p>
         )}
         {vacationStart && (
           <p className="flex items-center gap-1.5 text-xs text-dim">
-            <span className="inline-block h-3 w-3 rounded border border-orange-500/40 bg-orange-500/10" /> 🏖️ Vacances
+            <span className="inline-block h-3 w-3 rounded border border-orange-500/40 bg-orange-500/10" /> Vacances
           </p>
         )}
       </div>
 
-      {editing && <SessionEditor sessionId={editing} role={role} onClose={() => setEditing(null)} />}
+      {editing && <SessionEditor sessionId={editing} role={role} fresh={editing === freshId} onClose={() => setEditing(null)} />}
 
       {vacationOpen && (
         <VacationModal
@@ -432,7 +442,7 @@ export default function PlanPage() {
       {composing && (
         <ComposeModal
           onClose={() => setComposing(false)}
-          onCreated={(id) => { setComposing(false); setEditing(id); }}
+          onCreated={(id) => { setComposing(false); setFreshId(id); setEditing(id); }}
         />
       )}
 
@@ -524,13 +534,13 @@ function VacationModal({
     >
       <div className="w-full max-w-sm overflow-hidden rounded-t-3xl border-t border-line bg-surface p-5 sm:rounded-3xl sm:border">
         <div className="mb-4 flex items-center justify-between">
-          <h2 className="text-lg font-bold">🏖️ Mode vacances</h2>
+          <h2 className="text-lg font-bold">Mode vacances</h2>
           <button onClick={onClose} className="text-dim hover:text-ink">✕</button>
         </div>
 
         {isActive && (
           <div className="mb-4 rounded-xl bg-orange-500/10 px-3 py-2.5 text-sm font-semibold text-orange-400">
-            🏖️ Tu es actuellement en vacances
+            Tu es actuellement en vacances
             {end ? ` jusqu'au ${new Date(end + "T00:00:00").toLocaleDateString("fr-FR", { day: "numeric", month: "long" })}` : ""}
           </div>
         )}
@@ -1040,7 +1050,7 @@ function DuplicateWeekModal({
           <button onClick={() => shiftDest(1)} className="grid h-9 w-9 shrink-0 place-items-center rounded-lg bg-surface2 text-lg">›</button>
         </div>
         <p className="mb-4 text-center text-[12px] text-dim">
-          {sameWeek ? "⚠️ Duplique sur la même semaine (crée des doublons)" : "Les jours de la semaine sont conservés"}
+          {sameWeek ? "Attention : duplique sur la même semaine (crée des doublons)" : "Les jours de la semaine sont conservés"}
         </p>
 
         {/* Nombre de semaines */}
@@ -1212,7 +1222,7 @@ function TransferWeekModal({
 
         {done ? (
           <div className="py-6 text-center">
-            <p className="mb-1 text-2xl">✅</p>
+            <p className="mx-auto mb-2 grid h-12 w-12 place-items-center rounded-full bg-ok/15 text-2xl font-black text-ok">✓</p>
             {savedTplName ? (
               <>
                 <p className="font-semibold">Semaine type enregistrée</p>
@@ -1413,17 +1423,10 @@ function dayDrop(key: string, pending: string | null, onPlace: ViewProps["onPlac
   };
 }
 
-function SessionPill({ s, onOpen, big, todayKey }: { s: SessionInstance; onOpen: (id: string) => void; big?: boolean; todayKey: string }) {
-  const isPast = !!s.date && s.date < todayKey;
-  const rpes = s.exercises.map((e) => e.rpeClient).filter((r) => r > 0);
-  const avgRpe = rpes.length > 0 ? Math.round(rpes.reduce((a, b) => a + b, 0) / rpes.length) : 0;
-
-  const badge = s.done
-    ? <span className="shrink-0 leading-none">{big && avgRpe > 0 ? `✅ RPE ${avgRpe}${s.emoji > 0 ? " " + EMOJIS[s.emoji - 1] : ""}` : "✅"}</span>
-    : isPast
-    ? <span className="shrink-0 leading-none">❌</span>
-    : null;
-
+function SessionPill({ s, onOpen, todayKey }: { s: SessionInstance; onOpen: (id: string) => void; todayKey: string }) {
+  const missed = !s.done && !!s.date && s.date < todayKey;
+  // Validée par le sportif → pastille pleine à la couleur de la séance.
+  // Non validée → transparente (teinte légère + contour) ; manquée → contour pointillé rouge.
   return (
     <button
       draggable={!s.done}
@@ -1433,13 +1436,20 @@ function SessionPill({ s, onOpen, big, todayKey }: { s: SessionInstance; onOpen:
         e.dataTransfer.setData("text/session", s.id);
       }}
       onClick={(e) => { e.stopPropagation(); onOpen(s.id); }}
-      className={`w-full rounded-md px-1.5 text-left font-semibold text-[#06121f] ${big ? "py-1.5 text-[13px]" : "py-1 text-[11px]"} ${s.done ? "cursor-pointer" : ""}`}
-      style={{ background: s.color }}
+      title={`${s.name}${s.done ? " · validée" : missed ? " · manquée" : ""}`}
+      className={`w-full rounded-md border px-1 py-1 text-left text-[10px] font-black leading-[1.15] sm:px-1.5 sm:text-[11px] ${
+        s.done ? "text-[#06121f]" : "text-ink"
+      } ${missed ? "border-dashed" : ""}`}
+      style={
+        s.done
+          ? { background: s.color, borderColor: s.color }
+          : {
+              background: `color-mix(in srgb, ${s.color} 14%, transparent)`,
+              borderColor: missed ? "var(--color-danger)" : `color-mix(in srgb, ${s.color} 60%, transparent)`,
+            }
+      }
     >
-      <span className="flex items-center justify-between gap-1">
-        <span className="min-w-0 flex-1 truncate">{emojiOf(s.emoji)}{big ? s.name : shortName(s.name)}</span>
-        {badge}
-      </span>
+      <span className="line-clamp-2 break-words [hyphens:auto]">{shortName(s.name)}</span>
     </button>
   );
 }
@@ -1467,7 +1477,7 @@ function MonthView({ cursor, todayKey, sessionsByDate, goalsByDate, injuries, va
       <div
         key={key}
         {...dayDrop(key, pending, onPlace)}
-        className={`flex min-h-[78px] flex-col gap-1 rounded-lg border p-1 ${
+        className={`flex min-h-[78px] min-w-0 flex-col gap-1 rounded-lg border p-0.5 sm:p-1 ${
           isGoal
             ? "border-ok bg-ok/10 ring-1 ring-ok/50"
             : isInjury
@@ -1479,17 +1489,17 @@ function MonthView({ cursor, todayKey, sessionsByDate, goalsByDate, injuries, va
       >
         <span className="flex items-center justify-between text-[11px] text-dim">
           {day}
-          <span className="flex gap-0.5">
-            {isVacation && !isInjury && !isGoal && <span title="Vacances">🏖️</span>}
-            {isInjury && <span title={dayInjuries.map((f) => f.text).join(", ")}>🩹</span>}
-            {isGoal && <span title={goals.map((g) => g.competition).join(", ")}>🎯</span>}
+          <span className="flex items-center gap-0.5">
+            {isVacation && !isInjury && !isGoal && <span title="Vacances" className="h-1.5 w-1.5 rounded-full bg-orange-400" />}
+            {isInjury && <span title={dayInjuries.map((f) => f.text).join(", ")} className="h-1.5 w-1.5 rounded-full bg-danger" />}
+            {isGoal && <span title={goals.map((g) => g.competition).join(", ")} className="h-1.5 w-1.5 rounded-full bg-ok" />}
           </span>
         </span>
         {goals.map((g) => (
           <button
             key={g.id}
             onClick={(e) => { e.stopPropagation(); onOpenGoal([g]); }}
-            className="truncate rounded-md bg-ok/25 px-1.5 py-0.5 text-left text-[10px] font-semibold text-ok"
+            className="line-clamp-2 break-words rounded-md bg-ok/25 px-1 py-0.5 text-left text-[10px] font-black leading-[1.15] text-ok"
             title={g.clientName ? `${g.clientName} · ${g.competition}` : g.competition}
           >
             {g.clientName ? `${g.clientName.split(" ")[0]} · ${g.competition}` : g.competition}
@@ -1500,7 +1510,7 @@ function MonthView({ cursor, todayKey, sessionsByDate, goalsByDate, injuries, va
     );
   }
 
-  return <div className="grid grid-cols-7 gap-1.5">{cells}</div>;
+  return <div className="grid grid-cols-7 gap-1 sm:gap-1.5">{cells}</div>;
 }
 
 interface SynthesisViewProps {
@@ -1548,15 +1558,14 @@ function SynthesisView({ cursor, todayKey, sessionsByDate, goalsByDate, injuries
           >
             <h3 className="mb-2 flex justify-between text-sm font-semibold">
               <span className="flex items-center gap-1.5">
-                {isVacation && !isInjury && !isGoal && <span className="text-base">🏖️</span>}
-                {DOW[i]}
+                                {DOW[i]}
               </span>
               <span className="font-normal text-dim">{date.getDate()} {MONTHS[date.getMonth()].slice(0, 3)}</span>
             </h3>
 
             {isVacation && !isInjury && !isGoal && (
               <div className="mb-2 flex items-center gap-1.5 rounded-md bg-orange-500/15 px-2 py-1 text-[13px] font-semibold text-orange-400">
-                🏖️ Vacances
+                Vacances
               </div>
             )}
 
@@ -1566,7 +1575,6 @@ function SynthesisView({ cursor, todayKey, sessionsByDate, goalsByDate, injuries
                 onClick={() => onOpenGoal([g])}
                 className="mb-1.5 flex w-full items-center gap-1.5 rounded-md bg-ok/20 px-2 py-1 text-left text-[13px] font-semibold text-ok"
               >
-                🎯
                 {g.clientName && <span className="font-bold text-accent">{g.clientName.split(" ")[0]}</span>}
                 <span className={g.clientName ? "font-normal" : ""}>{g.competition}</span>
                 {g.place && <span className="font-normal opacity-80">· {g.place}</span>}
@@ -1576,7 +1584,7 @@ function SynthesisView({ cursor, todayKey, sessionsByDate, goalsByDate, injuries
 
             {dayInjuries.map((f) => (
               <div key={f.id} className="mb-2 flex items-center gap-1.5 rounded-md bg-danger/15 px-2 py-1 text-[13px] font-semibold text-danger">
-                🩹 {f.text.split("\n")[0].slice(0, 60)}
+                {f.text.split("\n")[0].slice(0, 60)}
               </div>
             ))}
 
@@ -1598,12 +1606,12 @@ function SynthesisView({ cursor, todayKey, sessionsByDate, goalsByDate, injuries
                         style={{ borderLeft: `5px solid ${s.color}` }}
                       >
                         <div className="flex items-center justify-between gap-2">
-                          <span className="font-semibold text-sm">{emojiOf(s.emoji)}{s.name}</span>
+                          <span className="font-semibold text-sm">{s.name}</span>
                           <span className="flex items-center gap-1.5 text-[12px] shrink-0">
                             {s.done ? (
-                              <span className="text-ok font-semibold">✅{avgRpe > 0 ? ` RPE ${avgRpe}` : ""}</span>
+                              <span className="text-ok font-semibold">✓{avgRpe > 0 ? ` RPE ${avgRpe}` : ""}</span>
                             ) : isPast ? (
-                              <span className="text-danger">❌</span>
+                              <span className="font-semibold text-danger">✕</span>
                             ) : null}
                             <span className="text-dim text-[11px] underline underline-offset-2">éditer</span>
                           </span>
@@ -1628,7 +1636,7 @@ function SynthesisView({ cursor, todayKey, sessionsByDate, goalsByDate, injuries
                                 <div className="flex items-baseline justify-between gap-2">
                                   <span className="text-[13px] font-medium">{ex.name}</span>
                                   {ex.failed ? (
-                                    <span className="shrink-0 text-[11px] font-semibold text-danger">❌ Raté</span>
+                                    <span className="shrink-0 text-[11px] font-semibold text-danger">Raté</span>
                                   ) : ex.rpeClient > 0 ? (
                                     <span className="shrink-0 text-[11px] font-semibold text-accent">RPE client {ex.rpeClient}</span>
                                   ) : null}
@@ -1639,17 +1647,17 @@ function SynthesisView({ cursor, todayKey, sessionsByDate, goalsByDate, injuries
                                     <p className="text-[12px] text-dim">{prescription}</p>
                                     {(ex.weightClient ?? 0) > 0 && (
                                       <span className="shrink-0 rounded-md bg-ok/15 px-2 py-0.5 text-[11px] font-bold text-ok">
-                                        🏋️ {ex.weightClient} kg
+                                        {ex.weightClient} kg
                                       </span>
                                     )}
                                   </div>
                                 )}
                                 {/* Ligne 3 : commentaires */}
                                 {ex.coachComment && (
-                                  <p className="mt-1 text-[11px] text-dim italic">🗒 {ex.coachComment}</p>
+                                  <p className="mt-1 text-[11px] text-dim italic">Coach : {ex.coachComment}</p>
                                 )}
                                 {ex.clientComment && (
-                                  <p className="mt-1 text-[11px] text-accent2 italic">💬 {ex.clientComment}</p>
+                                  <p className="mt-1 text-[11px] text-accent2 italic">Sportif : {ex.clientComment}</p>
                                 )}
                               </div>
                             );
@@ -1710,7 +1718,7 @@ function WeekView({ cursor, todayKey, sessionsByDate, goalsByDate, injuries, vac
               >
                 {date.getDate()}
               </span>
-              {isVacation && <span className="mt-1 text-xs" title="Vacances">🏖️</span>}
+              {isVacation && <span className="mt-1.5 h-1.5 w-1.5 rounded-full bg-orange-400" title="Vacances" />}
             </div>
 
             <div className="flex min-w-0 flex-col gap-2">
@@ -1724,7 +1732,7 @@ function WeekView({ cursor, todayKey, sessionsByDate, goalsByDate, injuries, vac
                   <span aria-hidden className="absolute inset-y-0 left-0 w-1 bg-ok" />
                   <span className="flex items-center justify-between gap-2">
                     <span className="min-w-0 truncate text-[15px] font-black">
-                      🎯 {g.clientName && <span className="text-accent">{g.clientName.split(" ")[0]} · </span>}{g.competition}
+                      {g.clientName && <span className="text-accent">{g.clientName.split(" ")[0]} · </span>}{g.competition}
                     </span>
                     <span className="shrink-0 rounded-full bg-ok/15 px-2 py-0.5 text-[11px] font-black text-ok">{countdownLabel(g.date)}</span>
                   </span>
@@ -1733,7 +1741,7 @@ function WeekView({ cursor, todayKey, sessionsByDate, goalsByDate, injuries, vac
               ))}
               {dayInjuries.map((f) => (
                 <div key={f.id} className="truncate rounded-lg bg-danger/15 px-2.5 py-1.5 text-[13px] font-semibold text-danger">
-                  🩹 {f.text.split("\n")[0].slice(0, 60)}
+                  {f.text.split("\n")[0].slice(0, 60)}
                 </div>
               ))}
               {sessions.map((s) => (
@@ -1785,7 +1793,7 @@ function WeekSessionCard({ s, onOpen, todayKey }: { s: SessionInstance; onOpen: 
         <span className="min-w-0 truncate text-base font-black">{s.name}</span>
         {s.done ? (
           <span className="shrink-0 rounded-full bg-ok/15 px-2 py-0.5 text-[11px] font-black text-ok">
-            ✓{avgRpe > 0 ? ` RPE ${avgRpe}` : ""}{s.emoji > 0 ? ` ${EMOJIS[s.emoji - 1]}` : ""}
+            ✓{avgRpe > 0 ? ` RPE ${avgRpe}` : ""}{s.emoji > 0 ? ` · ressenti ${s.emoji}/5` : ""}
           </span>
         ) : missed ? (
           <span className="shrink-0 rounded-full bg-danger/15 px-2 py-0.5 text-[11px] font-black text-danger">✕ manquée</span>

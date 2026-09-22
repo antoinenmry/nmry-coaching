@@ -244,10 +244,13 @@ function frenchDate(key: string) {
 export default function SessionEditor({
   sessionId,
   role,
+  fresh = false,
   onClose,
 }: {
   sessionId: string;
   role: Role;
+  /** Séance qui vient d'être créée : mode prescription uniquement. */
+  fresh?: boolean;
   onClose: () => void;
 }) {
   const { update, state, library, activeUserId, me } = useData();
@@ -290,7 +293,9 @@ export default function SessionEditor({
   const isCoach = role === "coach" || role === "admin";
   // Auto-suivi : coach/admin éditant SA PROPRE séance (pas celle d'un sportif sélectionné)
   // → en plus de la prescription, on lui montre aussi le ressenti/validation/RPE sportif.
-  const isSelf = activeUserId === me?.id;
+  // Pas d'auto-suivi sur une séance tout juste créée ni sur une séance non placée :
+  // le coach est alors en train de prescrire, pas de s'entraîner.
+  const isSelf = activeUserId === me?.id && !fresh && !!session?.date;
   const backdropRef = useRef(false);
 
   const patchSession = (patch: Partial<typeof session>) =>
