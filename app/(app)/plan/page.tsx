@@ -195,60 +195,81 @@ export default function PlanPage() {
         </div>
       )}
 
-      {/* Barre d'outils — ligne 1 : modes + vacances */}
-      <div className="mb-2 flex items-center gap-2">
-        <div className="flex flex-1 rounded-full border border-line bg-surface p-1">
-          {(["month", "week", "synthesis"] as const).map((m) => (
-            <button
-              key={m}
-              onClick={() => setMode(m)}
-              className={`flex-1 rounded-full px-1 py-2 text-[13px] font-black transition ${
-                mode === m
-                  ? "bg-gradient-to-br from-[#ffc53d] to-[#ff9f00] text-[#1a1500] shadow-[0_6px_18px_-6px_rgba(255,170,0,0.7)]"
-                  : "text-dim"
-              }`}
-            >
-              {m === "month" ? "Mois" : m === "week" ? "Semaine" : "Synthèse"}
-            </button>
-          ))}
-          {/* Bouton vacances — clients uniquement, emoji seul pour ne pas dépasser */}
-          {!isCoach && (() => {
-            const onVacation = !!vacationStart && todayKey >= vacationStart && (!vacationEnd || todayKey <= vacationEnd);
-            const hasVacation = !!vacationStart;
-            return (
-              <>
-                <div className="mx-1 w-px self-stretch bg-line" />
+      {/* Onglets + navigation réunis : l'onglet actif porte ses flèches et la période.
+          Largeurs FIXES par mode (grille) → changer de semaine ne décale jamais rien :
+          une flèche reste sous le doigt, pas un autre onglet. */}
+      <div className="mb-3.5 flex items-stretch rounded-full border border-line bg-surface p-1">
+        <div
+          className="grid min-w-0 flex-1 gap-1"
+          style={{
+            gridTemplateColumns:
+              mode === "month" ? "2.4fr 1fr 1fr" : mode === "week" ? "1fr 2.4fr 1fr" : "1fr 1fr 2.4fr",
+          }}
+        >
+          {(["month", "week", "synthesis"] as const).map((m) => {
+            const name = m === "month" ? "Mois" : m === "week" ? "Semaine" : "Synthèse";
+            if (m !== mode) {
+              return (
                 <button
-                  onClick={() => setVacationOpen(true)}
-                  title="Mode vacances"
-                  className={`rounded-full px-2.5 py-2 text-base transition ${
-                    onVacation
-                      ? "bg-orange-500/25"
-                      : hasVacation
-                      ? "opacity-60"
-                      : "opacity-40 hover:opacity-70"
-                  }`}
+                  key={m}
+                  onClick={() => setMode(m)}
+                  className="min-w-0 touch-manipulation truncate rounded-full px-1 py-2.5 text-[13px] font-black text-dim"
                 >
-                  <svg aria-hidden width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" className={onVacation ? "text-orange-400" : "text-dim"}>
-                    <circle cx="12" cy="12" r="4" /><path d="M12 2v2M12 20v2M4.9 4.9l1.4 1.4M17.7 17.7l1.4 1.4M2 12h2M20 12h2M4.9 19.1l1.4-1.4M17.7 6.3l1.4-1.4" />
-                  </svg>
+                  {name}
                 </button>
-              </>
+              );
+            }
+            return (
+              <div
+                key={m}
+                className="flex min-w-0 items-center rounded-full bg-gradient-to-br from-[#ffc53d] to-[#ff9f00] text-[#1a1500] shadow-[0_6px_18px_-6px_rgba(255,170,0,0.7)]"
+              >
+                <button
+                  onClick={() => shiftPeriod(-1)}
+                  aria-label="Période précédente"
+                  className="grid h-11 w-9 shrink-0 touch-manipulation place-items-center rounded-full text-lg font-black active:bg-black/10"
+                >
+                  ‹
+                </button>
+                <span className="min-w-0 flex-1 text-center leading-[1.1]">
+                  <span className="block truncate text-[13px] font-black">
+                    {name}{m !== "month" && ` · S${isoWeek(cursor)}`}
+                  </span>
+                  <span className="block truncate text-[10.5px] font-black opacity-75">{periodLabel(mode, cursor)}</span>
+                </span>
+                <button
+                  onClick={() => shiftPeriod(1)}
+                  aria-label="Période suivante"
+                  className="grid h-11 w-9 shrink-0 touch-manipulation place-items-center rounded-full text-lg font-black active:bg-black/10"
+                >
+                  ›
+                </button>
+              </div>
             );
-          })()}
+          })}
         </div>
-      </div>
-
-      {/* Ligne 2 : navigation période */}
-      <div className="mb-3.5 flex items-center justify-between rounded-full border border-line bg-surface p-1">
-        <button onClick={() => shiftPeriod(-1)} aria-label="Période précédente" className="h-9 w-9 rounded-full bg-surface2 text-lg">‹</button>
-        <div className="text-center leading-tight">
-          <span className="block text-[10.5px] font-black uppercase tracking-[0.12em] text-accent">
-            {mode === "month" ? "Mois" : `Semaine ${isoWeek(cursor)}`}
-          </span>
-          <span className="text-sm font-black">{periodLabel(mode, cursor)}</span>
-        </div>
-        <button onClick={() => shiftPeriod(1)} aria-label="Période suivante" className="h-9 w-9 rounded-full bg-surface2 text-lg">›</button>
+        {/* Bouton vacances — sportifs uniquement */}
+        {!isCoach && (() => {
+          const onVacation = !!vacationStart && todayKey >= vacationStart && (!vacationEnd || todayKey <= vacationEnd);
+          const hasVacation = !!vacationStart;
+          return (
+            <>
+              <div className="mx-1 w-px self-stretch bg-line" />
+              <button
+                onClick={() => setVacationOpen(true)}
+                title="Mode vacances"
+                aria-label="Mode vacances"
+                className={`grid w-9 shrink-0 touch-manipulation place-items-center rounded-full transition ${
+                  onVacation ? "bg-orange-500/25" : hasVacation ? "opacity-60" : "opacity-40 hover:opacity-70"
+                }`}
+              >
+                <svg aria-hidden width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" className={onVacation ? "text-orange-400" : "text-dim"}>
+                  <circle cx="12" cy="12" r="4" /><path d="M12 2v2M12 20v2M4.9 4.9l1.4 1.4M17.7 17.7l1.4 1.4M2 12h2M20 12h2M4.9 19.1l1.4-1.4M17.7 6.3l1.4-1.4" />
+                </svg>
+              </button>
+            </>
+          );
+        })()}
       </div>
 
       {/* Zone "À placer" — masquée quand elle est vide (le coach garde ses actions) */}
