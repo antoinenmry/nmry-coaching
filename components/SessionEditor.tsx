@@ -500,11 +500,14 @@ export default function SessionEditor({
         )}
 
         {/* Ressenti de la séance : 5 gouttes, 3/5 = 3 gouttes pleines */}
-        <FeelDrops
-          value={session.emoji}
-          readOnly={isCoach && !isSelf}
-          onChange={(v) => patchSession({ emoji: v })}
-        />
+        {/* Côté coach (création / édition) : inutile tant que le sportif n'a rien saisi. */}
+        {(!isCoach || isSelf || session.emoji > 0) && (
+          <FeelDrops
+            value={session.emoji}
+            readOnly={isCoach && !isSelf}
+            onChange={(v) => patchSession({ emoji: v })}
+          />
+        )}
 
         {/* Valider la séance (client, ou coach/admin sur sa propre séance) */}
         {(!isCoach || isSelf) && session.date && (
@@ -1136,10 +1139,13 @@ function ExerciseBlock({
         </>
       )}
 
-      {/* Log par série — visible coach (lecture) + client (édition) */}
-      <SetLogsSection ex={ex} isCoach={isCoach} onPatch={onPatch} />
+      {/* Log par série + RPE sportif : saisie du sportif. Côté coach, affichés seulement
+          quand le sportif a déjà rempli quelque chose (inutiles à la création). */}
+      {(!isCoach || isSelf || (ex.setLogs ?? []).some((l) => l.w > 0 || l.r > 0)) && (
+        <SetLogsSection ex={ex} isCoach={isCoach} onPatch={onPatch} />
+      )}
 
-      {/* RPE client + échec */}
+      {(!isCoach || isSelf || ex.rpeClient > 0 || !!ex.failed) && (
       <div className="mt-2.5">
         <div className="flex items-center gap-2">
           <span className="w-24 shrink-0 text-[13px] font-semibold text-ink">RPE sportif</span>
@@ -1164,6 +1170,7 @@ function ExerciseBlock({
         </div>
         {ex.rpeClient > 0 && !ex.failed && <RpeGauge value={ex.rpeClient} />}
       </div>
+      )}
 
       {/* Commentaire client */}
       {isCoach && !isSelf ? (
@@ -1181,6 +1188,7 @@ function ExerciseBlock({
         </label>
       )}
 
+      {(!isCoach || isSelf) && (
       <button
         type="button"
         onClick={hasNext ? onNext : onToggle}
@@ -1188,6 +1196,7 @@ function ExerciseBlock({
       >
         {hasNext ? "Suivant ›" : "OK"}
       </button>
+      )}
       </div>
       )}
     </div>
