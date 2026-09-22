@@ -9,7 +9,90 @@ import type { ExerciseInstance, Role } from "@/lib/types";
 import { getMaxRecord, saveStrengthRecord } from "@/lib/prDetection";
 import { beforeRemove, cutAt, groupExercises, linkAt, moveWithLinks, toggleGroupType } from "@/lib/exerciseLinks";
 
-const EMOJIS = ["😫", "😕", "😐", "🙂", "🤩"]; // ressenti 1 → 5
+const FEEL_LABELS = ["", "Très dur", "Dur", "Correct", "Bien", "Excellent"]; // ressenti 1 → 5
+const MONTHS_SHORT = ["JANV", "FÉV", "MARS", "AVR", "MAI", "JUIN", "JUIL", "AOÛT", "SEPT", "OCT", "NOV", "DÉC"];
+const DAYS_SHORT = ["DIM", "LUN", "MAR", "MER", "JEU", "VEN", "SAM"];
+
+// Tuile date à la couleur de la séance ; un input date natif invisible la recouvre
+// → un tap ouvre le sélecteur du téléphone pour déplacer la séance.
+function DateTile({ date, color, locked, onChange }: { date: string | null; color: string; locked: boolean; onChange: (v: string) => void }) {
+  const d = date ? new Date(date + "T00:00:00") : null;
+  return (
+    <label
+      className={`relative grid h-[66px] w-[62px] shrink-0 place-content-center rounded-[18px] text-center leading-none text-white ${locked ? "" : "cursor-pointer active:scale-95"}`}
+      style={{
+        background: `linear-gradient(160deg, color-mix(in srgb, ${color} 88%, white), ${color})`,
+        boxShadow: `0 10px 24px -12px ${color}`,
+      }}
+      title={locked ? "Séance validée : date figée" : "Changer la date"}
+    >
+      {d ? (
+        <>
+          <span className="text-[10px] font-black tracking-[0.1em] opacity-90">{DAYS_SHORT[d.getDay()]}</span>
+          <span className="my-0.5 text-[26px] font-black">{d.getDate()}</span>
+          <span className="text-[10px] font-black tracking-[0.1em] opacity-90">{MONTHS_SHORT[d.getMonth()]}</span>
+        </>
+      ) : (
+        <span className="text-[11px] font-black">À placer</span>
+      )}
+      {!locked && (
+        <input
+          type="date"
+          value={date ?? ""}
+          onChange={(e) => onChange(e.target.value)}
+          aria-label="Date de la séance"
+          className="absolute inset-0 !h-full !w-full cursor-pointer opacity-0"
+        />
+      )}
+    </label>
+  );
+}
+
+// Ressenti de la séance en gouttes d'eau : n/5 = n gouttes remplies. Re-toucher la valeur la retire.
+function FeelDrops({ value, readOnly, onChange }: { value: number; readOnly: boolean; onChange: (v: number) => void }) {
+  return (
+    <div className="mt-3 rounded-2xl border border-line bg-surface2 px-3.5 py-3">
+      <div className="mb-1.5 flex items-baseline justify-between">
+        <span className="text-[13px] font-black">Ressenti de la séance</span>
+        <span className={`text-[12px] font-black ${value ? "text-accent2" : "text-dim"}`}>
+          {value ? `${value} / 5 · ${FEEL_LABELS[value]}` : "— / 5"}
+        </span>
+      </div>
+      <div className="grid grid-cols-5">
+        {[1, 2, 3, 4, 5].map((n) => {
+          const on = n <= value;
+          return (
+            <button
+              key={n}
+              type="button"
+              disabled={readOnly}
+              onClick={() => onChange(value === n ? 0 : n)}
+              aria-label={`${n} sur 5`}
+              aria-pressed={on}
+              className="grid place-items-center py-1 transition active:scale-90 disabled:cursor-default"
+            >
+              <svg aria-hidden width="30" height="38" viewBox="0 0 30 40">
+                <defs>
+                  <linearGradient id={`drop-${n}`} x1="0" y1="0" x2="0" y2="1">
+                    <stop offset="0" stopColor="#7cc3f8" />
+                    <stop offset="1" stopColor="#1e88e5" />
+                  </linearGradient>
+                </defs>
+                <path
+                  d="M15 3C15 3 5 16 5 24a10 10 0 0 0 20 0C25 16 15 3 15 3z"
+                  fill={on ? `url(#drop-${n})` : "transparent"}
+                  stroke={on ? "var(--color-accent2)" : "color-mix(in srgb, var(--color-accent2) 55%, var(--color-dim))"}
+                  strokeWidth="1.8"
+                />
+              </svg>
+              <span className={`text-[10px] font-black ${on ? "text-accent2" : "text-dim"}`}>{n}</span>
+            </button>
+          );
+        })}
+      </div>
+    </div>
+  );
+}
 
 // ---- Pace helpers (allure min/km) ----
 
@@ -173,6 +256,7 @@ export default function SessionEditor({
   // Dates supplémentaires cochées dans le calendrier → une copie de la séance par date.
   const [copyDates, setCopyDates] = useState<string[]>([]);
   const [copiedCount, setCopiedCount] = useState(0);
+  const [dupOpen, setDupOpen] = useState(false);
   // Déroulé : une seule ligne d'exercice ouverte à la fois.
   const [openUid, setOpenUid] = useState<string | null>(null);
 
@@ -313,147 +397,126 @@ export default function SessionEditor({
       onClick={(e) => { if (backdropRef.current && e.target === e.currentTarget) onClose(); }}
     >
       <div className="max-h-[90vh] w-full max-w-xl overflow-y-auto overflow-x-hidden rounded-t-3xl border-t border-line bg-surface p-5 sm:rounded-3xl sm:border">
-        <button onClick={onClose} className="float-right grid h-9 w-9 place-items-center rounded-lg bg-surface2" aria-label="Fermer">✕</button>
-
-        <div className="border-l-4 pl-2.5" style={{ borderColor: session.color }}>
-          {isCoach ? (
-            <input
-              value={session.name}
-              onChange={(e) => patchSession({ name: e.target.value })}
-              className="!border-0 !bg-transparent !p-0 text-lg font-bold"
-              aria-label="Nom de la séance"
-            />
-          ) : (
-            <h2 className="text-lg font-bold">{session.name}</h2>
-          )}
-          <p className="text-[13px] text-dim">{session.date ? frenchDate(session.date) : "Non placée (à glisser sur un jour)"}</p>
+        {/* ─── En-tête : tuile date (tap = changer la date) + nom ─── */}
+        <div className="relative flex items-center gap-3 pr-11">
+          <button onClick={onClose} className="absolute right-0 top-0 grid h-9 w-9 place-items-center rounded-full bg-surface2" aria-label="Fermer">✕</button>
+          <DateTile
+            date={session.date}
+            color={session.color}
+            locked={session.done && !isCoach}
+            onChange={(v) => patchSession({ date: v || null })}
+          />
+          <div className="min-w-0 flex-1">
+            {isCoach ? (
+              <input
+                value={session.name}
+                onChange={(e) => patchSession({ name: e.target.value })}
+                className="!border-0 !bg-transparent !p-0 !text-[21px] font-black leading-tight"
+                aria-label="Nom de la séance"
+              />
+            ) : (
+              <h2 className="text-[21px] font-black leading-tight">{session.name}</h2>
+            )}
+            <p className="mt-0.5 text-[12.5px] text-dim">
+              {session.date ? frenchDate(session.date) : "Non placée · touche la date"}
+              {session.done && !isCoach && " · date figée"}
+            </p>
+          </div>
         </div>
 
-        {/* Couleur (coach) */}
+        {/* Réglages coach : couleur + duplication (calendrier seulement au tap) */}
         {isCoach && (
-          <div className="mt-3 flex gap-2">
-            {SESSION_COLORS.map((c) => (
-              <button
-                key={c}
-                onClick={() => patchSession({ color: c })}
-                className={`h-7 w-7 rounded-full border-2 ${session.color === c ? "border-ink" : "border-transparent"}`}
-                style={{ background: c }}
-                aria-label={`Couleur ${c}`}
-              />
-            ))}
-          </div>
-        )}
-
-        {/* Reprogrammer */}
-        <label className="mt-3 block">
-          <span className="mb-1 flex items-center gap-1.5 text-[13px] text-dim">
-            Date (placement)
-            {session.done && <span className="text-[12px]">🔒 figée</span>}
-          </span>
-          <input
-            type="date"
-            value={session.date ?? ""}
-            onChange={(e) => patchSession({ date: e.target.value || null })}
-            disabled={session.done && !isCoach}
-            className={session.done && !isCoach ? "opacity-60 cursor-not-allowed" : ""}
-          />
-        </label>
-
-        {/* Dupliquer sur d'autres dates (coach) — coche plusieurs jours d'un coup */}
-        {isCoach && (
-          <div className="mt-3">
-            <span className="mb-1.5 flex items-center justify-between text-[13px] text-dim">
-              <span>
-                Dupliquer sur d&apos;autres dates
-                {copyDates.length > 0 && ` · ${copyDates.length} sélectionnée${copyDates.length > 1 ? "s" : ""}`}
-              </span>
-              {copyDates.length > 0 && (
-                <button type="button" onClick={() => setCopyDates([])} className="text-[12px] underline">
-                  Effacer
-                </button>
-              )}
-            </span>
-            <MiniCalendar
-              selected={copyDates}
-              marked={session.date ? [session.date] : []}
-              initialMonth={session.date ?? new Date().toISOString().slice(0, 10)}
-              onToggle={(d) =>
-                setCopyDates((prev) => (prev.includes(d) ? prev.filter((x) => x !== d) : [...prev, d].sort()))
-              }
-            />
-            {copiedCount > 0 ? (
-              <p className="mt-2 rounded-xl bg-ok/15 px-3 py-2 text-[13px] font-semibold text-ok">
-                ✅ {copiedCount} copie{copiedCount > 1 ? "s" : ""} créée{copiedCount > 1 ? "s" : ""}
-              </p>
-            ) : (
+          <div className="mt-3.5">
+            <div className="flex items-center gap-2">
+              <div className="flex flex-1 gap-1.5">
+                {SESSION_COLORS.map((c) => (
+                  <button
+                    key={c}
+                    onClick={() => patchSession({ color: c })}
+                    className={`h-6 w-6 rounded-full transition ${session.color === c ? "shadow-[0_0_0_2px_var(--color-surface),0_0_0_4px_var(--color-ink)]" : ""}`}
+                    style={{ background: c }}
+                    aria-label={`Couleur ${c}`}
+                  />
+                ))}
+              </div>
               <button
                 type="button"
-                onClick={confirmDuplicate}
-                disabled={copyDates.length === 0}
-                className="mt-2 w-full rounded-xl py-2.5 text-sm font-semibold text-white disabled:opacity-40"
-                style={{ background: "#a855f7" }}
+                onClick={() => setDupOpen((v) => !v)}
+                aria-expanded={dupOpen}
+                className={`flex h-9 shrink-0 items-center gap-1.5 rounded-full border px-3.5 text-[12.5px] font-black transition ${
+                  dupOpen ? "border-[#a855f7] bg-[#a855f7]/15 text-[#c084fc]" : "border-line bg-surface2 text-ink"
+                }`}
               >
-                {copyDates.length === 0
-                  ? "Coche un ou plusieurs jours"
-                  : `Dupliquer sur ${copyDates.length} date${copyDates.length > 1 ? "s" : ""}`}
+                <svg aria-hidden width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2"><rect x="8" y="8" width="13" height="13" rx="3" /><path d="M16 8V5a2 2 0 0 0-2-2H5a2 2 0 0 0-2 2v9a2 2 0 0 0 2 2h3" /></svg>
+                Dupliquer
               </button>
+            </div>
+            {copiedCount > 0 && (
+              <p className="mt-2 rounded-xl bg-ok/15 px-3 py-2 text-[13px] font-semibold text-ok">
+                {copiedCount} copie{copiedCount > 1 ? "s" : ""} créée{copiedCount > 1 ? "s" : ""}
+              </p>
+            )}
+            {dupOpen && (
+              <div className="mt-2.5">
+                <MiniCalendar
+                  selected={copyDates}
+                  marked={session.date ? [session.date] : []}
+                  initialMonth={session.date ?? new Date().toISOString().slice(0, 10)}
+                  onToggle={(d) =>
+                    setCopyDates((prev) => (prev.includes(d) ? prev.filter((x) => x !== d) : [...prev, d].sort()))
+                  }
+                />
+                <button
+                  type="button"
+                  onClick={() => { confirmDuplicate(); setDupOpen(false); }}
+                  disabled={copyDates.length === 0}
+                  className="mt-2 w-full rounded-full bg-gradient-to-br from-[#c084fc] to-[#a855f7] py-2.5 text-[13px] font-black text-white disabled:opacity-40"
+                >
+                  {copyDates.length === 0
+                    ? "Coche un ou plusieurs jours"
+                    : `Dupliquer sur ${copyDates.length} date${copyDates.length > 1 ? "s" : ""}`}
+                </button>
+              </div>
             )}
           </div>
         )}
 
-        {/* Commentaire coach (séance globale) */}
-        {isCoach ? (
-          <label className="mt-3 block">
-            <span className="mb-1 block text-[13px] text-dim">Commentaire coach (séance)</span>
-            <textarea
-              value={session.coachComment ?? ""}
-              onChange={(e) => patchSession({ coachComment: e.target.value })}
-              placeholder="Consignes générales, objectifs, contexte de la séance…"
-              className="min-h-[60px]"
-            />
-          </label>
-        ) : (session.coachComment ?? "") ? (
-          <div className="mt-3 rounded-xl border border-line bg-surface2 p-3">
-            <span className="mb-1 block text-[13px] text-dim">Note du coach</span>
-            <p className="text-sm">{session.coachComment}</p>
+        {/* Note du coach (séance) — encart à liseré doré */}
+        {(isCoach || (session.coachComment ?? "")) && (
+          <div className="relative mt-4 rounded-2xl bg-surface2 py-2.5 pl-4 pr-3">
+            <span aria-hidden className="absolute bottom-2.5 left-0 top-2.5 w-[3px] rounded-full bg-accent" />
+            <span className="block text-[10px] font-black uppercase tracking-[0.12em] text-accent">Note du coach</span>
+            {isCoach ? (
+              <textarea
+                value={session.coachComment ?? ""}
+                onChange={(e) => patchSession({ coachComment: e.target.value })}
+                placeholder="Consignes générales, objectifs, contexte…"
+                className="!min-h-[44px] !border-0 !bg-transparent !p-0 !text-[14px]"
+              />
+            ) : (
+              <p className="mt-0.5 whitespace-pre-wrap text-[14px] leading-snug">{session.coachComment}</p>
+            )}
           </div>
-        ) : null}
+        )}
 
-        {/* Ressenti séance (client) */}
-        <div className="mt-3 rounded-xl border border-line bg-surface2 p-3">
-          <span className="mb-2 block text-[13px] text-dim">Ressenti de la séance (sportif)</span>
-          <div className="flex gap-2">
-            {EMOJIS.map((emo, i) => {
-              const value = i + 1;
-              const active = session.emoji === value;
-              return (
-                <button
-                  key={value}
-                  disabled={isCoach && !isSelf}
-                  onClick={() => patchSession({ emoji: active ? 0 : value })}
-                  className={`grid h-11 flex-1 place-items-center rounded-lg border text-2xl transition ${
-                    active ? "border-accent bg-accent/15" : "border-line bg-surface"
-                  } ${isCoach && !isSelf ? "opacity-60" : ""}`}
-                  title={`${value}/5`}
-                >
-                  {emo}
-                </button>
-              );
-            })}
-          </div>
-        </div>
+        {/* Ressenti de la séance : 5 gouttes, 3/5 = 3 gouttes pleines */}
+        <FeelDrops
+          value={session.emoji}
+          readOnly={isCoach && !isSelf}
+          onChange={(v) => patchSession({ emoji: v })}
+        />
 
         {/* Valider la séance (client, ou coach/admin sur sa propre séance) */}
         {(!isCoach || isSelf) && session.date && (
           <button
             onClick={() => patchSession({ done: !session.done })}
-            className={`mt-3 w-full rounded-xl py-3 font-semibold transition ${
+            className={`mt-3 w-full rounded-full py-3 font-black transition active:scale-[0.98] ${
               session.done
-                ? "bg-ok text-[#06210a]"
-                : "border border-dashed border-ok text-ok"
+                ? "bg-surface2 text-ok shadow-[inset_0_0_0_1.5px_var(--color-ok)]"
+                : "bg-gradient-to-br from-[#86d98a] to-[#43a047] text-[#0d2410] shadow-[0_8px_22px_-10px_rgba(102,187,106,0.9)]"
             }`}
           >
-            {session.done ? "✅ Séance validée · toucher pour annuler" : "✅ Valider la séance"}
+            {session.done ? "Séance validée · toucher pour annuler" : "Valider la séance"}
           </button>
         )}
 
