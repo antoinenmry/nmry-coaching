@@ -173,6 +173,8 @@ export default function SessionEditor({
   // Dates supplémentaires cochées dans le calendrier → une copie de la séance par date.
   const [copyDates, setCopyDates] = useState<string[]>([]);
   const [copiedCount, setCopiedCount] = useState(0);
+  // Déroulé : une seule ligne d'exercice ouverte à la fois.
+  const [openUid, setOpenUid] = useState<string | null>(null);
 
   const videoById = Object.fromEntries(library.exercises.map((e) => [e.id, e.video]));
 
@@ -455,14 +457,30 @@ export default function SessionEditor({
           </button>
         )}
 
-        <div className="mt-3">
+        <div className="mt-4">
+          {session.exercises.length > 0 && (
+            <div className="mb-2 flex items-center justify-between px-0.5">
+              <span className="text-[11px] font-black uppercase tracking-[0.14em] text-dim">Déroulé</span>
+              <span className="text-[11px] font-black text-dim">
+                {(!isCoach || isSelf || session.exercises.some(exerciseStatusDone))
+                  ? `${session.exercises.filter(exerciseStatusDone).length} / ${session.exercises.length} fait`
+                  : `${session.exercises.length} exercice${session.exercises.length > 1 ? "s" : ""}`}
+              </span>
+            </div>
+          )}
           {(() => {
             const renderEx = (idx: number) => {
               const ex = session.exercises[idx];
+              const next = session.exercises[idx + 1];
               return (
                 <ExerciseBlock
                   key={ex.uid}
                   ex={ex}
+                  color={session.color}
+                  open={openUid === ex.uid}
+                  onToggle={() => setOpenUid(openUid === ex.uid ? null : ex.uid)}
+                  onNext={() => setOpenUid(next ? next.uid : null)}
+                  hasNext={!!next}
                   index={idx}
                   total={session.exercises.length}
                   video={videoById[ex.exId]}
@@ -766,8 +784,19 @@ function SetLogsSection({
   );
 }
 
+// Un exercice compte comme « fait » dès que le sportif a saisi quelque chose de réalisé.
+function exerciseStatusDone(ex: ExerciseInstance): boolean {
+  if (ex.failed) return false;
+  return (ex.weightClient ?? 0) > 0 || ex.rpeClient > 0 || (ex.setLogs ?? []).some((l) => l.w > 0 || l.r > 0);
+}
+
 function ExerciseBlock({
   ex,
+  color,
+  open,
+  onToggle,
+  onNext,
+  hasNext,
   index,
   total,
   video,
@@ -781,6 +810,11 @@ function ExerciseBlock({
   onSaveRecord,
 }: {
   ex: ExerciseInstance;
+  color: string;
+  open: boolean;
+  onToggle: () => void;
+  onNext: () => void;
+  hasNext: boolean;
   index: number;
   total: number;
   video?: string;
@@ -811,14 +845,60 @@ function ExerciseBlock({
   const showBanner = isPr && effectiveWeight !== ex.prDismissedWeight;
   const showSaved = savedWeight !== null && effectiveWeight === savedWeight && !isPr;
 
+  // ─── Ligne du déroulé : nom + note | séries × reps | charge ───
+  const done = exerciseStatusDone(ex);
+  const barColor = open
+    ? "var(--color-accent)"
+    : ex.failed
+      ? "var(--color-danger)"
+      : done
+        ? "var(--color-ok)"
+        : isCoach && !isSelf
+          ? color
+          : "#6b7280";
+  const setsReps = [ex.setsLabel ?? (ex.sets || ""), ex.repsLabel ?? (ex.reps || "")].filter((v) => v !== "").join(" × ");
+  const prescribed = ex.weightLabel || (ex.weight > 0 ? (isPace ? fmtPaceDisplay(ex.weight) : `${ex.weight} kg`) : "");
+  const realized = hasRealized ? (isPace ? fmtPaceDisplay(ex.weightClient ?? 0) : `${ex.weightClient} kg`) : "";
+
   return (
-    <div className="rounded-xl border border-line bg-surface2 p-3">
-      {/* En-tête : nom + contrôles */}
+    <div
+      className={`overflow-hidden rounded-2xl border transition ${open ? "border-accent/50" : "border-line"}`}
+      style={{
+        background: open
+          ? "linear-gradient(180deg, color-mix(in srgb, var(--color-accent) 8%, var(--color-surface2)), var(--color-surface2))"
+          : "var(--color-surface2)",
+      }}
+    >
+      <button
+        type="button"
+        onClick={onToggle}
+        aria-expanded={open}
+        className="grid w-full grid-cols-[4px_minmax(0,1fr)_auto_minmax(0,68px)] items-center gap-3 px-3 py-3 text-left"
+      >
+        <span aria-hidden className="min-h-[22px] self-stretch rounded" style={{ background: barColor }} />
+        <span className="min-w-0">
+          <span className="block text-[15px] font-black leading-tight">{ex.name}</span>
+          {(ex.coachComment ?? "") && (
+            <span className="mt-0.5 line-clamp-2 block text-[12px] leading-snug text-dim">{ex.coachComment}</span>
+          )}
+        </span>
+        <span className="whitespace-nowrap text-right text-[15px] font-black">{setsReps || "—"}</span>
+        <span
+          className={`truncate text-right text-[14px] ${
+            ex.failed ? "font-black text-danger" : realized ? "font-black text-ok" : prescribed ? "font-bold text-dim" : "text-dim"
+          }`}
+        >
+          {ex.failed ? "Raté" : realized || prescribed || "—"}
+        </span>
+      </button>
+
+      {open && (
+      <div className="border-t border-line/60 px-3 pb-3 pt-2.5">
+      {/* Contrôles : vidéo + ordre / retrait (coach) */}
       <div className="mb-2.5 flex items-center justify-between gap-2">
         <div className="min-w-0 flex-1">
-          <span className="font-bold">{ex.name}</span>
           {video && (
-            <a href={video} target="_blank" rel="noreferrer" className="ml-2 text-[13px] text-accent2">▶ vidéo</a>
+            <a href={video} target="_blank" rel="noreferrer" className="text-[13px] font-bold text-accent2">▶ Voir la vidéo</a>
           )}
         </div>
         {isCoach && (
@@ -894,17 +974,10 @@ function ExerciseBlock({
         </>
       ) : (
         <>
-          {/* Vue client — prescription en lecture seule */}
-          <div className="flex flex-wrap gap-x-4 gap-y-1 text-sm">
-            <span><strong>{ex.setsLabel ?? ex.sets}</strong> × <strong>{ex.repsLabel ?? ex.reps}</strong> reps</span>
-            {(ex.weightLabel || ex.weight > 0) && (
-              <span className="rounded-md bg-surface px-2 py-0.5 text-[12px] font-semibold text-dim">
-                Prescrit : {ex.weightLabel ?? (isPace ? fmtPaceDisplay(ex.weight) : `${ex.weight} kg`)}
-              </span>
-            )}
-          </div>
-          {(ex.coachComment ?? "") && (
-            <p className="mt-1.5 rounded-lg bg-surface p-2 text-[13px]"><span className="text-dim">Coach : </span>{ex.coachComment}</p>
+          {/* Vue client — la prescription est dans la ligne ; ici la note complète du coach
+              (elle est tronquée à 2 lignes dans la ligne repliée). */}
+          {(ex.coachComment ?? "").length > 90 && (
+            <p className="rounded-lg bg-surface p-2 text-[13px]"><span className="text-dim">Coach : </span>{ex.coachComment}</p>
           )}
         </>
       )}
@@ -1008,7 +1081,7 @@ function ExerciseBlock({
         <div className="flex items-center gap-2">
           <span className="w-24 shrink-0 text-[13px] font-semibold text-ink">RPE sportif</span>
           {ex.failed ? (
-            <span className="rounded-lg bg-danger/20 px-2.5 py-1 text-sm font-bold text-danger">❌ Raté</span>
+            <span className="rounded-lg bg-danger/20 px-2.5 py-1 text-sm font-bold text-danger">Raté</span>
           ) : (
             <span className={`rounded-lg px-2.5 py-1 text-sm font-bold ${ex.rpeClient ? "bg-accent2 text-[#06121f]" : "bg-surface text-dim"}`}>
               {ex.rpeClient ? `${ex.rpeClient}/10` : "—"}
@@ -1022,8 +1095,8 @@ function ExerciseBlock({
               type="button"
               onClick={() => onPatch({ failed: !ex.failed, ...(ex.failed ? {} : { rpeClient: 0 }) })}
               title={ex.failed ? "Retirer l'échec" : "Marquer comme raté"}
-              className={`shrink-0 rounded-lg px-2 py-1 text-[13px] transition ${ex.failed ? "bg-danger text-white" : "bg-surface2 text-dim hover:text-danger"}`}
-            >❌</button>
+              className={`shrink-0 rounded-full border px-2.5 py-1 text-[12px] font-black transition ${ex.failed ? "border-danger bg-danger text-white" : "border-danger/40 text-danger"}`}
+            >{ex.failed ? "Annuler raté" : "Raté"}</button>
           )}
         </div>
         {ex.rpeClient > 0 && !ex.failed && <RpeGauge value={ex.rpeClient} />}
@@ -1043,6 +1116,16 @@ function ExerciseBlock({
             className="min-h-[60px]"
           />
         </label>
+      )}
+
+      <button
+        type="button"
+        onClick={hasNext ? onNext : onToggle}
+        className="mt-3 w-full rounded-full bg-gradient-to-br from-[#ffc53d] to-[#ff9f00] py-2.5 text-[13px] font-black text-[#1a1500] transition active:scale-[0.98]"
+      >
+        {hasNext ? "Suivant ›" : "OK"}
+      </button>
+      </div>
       )}
     </div>
   );
