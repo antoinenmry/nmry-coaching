@@ -35,8 +35,14 @@ const emojiOf = (n: number) => (n >= 1 && n <= 5 ? EMOJIS[n - 1] + " " : "");
 // nombre d'actions réellement visibles. 10px est la taille qui tient encore sur les
 // écrans les plus étroits (375px) : au-delà, « Séance » déborde de sa tuile.
 const TILE =
-  "grid h-10 place-items-center rounded-lg border px-px text-center text-[10px] font-semibold leading-tight tracking-tight transition";
-const TILE_SECONDARY = "border-line bg-surface2 text-ink hover:bg-surface";
+  "grid h-12 place-items-center rounded-[13px] border px-px text-center text-[10px] font-black leading-tight tracking-tight transition active:scale-95";
+// Léger relief (dégradé vertical) sur les tuiles neutres ; Créer en vert et Notif en or.
+const TILE_SECONDARY =
+  "border-line bg-[linear-gradient(180deg,color-mix(in_srgb,var(--color-surface2)_100%,white_4%),var(--color-surface2))] text-ink hover:brightness-110";
+const TILE_CREATE =
+  "border-ok/55 bg-[linear-gradient(160deg,color-mix(in_srgb,var(--color-ok)_38%,transparent),color-mix(in_srgb,var(--color-ok)_12%,transparent))] text-ok";
+const TILE_NOTIF =
+  "border-accent/50 bg-[linear-gradient(160deg,color-mix(in_srgb,var(--color-accent)_32%,transparent),color-mix(in_srgb,var(--color-accent)_8%,transparent))] text-accent hover:brightness-110 disabled:opacity-50";
 
 export default function PlanPage() {
   const { state, update, role, setRole, loading, clients, activeUserId, me, recordPlanNotif, templates } = useData();
@@ -190,12 +196,16 @@ export default function PlanPage() {
 
       {/* Barre d'outils — ligne 1 : modes + vacances */}
       <div className="mb-2 flex items-center gap-2">
-        <div className="flex flex-1 rounded-lg bg-surface2 p-1">
+        <div className="flex flex-1 rounded-full border border-line bg-surface p-1">
           {(["month", "week", "synthesis"] as const).map((m) => (
             <button
               key={m}
               onClick={() => setMode(m)}
-              className={`flex-1 rounded-md px-1 py-2 text-[13px] font-semibold ${mode === m ? "bg-accent text-[#1a1500]" : "text-dim"}`}
+              className={`flex-1 rounded-full px-1 py-2 text-[13px] font-black transition ${
+                mode === m
+                  ? "bg-gradient-to-br from-[#ffc53d] to-[#ff9f00] text-[#1a1500] shadow-[0_6px_18px_-6px_rgba(255,170,0,0.7)]"
+                  : "text-dim"
+              }`}
             >
               {m === "month" ? "Mois" : m === "week" ? "Semaine" : "Synthèse"}
             </button>
@@ -210,7 +220,7 @@ export default function PlanPage() {
                 <button
                   onClick={() => setVacationOpen(true)}
                   title="Mode vacances"
-                  className={`rounded-md px-2.5 py-2 text-base transition ${
+                  className={`rounded-full px-2.5 py-2 text-base transition ${
                     onVacation
                       ? "bg-orange-500/25"
                       : hasVacation
@@ -227,15 +237,20 @@ export default function PlanPage() {
       </div>
 
       {/* Ligne 2 : navigation période */}
-      <div className="mb-3 flex items-center justify-center gap-2.5">
-        <button onClick={() => shiftPeriod(-1)} className="h-9 w-9 rounded-lg bg-surface2 text-lg">‹</button>
-        <span className="min-w-[130px] text-center text-sm font-bold">{periodLabel(mode, cursor)}</span>
-        <button onClick={() => shiftPeriod(1)} className="h-9 w-9 rounded-lg bg-surface2 text-lg">›</button>
+      <div className="mb-3.5 flex items-center justify-between rounded-full border border-line bg-surface p-1">
+        <button onClick={() => shiftPeriod(-1)} aria-label="Période précédente" className="h-9 w-9 rounded-full bg-surface2 text-lg">‹</button>
+        <div className="text-center leading-tight">
+          <span className="block text-[10.5px] font-black uppercase tracking-[0.12em] text-accent">
+            {mode === "month" ? "Mois" : `Semaine ${isoWeek(cursor)}`}
+          </span>
+          <span className="text-sm font-black">{periodLabel(mode, cursor)}</span>
+        </div>
+        <button onClick={() => shiftPeriod(1)} aria-label="Période suivante" className="h-9 w-9 rounded-full bg-surface2 text-lg">›</button>
       </div>
 
       {/* Zone "À placer" */}
       <div
-        className="mb-3.5 rounded-xl border border-line bg-surface p-3"
+        className="mb-3.5 rounded-[20px] border border-line bg-[radial-gradient(120%_80%_at_0%_0%,rgba(255,179,0,0.10),transparent_60%),var(--color-surface)] p-3.5"
         onDragOver={(e) => e.preventDefault()}
         onDrop={(e) => {
           e.preventDefault();
@@ -243,17 +258,20 @@ export default function PlanPage() {
           if (id) place(id, null);
         }}
       >
-        <div className="mb-2 flex items-center justify-between">
-          <span className="text-sm font-bold">À placer ({bank.length})</span>
+        <div className="mb-3 flex items-center">
+          <span className="text-[15px] font-black">À placer</span>
+          <span className="ml-1.5 inline-grid h-[22px] min-w-[22px] place-items-center rounded-full bg-surface2 px-1.5 text-[11px] font-black">
+            {bank.length}
+          </span>
         </div>
         {/* Barre d'actions coach — géométrie uniforme (même hauteur, pas de retour à
             la ligne) sur une rangée défilante : le titre ne comprime plus les boutons.
             Hiérarchie de couleur réduite à 3 niveaux : action principale (créer),
             actions secondaires (neutres), envoi (accent). */}
         {isCoach && (
-          <div className="mb-2.5 grid auto-cols-fr grid-flow-col gap-1">
+          <div className="mb-3 grid auto-cols-fr grid-flow-col gap-[5px]">
             <button onClick={() => setComposing(true)} title="Créer une séance"
-              className={`${TILE} border-ok/50 bg-ok/20 text-ok`}>
+              className={`${TILE} ${TILE_CREATE}`}>
               Créer
             </button>
             {(templates.sessionTemplates ?? []).length > 0 && (
@@ -281,16 +299,17 @@ export default function PlanPage() {
               onClick={notifyNewPlan}
               disabled={notifying}
               title="Notifier le sportif d'une mise à jour"
-              className={`${TILE} border-accent/40 bg-accent/15 text-accent hover:bg-accent/25 disabled:opacity-50`}
+              className={`${TILE} ${TILE_NOTIF}`}
             >
               {notifying ? "…" : notifSent ? "Envoyé" : "Notif"}
             </button>
           </div>
         )}
         {bank.length === 0 ? (
-          <p className="py-2 text-[13px] text-dim">
-            {isCoach ? "Crée des séances ; elles apparaîtront ici à placer sur les jours." : "Aucune séance à placer pour l'instant."}
-          </p>
+          <div className="flex items-center gap-2.5 rounded-[14px] border-[1.5px] border-dashed border-line p-3 text-[12.5px] leading-snug text-dim">
+            <span className="grid h-[30px] w-[30px] shrink-0 place-items-center rounded-full bg-surface2 font-black text-accent">+</span>
+            {isCoach ? "Crée des séances : elles apparaîtront ici, prêtes à glisser sur un jour." : "Aucune séance à placer pour l'instant."}
+          </div>
         ) : (
           <div className="flex gap-2.5 overflow-x-auto pb-1">
             {bank.map((s) => (
@@ -299,29 +318,33 @@ export default function PlanPage() {
                 draggable
                 onDragStart={(e) => e.dataTransfer.setData("text/session", s.id)}
                 onClick={() => setPending(pending === s.id ? null : s.id)}
-                className={`flex-none cursor-grab select-none rounded-xl border bg-surface2 px-3 py-2.5 ${
-                  pending === s.id ? "border-accent" : "border-line"
+                className={`relative flex-none cursor-grab select-none overflow-hidden rounded-[14px] border py-2.5 pl-3.5 pr-3 ${
+                  pending === s.id ? "ring-2 ring-accent" : ""
                 }`}
-                style={{ borderLeft: `5px solid ${s.color}` }}
+                style={{
+                  background: `linear-gradient(105deg, color-mix(in srgb, ${s.color} 30%, var(--color-surface2)), var(--color-surface2) 90%)`,
+                  borderColor: `color-mix(in srgb, ${s.color} 36%, transparent)`,
+                }}
               >
+                <span aria-hidden className="absolute inset-y-0 left-0 w-1" style={{ background: s.color }} />
                 <div className="flex items-center gap-2">
-                  <span className="text-sm font-semibold">{s.name}</span>
+                  <span className="text-sm font-black">{s.name}</span>
                   {isCoach && (
                     <>
                       <button
                         onClick={(e) => { e.stopPropagation(); setEditing(s.id); }}
                         aria-label="Modifier la séance"
-                        className="grid h-6 w-6 shrink-0 place-items-center rounded-md bg-surface text-[12px]"
+                        className="grid h-6 w-6 shrink-0 place-items-center rounded-md bg-black/25 text-[12px]"
                       >✏️</button>
                       <button
                         onClick={(e) => { e.stopPropagation(); deleteBankSession(s.id); }}
                         aria-label="Supprimer la séance"
-                        className="grid h-6 w-6 shrink-0 place-items-center rounded-md bg-surface text-[12px]"
+                        className="grid h-6 w-6 shrink-0 place-items-center rounded-md bg-black/25 text-[12px]"
                       >🗑️</button>
                     </>
                   )}
                 </div>
-                <span className="text-[11px] text-dim">{s.exercises.length} exercice{s.exercises.length > 1 ? "s" : ""}</span>
+                <span className="text-[11px] text-ink/70">{s.exercises.length} exercice{s.exercises.length > 1 ? "s" : ""}</span>
               </div>
             ))}
           </div>
@@ -1324,6 +1347,14 @@ function TransferWeekModal({
       </div>
     </div>
   );
+}
+
+// Numéro de semaine ISO 8601 (semaine du jeudi).
+function isoWeek(d: Date) {
+  const t = new Date(Date.UTC(d.getFullYear(), d.getMonth(), d.getDate()));
+  t.setUTCDate(t.getUTCDate() + 3 - ((t.getUTCDay() + 6) % 7));
+  const jan4 = new Date(Date.UTC(t.getUTCFullYear(), 0, 4));
+  return 1 + Math.round(((t.getTime() - jan4.getTime()) / 86400000 - 3 + ((jan4.getUTCDay() + 6) % 7)) / 7);
 }
 
 function periodLabel(mode: "month" | "week" | "synthesis", cursor: Date) {
