@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useRef, useState } from "react";
+import { createPortal } from "react-dom";
 import { useData } from "@/components/DataProvider";
 import { createClient } from "@/lib/supabase/client";
 import dynamic from "next/dynamic";
@@ -74,6 +75,9 @@ export default function LibraryPage() {
   const [viewing, setViewing] = useState<{ ex: LibraryExercise; edit: boolean } | null>(null);
   const [creating, setCreating] = useState(false);
   const [managingFilters, setManagingFilters] = useState(false);
+  const [sheetEx, setSheetEx] = useState<LibraryExercise | null>(null);
+  const [collapsedGroups, setCollapsedGroups] = useState<string[]>([]);
+  const [expandedGroups, setExpandedGroups] = useState<string[]>([]);
 
   // --- Onglet Séances types ---
   const [editingSession, setEditingSession] = useState<SessionTemplate | null | "new">(null);
@@ -144,6 +148,39 @@ export default function LibraryPage() {
     });
   }, [lib.exercises, lib.categories, selected, search]);
 
+  // Groupes = options de la 1ʳᵉ catégorie de filtres (ex. zone du corps) ; un exercice
+  // est rangé sous sa première option, les autres sous « Autres ».
+  const groupCat = lib.categories[0];
+  const otherFilterCount = lib.categories.slice(1).reduce((n, c) => n + (selected[c.id]?.length ?? 0), 0);
+  const groupOptionOf = (ex: LibraryExercise) => {
+    if (!groupCat) return null;
+    const sel = selected[groupCat.id] ?? [];
+    const ids = ex.tags[groupCat.id] ?? [];
+    const id = ids.find((t) => sel.includes(t)) ?? ids[0];
+    const idx = groupCat.options.findIndex((o) => o.id === id);
+    return idx === -1 ? null : { opt: groupCat.options[idx], idx };
+  };
+  const colorOfExercise = (ex: LibraryExercise) => {
+    const g = groupOptionOf(ex);
+    return g ? optColor(g.opt, g.idx) : "var(--color-dim)";
+  };
+  const groupLabelOf = (ex: LibraryExercise) => groupOptionOf(ex)?.opt.label ?? "";
+  const exerciseGroups = useMemo(() => {
+    const out: { id: string; label: string; color: string; items: LibraryExercise[] }[] = [];
+    (groupCat?.options ?? []).forEach((opt, i) => out.push({ id: opt.id, label: opt.label, color: optColor(opt, i), items: [] }));
+    const others = { id: "__others", label: groupCat ? "Autres" : "Tous les exercices", color: "var(--color-dim)", items: [] as LibraryExercise[] };
+    filtered.forEach((ex) => {
+      const g = groupOptionOf(ex);
+      (g ? out.find((x) => x.id === g.opt.id)!.items : others.items).push(ex);
+    });
+    return [...out, others].filter((g) => g.items.length > 0);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [filtered, groupCat, selected]);
+  const toggleFav = (id: string) =>
+    update((s) => {
+      s.preferences.favoriteExerciseId = s.preferences.favoriteExerciseId === id ? undefined : id;
+    });
+
   function countFor(catId: string, optId: string | null) {
     const base = lib.exercises.filter((ex) =>
       lib.categories.every((c) => {
@@ -161,11 +198,11 @@ export default function LibraryPage() {
     <div>
       {/* En-tête */}
       <div className="mb-4 flex items-center justify-between gap-3">
-        <h2 className="text-xl font-bold">📚 Bibliothèque</h2>
+        <h2 className="text-xl font-black">Bibliothèque</h2>
       </div>
 
       {/* Tabs */}
-      <div className="mb-5 flex gap-1 rounded-xl border border-line bg-surface2 p-1">
+      <div className="mb-5 flex gap-1 overflow-x-auto rounded-full border border-line bg-surface p-1 [scrollbar-width:none]">
         <TabButton active={tab === "exercises"} onClick={() => setTab("exercises")} label="Exercices" count={lib.exercises.length} />
         {canEdit && (
           <>
@@ -183,23 +220,29 @@ export default function LibraryPage() {
       {/* ===== TAB : EXERCICES ===== */}
       {tab === "exercises" && (
         <div>
-          {/* Actions coach */}
-          {canEdit && (
-            <div className="mb-4 flex justify-end gap-2">
-              <button
-                onClick={() => setManagingFilters(true)}
-                className="rounded-lg border border-line bg-surface2 px-3 py-2 text-[13px] font-semibold"
-              >
-                Gérer les filtres
-              </button>
-              <button
-                onClick={() => setCreating(true)}
-                className="rounded-lg bg-ok px-3 py-2 text-[13px] font-semibold text-[#06210a]"
-              >
-                + Créer un exercice
-              </button>
-            </div>
-          )}
+          {/* En-tête : titre + gérer les filtres + créer (coach) */}
+          <div className="mb-3 flex items-center gap-2">
+            <h3 className="flex-1 text-xl font-black">Exercices</h3>
+            {canEdit && (
+              <>
+                <button
+                  onClick={() => setManagingFilters(true)}
+                  aria-label="Gérer les filtres"
+                  title="Gérer les filtres"
+                  className="grid h-11 w-11 place-items-center rounded-full border border-line bg-surface text-dim"
+                >
+                  <svg aria-hidden width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round"><path d="M4 6h10M18 6h2M4 12h4M12 12h8M4 18h12" /><circle cx="16" cy="6" r="2" /><circle cx="10" cy="12" r="2" /><circle cx="18" cy="18" r="2" /></svg>
+                </button>
+                <button
+                  onClick={() => setCreating(true)}
+                  aria-label="Créer un exercice"
+                  className="grid h-11 w-11 place-items-center rounded-full bg-gradient-to-br from-[#ffc53d] to-[#ff9f00] text-2xl font-black leading-none text-[#1a1500] shadow-[0_6px_18px_-6px_rgba(255,170,0,0.7)] transition active:scale-95"
+                >
+                  +
+                </button>
+              </>
+            )}
+          </div>
 
           {/* Recherche */}
           <input
@@ -207,50 +250,56 @@ export default function LibraryPage() {
             value={search}
             onChange={(e) => setSearch(e.target.value)}
             placeholder="Rechercher un exercice…"
-            className="mb-4 w-full"
+            className="mb-2.5 w-full"
           />
 
-          {/* Filtres — barre de déclenchement */}
-          <div className="mb-3 flex items-center gap-2">
-            <button
-              onClick={() => setFiltersOpen((o) => !o)}
-              className={`flex flex-1 items-center gap-2 rounded-xl border px-3 py-2 text-[13px] transition ${
-                activeFilterCount > 0
-                  ? "border-accent/60 bg-accent/10 text-accent"
-                  : "border-line bg-surface2 text-dim hover:text-ink"
-              }`}
-            >
-              <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><line x1="4" y1="6" x2="20" y2="6"/><line x1="8" y1="12" x2="16" y2="12"/><line x1="11" y1="18" x2="13" y2="18"/></svg>
-              Filtres
-              {activeFilterCount > 0 && (
-                <span className="ml-1 rounded-full bg-accent px-1.5 py-0.5 text-[10px] font-semibold text-[#1a1500]">
-                  {activeFilterCount}
-                </span>
-              )}
-              <svg
-                width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"
-                className={`ml-auto transition-transform duration-200 ${filtersOpen ? "rotate-180" : ""}`}
-                aria-hidden="true"
-              >
-                <polyline points="6 9 12 15 18 9"/>
-              </svg>
-            </button>
-            {activeFilterCount > 0 && (
+          {/* Filtre rapide : pastilles du groupe (1ʳᵉ catégorie) + accès aux autres filtres */}
+          <div className="-mx-1 mb-2 flex gap-1.5 overflow-x-auto px-1 pb-1 [scrollbar-width:none]">
+            {groupCat && (
+              <>
+                <button
+                  onClick={() => setSelected((s) => ({ ...s, [groupCat.id]: [] }))}
+                  className={`flex shrink-0 items-center gap-1.5 rounded-full border px-3 py-1.5 text-[12px] font-black ${
+                    !(selected[groupCat.id]?.length) ? "border-accent bg-accent/15 text-ink" : "border-line bg-surface text-dim"
+                  }`}
+                >
+                  Tout <span className="font-bold opacity-70">{countFor(groupCat.id, null)}</span>
+                </button>
+                {groupCat.options.map((opt, i) => {
+                  const on = (selected[groupCat.id] ?? []).includes(opt.id);
+                  const c = optColor(opt, i);
+                  return (
+                    <button
+                      key={opt.id}
+                      onClick={() => setSelected((s) => ({ ...s, [groupCat.id]: on ? [] : [opt.id] }))}
+                      className={`flex shrink-0 items-center gap-1.5 rounded-full border px-3 py-1.5 text-[12px] font-black ${on ? "text-ink" : "border-line bg-surface text-dim"}`}
+                      style={on ? { borderColor: c, background: `color-mix(in srgb, ${c} 20%, var(--color-surface))` } : undefined}
+                    >
+                      <span className="h-2 w-2 rounded-full" style={{ background: c }} />
+                      {opt.label} <span className="font-bold opacity-70">{countFor(groupCat.id, opt.id)}</span>
+                    </button>
+                  );
+                })}
+              </>
+            )}
+            {lib.categories.length > 1 && (
               <button
-                onClick={() => setSelected({})}
-                className="rounded-xl border border-line px-3 py-2 text-[12px] text-dim hover:text-danger"
+                onClick={() => setFiltersOpen((o) => !o)}
+                className={`flex shrink-0 items-center gap-1.5 rounded-full border px-3 py-1.5 text-[12px] font-black ${
+                  filtersOpen || otherFilterCount > 0 ? "border-accent/60 bg-accent/10 text-accent" : "border-line bg-surface text-dim"
+                }`}
               >
-                Effacer filtres
+                Plus de filtres{otherFilterCount > 0 ? ` · ${otherFilterCount}` : ""} {filtersOpen ? "▴" : "▾"}
               </button>
             )}
           </div>
 
-          {/* Panneau filtres déroulant */}
+          {/* Autres catégories de filtres (panneau déroulant) */}
           {filtersOpen && (
-            <div className="mb-3 rounded-xl border border-line bg-surface p-3 space-y-3">
-              {lib.categories.map((cat) => (
+            <div className="mb-3 space-y-3 rounded-2xl border border-line bg-surface p-3">
+              {lib.categories.slice(1).map((cat) => (
                 <div key={cat.id}>
-                  <span className="mb-1.5 block text-[10px] font-semibold uppercase tracking-wide text-dim">{cat.name}</span>
+                  <span className="mb-1.5 block text-[10.5px] font-black uppercase tracking-[0.12em] text-dim">{cat.name}</span>
                   <div className="flex flex-wrap gap-1.5">
                     <Chip
                       active={!(selected[cat.id]?.length)}
@@ -267,12 +316,7 @@ export default function LibraryPage() {
                         onClick={() =>
                           setSelected((s) => {
                             const cur = s[cat.id] ?? [];
-                            return {
-                              ...s,
-                              [cat.id]: cur.includes(opt.id)
-                                ? cur.filter((x) => x !== opt.id)
-                                : [...cur, opt.id],
-                            };
+                            return { ...s, [cat.id]: cur.includes(opt.id) ? cur.filter((x) => x !== opt.id) : [...cur, opt.id] };
                           })
                         }
                       />
@@ -280,37 +324,79 @@ export default function LibraryPage() {
                   </div>
                 </div>
               ))}
+              {activeFilterCount > 0 && (
+                <button onClick={() => setSelected({})} className="text-[12px] font-bold text-dim underline">
+                  Effacer tous les filtres
+                </button>
+              )}
             </div>
           )}
 
-          {/* Cartes exercices */}
+          {/* Liste compacte par groupe */}
           {filtered.length === 0 ? (
             <p className="py-10 text-center text-dim">Aucun exercice pour ces filtres.</p>
           ) : (
-            <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
-              {filtered.map((ex) => (
-                <ExerciseCard
-                  key={ex.id}
-                  ex={ex}
-                  tagLabels={tagLabels(ex, lib.categories)}
-                  canEdit={canEdit}
-                  isFav={state.preferences?.favoriteExerciseId === ex.id}
-                  onFav={() =>
-                    update((s) => {
-                      s.preferences.favoriteExerciseId =
-                        s.preferences.favoriteExerciseId === ex.id ? undefined : ex.id;
-                    })
-                  }
-                  onView={() => setViewing({ ex, edit: false })}
-                  onEdit={() => setViewing({ ex, edit: true })}
-                  onDelete={() =>
-                    updateLibrary((lib) => {
-                      lib.exercises = lib.exercises.filter((e) => e.id !== ex.id);
-                    })
-                  }
-                />
-              ))}
-            </div>
+            exerciseGroups.map((g) => {
+              const isCollapsed = collapsedGroups.includes(g.id) && !search.trim();
+              const showAll = expandedGroups.includes(g.id) || !!search.trim();
+              const shown = showAll ? g.items : g.items.slice(0, 5);
+              return (
+                <section key={g.id}>
+                  <button
+                    onClick={() => setCollapsedGroups((c) => (c.includes(g.id) ? c.filter((x) => x !== g.id) : [...c, g.id]))}
+                    aria-expanded={!isCollapsed}
+                    className="mb-2 mt-4 flex w-full items-center gap-2 px-0.5 text-left text-[11px] font-black uppercase tracking-[0.12em]"
+                    style={{ color: g.color }}
+                  >
+                    {g.label}
+                    <span className="grid h-[18px] min-w-[18px] place-items-center rounded-full bg-surface2 px-1 text-[10px] tracking-normal text-dim">{g.items.length}</span>
+                    <span aria-hidden className="ml-auto text-[12px] tracking-normal text-dim">{isCollapsed ? "▸" : "▾"}</span>
+                  </button>
+                  {!isCollapsed && (
+                    <div className="overflow-hidden rounded-[18px] border border-line bg-surface">
+                      {shown.map((ex, i) => (
+                        <ExerciseRow
+                          key={ex.id}
+                          ex={ex}
+                          color={g.color}
+                          subtitle={tagLabels(ex, lib.categories).filter((t) => t !== g.label).join(" · ")}
+                          first={i === 0}
+                          isFav={state.preferences?.favoriteExerciseId === ex.id}
+                          onFav={() => toggleFav(ex.id)}
+                          onOpen={() => setSheetEx(ex)}
+                        />
+                      ))}
+                      {!showAll && g.items.length > 5 && (
+                        <button
+                          onClick={() => setExpandedGroups((e) => [...e, g.id])}
+                          className="w-full border-t border-line/70 py-2.5 text-center text-[12px] font-black text-dim"
+                        >
+                          Voir les {g.items.length - 5} autres ▾
+                        </button>
+                      )}
+                    </div>
+                  )}
+                </section>
+              );
+            })
+          )}
+
+          {sheetEx && (
+            <ExerciseSheet
+              ex={lib.exercises.find((e) => e.id === sheetEx.id) ?? sheetEx}
+              color={colorOfExercise(sheetEx)}
+              groupLabel={groupLabelOf(sheetEx)}
+              tags={tagLabels(sheetEx, lib.categories)}
+              canEdit={canEdit}
+              isFav={state.preferences?.favoriteExerciseId === sheetEx.id}
+              onFav={() => toggleFav(sheetEx.id)}
+              onEdit={() => { setViewing({ ex: sheetEx, edit: true }); setSheetEx(null); }}
+              onDelete={() => {
+                updateLibrary((l) => { l.exercises = l.exercises.filter((e) => e.id !== sheetEx.id); });
+                setSheetEx(null);
+              }}
+              onClose={() => setSheetEx(null)}
+            />
           )}
 
           {creating && (
@@ -1126,14 +1212,14 @@ function TabButton({ active, onClick, label, count }: {
   return (
     <button
       onClick={onClick}
-      className={`flex-1 rounded-lg py-2 text-[13px] font-semibold transition ${
-        active ? "bg-surface text-ink shadow-sm" : "text-dim hover:text-ink"
+      className={`shrink-0 whitespace-nowrap rounded-full px-3.5 py-2 text-[12.5px] font-black transition ${
+        active
+          ? "bg-gradient-to-br from-[#ffc53d] to-[#ff9f00] text-[#1a1500] shadow-[0_6px_18px_-8px_rgba(255,170,0,0.7)]"
+          : "text-dim hover:text-ink"
       }`}
     >
       {label}
-      {count !== undefined && (
-        <span className={`ml-1 text-[11px] ${active ? "text-dim" : "text-dim/60"}`}>({count})</span>
-      )}
+      {count !== undefined && <span className="ml-1 text-[11px] opacity-65">{count}</span>}
     </button>
   );
 }
@@ -1202,66 +1288,155 @@ function VideoModal({ url, onClose }: { url: string; onClose: () => void }) {
   );
 }
 
-function ExerciseCard({ ex, tagLabels, canEdit, isFav, onFav, onView, onEdit, onDelete }: {
-  ex: LibraryExercise; tagLabels: string[]; canEdit: boolean;
-  isFav: boolean; onFav: () => void;
-  onView: () => void; onEdit: () => void; onDelete: () => void;
+const GROUP_PALETTE = ["#ef5350", "#42a5f5", "#ab47bc", "#26c6da", "#66bb6a", "#ffb300", "#ff7043", "#8d6e63"];
+function optColor(opt: { color?: string }, idx: number) {
+  return opt.color || GROUP_PALETTE[idx % GROUP_PALETTE.length];
+}
+
+function StarIcon({ on }: { on: boolean }) {
+  return (
+    <svg aria-hidden width="17" height="17" viewBox="0 0 24 24" strokeWidth="2" strokeLinejoin="round"
+      fill={on ? "var(--color-accent)" : "none"} stroke={on ? "var(--color-accent)" : "var(--color-dim)"}>
+      <path d="M12 3l2.7 5.6 6.1.9-4.4 4.3 1 6.1L12 17l-5.4 2.9 1-6.1-4.4-4.3 6.1-.9z" />
+    </svg>
+  );
+}
+
+// Ligne compacte : liseré couleur du groupe, nom, étiquettes, vidéo, favori.
+function ExerciseRow({ ex, color, subtitle, first, isFav, onFav, onOpen }: {
+  ex: LibraryExercise; color: string; subtitle: string; first: boolean;
+  isFav: boolean; onFav: () => void; onOpen: () => void;
 }) {
   const [videoOpen, setVideoOpen] = useState(false);
-
   return (
-    <>
+    <div className={first ? "" : "border-t border-line/70"}>
       <div
-        className="group cursor-pointer rounded-2xl border border-line bg-surface p-4 transition hover:border-accent/40"
-        onClick={canEdit ? onEdit : onView}
+        role="button"
+        tabIndex={0}
+        onClick={onOpen}
+        onKeyDown={(e) => (e.key === "Enter" || e.key === " ") && onOpen()}
+        className="grid cursor-pointer grid-cols-[4px_minmax(0,1fr)_auto_auto_10px] items-center gap-2.5 px-3 py-2.5"
       >
-        <div className="flex items-start justify-between gap-2">
-          <h3 className="font-bold transition-colors group-hover:text-accent">{ex.name}</h3>
-          <div className="flex shrink-0 items-center gap-1">
+        <span aria-hidden className="min-h-[30px] self-stretch rounded" style={{ background: color }} />
+        <span className="min-w-0">
+          <span className="block truncate text-[14.5px] font-black">{ex.name}</span>
+          {subtitle && <span className="block truncate text-[11.5px] text-dim">{subtitle}</span>}
+        </span>
+        {ex.video ? (
+          <button
+            onClick={(e) => { e.stopPropagation(); setVideoOpen(true); }}
+            aria-label="Voir la vidéo"
+            className="grid h-8 w-8 place-items-center rounded-full bg-accent2/15 text-[10px] text-accent2"
+          >
+            ▶
+          </button>
+        ) : <span />}
+        <button
+          onClick={(e) => { e.stopPropagation(); onFav(); }}
+          aria-label={isFav ? "Retirer des favoris" : "Ajouter aux favoris"}
+          className="grid h-8 w-8 place-items-center"
+        >
+          <StarIcon on={isFav} />
+        </button>
+        <span aria-hidden className="text-dim">›</span>
+      </div>
+      {videoOpen && ex.video && <VideoModal url={ex.video} onClose={() => setVideoOpen(false)} />}
+    </div>
+  );
+}
+
+// Fiche au tap : vidéo, étiquettes, commentaire ; Modifier / Supprimer pour le coach.
+function ExerciseSheet({ ex, color, groupLabel, tags, canEdit, isFav, onFav, onEdit, onDelete, onClose }: {
+  ex: LibraryExercise; color: string; groupLabel: string; tags: string[]; canEdit: boolean;
+  isFav: boolean; onFav: () => void; onEdit: () => void; onDelete: () => void; onClose: () => void;
+}) {
+  const [videoOpen, setVideoOpen] = useState(false);
+  const [confirmDelete, setConfirmDelete] = useState(false);
+  const yt = ex.video ? youtubeId(ex.video) : null;
+  return createPortal(
+    <div
+      className="fixed inset-0 z-50 flex items-end justify-center bg-black/60 sm:items-center"
+      onClick={(e) => e.target === e.currentTarget && onClose()}
+    >
+      <div className="max-h-[90vh] w-full max-w-md overflow-y-auto rounded-t-3xl border-t border-line bg-surface sm:rounded-3xl sm:border">
+        <div
+          className="relative p-5 pb-4"
+          style={{ background: `linear-gradient(135deg, color-mix(in srgb, ${color} 34%, var(--color-surface)), var(--color-surface) 75%)` }}
+        >
+          <button onClick={onClose} aria-label="Fermer" className="absolute right-4 top-4 grid h-9 w-9 place-items-center rounded-full bg-black/25">✕</button>
+          {groupLabel && (
+            <span className="text-[10.5px] font-black uppercase tracking-[0.12em]" style={{ color: `color-mix(in srgb, ${color} 70%, var(--color-ink))` }}>
+              {groupLabel}
+            </span>
+          )}
+          <h2 className="pr-10 text-[22px] font-black leading-tight">{ex.name}</h2>
+        </div>
+
+        {ex.video && (
+          <button
+            onClick={() => setVideoOpen(true)}
+            className="relative mx-5 mt-1 grid aspect-video w-[calc(100%-2.5rem)] place-items-center overflow-hidden rounded-2xl border border-line bg-surface2"
+            aria-label="Lire la vidéo"
+          >
+            {yt && <img src={`https://i.ytimg.com/vi/${yt}/hqdefault.jpg`} alt="" className="absolute inset-0 h-full w-full object-cover opacity-70" />}
+            <span className="relative grid h-14 w-14 place-items-center rounded-full bg-black/50 text-lg text-white">▶</span>
+          </button>
+        )}
+
+        <div className="space-y-3 p-5 pt-4">
+          {tags.length > 0 && (
+            <div>
+              <span className="mb-1.5 block text-[10.5px] font-black uppercase tracking-[0.12em] text-dim">Étiquettes</span>
+              <div className="flex flex-wrap gap-1.5">
+                {tags.map((t) => (
+                  <span
+                    key={t}
+                    className="rounded-full border px-2.5 py-1 text-[12px] font-black"
+                    style={t === groupLabel
+                      ? { borderColor: `color-mix(in srgb, ${color} 55%, transparent)`, background: `color-mix(in srgb, ${color} 14%, transparent)` }
+                      : { borderColor: "var(--color-line)", background: "var(--color-surface2)" }}
+                  >
+                    {t}
+                  </span>
+                ))}
+              </div>
+            </div>
+          )}
+          {ex.comment && (
+            <div>
+              <span className="mb-1 block text-[10.5px] font-black uppercase tracking-[0.12em] text-dim">Commentaire</span>
+              <p className="whitespace-pre-wrap text-[14px] leading-snug">{ex.comment}</p>
+            </div>
+          )}
+          <div className="flex gap-1.5 pt-1">
             <button
-              onClick={(e) => { e.stopPropagation(); onFav(); }}
-              className="grid h-8 w-8 place-items-center rounded-lg bg-surface2 text-base transition hover:scale-110"
-              aria-label={isFav ? "Retirer des favoris" : "Ajouter aux favoris"}
-              title={isFav ? "Retirer des favoris" : "Ajouter aux favoris"}
+              onClick={onFav}
+              className={`flex flex-1 items-center justify-center gap-1.5 rounded-full border py-2.5 text-[12.5px] font-black ${isFav ? "border-accent/60 bg-accent/10 text-accent" : "border-line bg-surface2"}`}
             >
-              {isFav ? "⭐" : "☆"}
+              <StarIcon on={isFav} /> {isFav ? "Favori" : "Mettre en favori"}
             </button>
-            {canEdit ? (
+            {canEdit && (
               <>
-                <button onClick={(e) => { e.stopPropagation(); onEdit(); }}
-                  className="grid h-8 w-8 place-items-center rounded-lg bg-surface2" aria-label="Modifier">✏️</button>
-                <button onClick={(e) => { e.stopPropagation(); onDelete(); }}
-                  className="grid h-8 w-8 place-items-center rounded-lg bg-surface2" aria-label="Supprimer">🗑️</button>
+                <button
+                  onClick={() => (confirmDelete ? onDelete() : setConfirmDelete(true))}
+                  className={`rounded-full border px-3.5 py-2.5 text-[12.5px] font-black ${confirmDelete ? "border-danger bg-danger text-white" : "border-danger/40 text-danger"}`}
+                >
+                  {confirmDelete ? "Confirmer" : "Supprimer"}
+                </button>
+                <button
+                  onClick={onEdit}
+                  className="rounded-full bg-gradient-to-br from-[#ffc53d] to-[#ff9f00] px-5 py-2.5 text-[12.5px] font-black text-[#1a1500]"
+                >
+                  Modifier
+                </button>
               </>
-            ) : (
-              <span className="ml-1 text-[12px] text-dim">Voir →</span>
             )}
           </div>
         </div>
-        {tagLabels.length > 0 && (
-          <div className="mt-2 flex flex-wrap gap-1.5">
-            {tagLabels.map((t) => (
-              <span key={t} className="rounded-full bg-surface2 px-2 py-0.5 text-[11px] text-dim">{t}</span>
-            ))}
-          </div>
-        )}
-        <div className="mt-2 flex flex-wrap items-center gap-3">
-          {ex.video && (
-            <button
-              onClick={(e) => { e.stopPropagation(); setVideoOpen(true); }}
-              className="flex items-center gap-1 rounded-lg bg-accent2/15 px-2.5 py-1 text-[12px] font-semibold text-accent2 transition hover:bg-accent2/25"
-            >
-              ▶ Vidéo
-            </button>
-          )}
-          {ex.comment && <span className="truncate text-[12px] italic text-dim">💬 {ex.comment}</span>}
-        </div>
       </div>
-
-      {videoOpen && ex.video && (
-        <VideoModal url={ex.video} onClose={() => setVideoOpen(false)} />
-      )}
-    </>
+      {videoOpen && ex.video && <VideoModal url={ex.video} onClose={() => setVideoOpen(false)} />}
+    </div>,
+    document.body,
   );
 }
 
