@@ -977,15 +977,130 @@ function MessagesTab() {
 }
 
 // ─── Tab Santé ─────────────────────────────────────────────────────────────────
+// Même esthétique que /plan : cartes en dégradé léger de la couleur du type,
+// liseré à gauche, pilules de statut. La saisie passe par une pop-up (bouton +)
+// pour que la liste reste lisible.
+type FollowupType = "pain" | "injury" | "note";
+const FU_META: Record<FollowupType, { label: string; plural: string; color: string; hint: string; placeholder: string }> = {
+  injury: { label: "Blessure", plural: "Blessures", color: "var(--color-danger)", hint: "Zone, intensité, contexte…", placeholder: "Ex : Épaule droite, 7/10 après développé couché" },
+  pain:   { label: "Douleur",  plural: "Douleurs",  color: "#f97316",             hint: "Où ? Intensité ?",            placeholder: "Ex : Genou gauche, gêne légère en squat" },
+  note:   { label: "Note",     plural: "Notes",     color: "var(--color-accent2)", hint: "Ressenti, observation…",     placeholder: "Ex : Récupération difficile cette semaine" },
+};
+const FU_ORDER: FollowupType[] = ["injury", "pain", "note"];
+const FU_LABEL = "mb-1.5 block text-[10.5px] font-black uppercase tracking-[0.12em] text-dim";
+const GOLD = "bg-gradient-to-br from-[#ffc53d] to-[#ff9f00] text-[#1a1500]";
+
 function SanteTab() {
-  const { state, update, role, me } = useData();
-  const isElevated = role === "coach" || role === "admin";
+  const { state } = useData();
   const [subTab, setSubTab] = useState<"suivi" | "metriques">("suivi");
-  const [type, setType] = useState<"pain" | "injury" | "note">("pain");
+  const [adding, setAdding] = useState(false);
+  const [editingId, setEditingId] = useState<string | null>(null);
+
+  const editing = state.followups.find(f => f.id === editingId) ?? null;
+
+  return (
+    <div className="space-y-4">
+      {/* Sous-onglets Suivi / Métriques */}
+      <div className="grid grid-cols-2 gap-1 rounded-full border border-line bg-surface p-1">
+        {(["suivi", "metriques"] as const).map(t => (
+          <button
+            key={t}
+            onClick={() => setSubTab(t)}
+            className={`rounded-full py-2 text-[13px] font-black transition ${
+              subTab === t ? "bg-surface2 text-ink shadow-[inset_0_0_0_1px_var(--color-line)]" : "text-dim"
+            }`}
+          >
+            {t === "suivi" ? "Suivi" : "Métriques"}
+          </button>
+        ))}
+      </div>
+
+      {subTab === "metriques" && <MetricsTab />}
+
+      {subTab === "suivi" && <>
+        <div className="flex items-center gap-2">
+          <h2 className="flex-1 text-xl font-black">Mon suivi</h2>
+          <button
+            onClick={() => setAdding(true)}
+            aria-label="Nouvelle entrée"
+            className={`grid h-11 w-11 place-items-center rounded-full text-2xl font-black leading-none shadow-[0_6px_18px_-6px_rgba(255,170,0,0.7)] transition active:scale-95 ${GOLD}`}
+          >
+            +
+          </button>
+        </div>
+
+        {state.followups.length === 0 ? (
+          <button
+            onClick={() => setAdding(true)}
+            className="flex w-full items-center gap-3 rounded-2xl border-[1.5px] border-dashed border-line p-4 text-left text-[13px] leading-snug text-dim"
+          >
+            <span className="grid h-9 w-9 shrink-0 place-items-center rounded-full bg-surface2 text-lg font-black text-accent">+</span>
+            Aucune entrée. Ajoute une douleur, une blessure ou une note.
+          </button>
+        ) : (
+          FU_ORDER.map(type => {
+            const items = state.followups.filter(f => f.type === type);
+            if (items.length === 0) return null;
+            const meta = FU_META[type];
+            return (
+              <section key={type} className="space-y-2">
+                <h3 className="flex items-center gap-2 text-[11px] font-black uppercase tracking-[0.12em]" style={{ color: meta.color }}>
+                  {meta.plural}
+                  <span className="grid h-[18px] min-w-[18px] place-items-center rounded-full bg-surface2 px-1 text-[10px] tracking-normal text-dim">
+                    {items.length}
+                  </span>
+                </h3>
+                {items.map(f => <FollowupCard key={f.id} f={f} onOpen={() => setEditingId(f.id)} />)}
+              </section>
+            );
+          })
+        )}
+
+        {adding && <NewFollowupModal onClose={() => setAdding(false)} />}
+        {editing && <EditFollowupModal followup={editing} onClose={() => setEditingId(null)} />}
+      </>}
+    </div>
+  );
+}
+
+// Carte d'une entrée : un tap ouvre l'édition (suppression dans la pop-up).
+function FollowupCard({ f, onOpen }: { f: Followup; onOpen: () => void }) {
+  const meta = FU_META[f.type as FollowupType] ?? FU_META.note;
+  const active = isActive(f);
+  const date = f.type === "injury"
+    ? (f.dateEnd ? `${frDate(f.date)} → ${frDate(f.dateEnd)}` : `Depuis le ${frDate(f.date)}`)
+    : frDate(f.date);
+  return (
+    <button
+      onClick={onOpen}
+      className="relative block w-full overflow-hidden rounded-2xl border py-3 pl-4 pr-3.5 text-left transition active:scale-[0.99]"
+      style={{
+        background: `linear-gradient(105deg, color-mix(in srgb, ${meta.color} ${active ? 30 : 20}%, var(--color-surface)) 0%, color-mix(in srgb, ${meta.color} 6%, var(--color-surface)) 60%, var(--color-surface) 100%)`,
+        borderColor: `color-mix(in srgb, ${meta.color} ${active ? 50 : 28}%, transparent)`,
+      }}
+    >
+      <span aria-hidden className="absolute inset-y-0 left-0 w-1" style={{ background: meta.color }} />
+      <div className="flex items-center gap-2">
+        <span className="text-[12px] font-bold text-dim">{date}</span>
+        {active && (
+          <span className="rounded-full bg-danger px-2 py-0.5 text-[10.5px] font-black text-white">En cours</span>
+        )}
+        <span aria-hidden className="ml-auto text-lg leading-none text-dim">›</span>
+      </div>
+      <p className="mt-1 line-clamp-3 whitespace-pre-wrap text-[14px] leading-snug text-ink">{f.text}</p>
+    </button>
+  );
+}
+
+// ─── Pop-up nouvelle entrée ────────────────────────────────────────────────────
+function NewFollowupModal({ onClose }: { onClose: () => void }) {
+  const { update, role, me } = useData();
+  const isElevated = role === "coach" || role === "admin";
+  const [type, setType] = useState<FollowupType>("pain");
   const [text, setText] = useState("");
   const [dateStart, setDateStart] = useState(todayKey());
   const [dateEnd, setDateEnd] = useState("");
-  const [editingId, setEditingId] = useState<string | null>(null);
+  const meta = FU_META[type];
 
   function add() {
     if (!text.trim()) return;
@@ -998,7 +1113,6 @@ function SanteTab() {
       text: entryText,
     };
     update(d => { d.followups.unshift(entry); });
-    setText(""); setDateStart(todayKey()); setDateEnd("");
 
     // Notifier le coach si c'est une blessure (client uniquement)
     if (type === "injury" && !isElevated && me) {
@@ -1008,170 +1122,63 @@ function SanteTab() {
         body: JSON.stringify({ clientId: me.id, clientName: me.name || me.email, injuryText: entryText }),
       }).catch(() => {});
     }
+    onClose();
   }
 
-  const injuries = state.followups.filter(f => f.type === "injury");
-  const pains    = state.followups.filter(f => f.type === "pain");
-  const notes    = state.followups.filter(f => f.type === "note");
-  const editing  = state.followups.find(f => f.id === editingId) ?? null;
-
   return (
-    <div className="space-y-4">
-      {/* Sous-onglets Suivi / Métriques */}
-      <div className="flex rounded-xl bg-surface2 p-1">
-        {(["suivi", "metriques"] as const).map(t => (
-          <button
-            key={t}
-            onClick={() => setSubTab(t)}
-            className={`flex-1 rounded-lg py-2 text-[13px] font-semibold transition ${
-              subTab === t ? "bg-surface text-ink shadow-sm" : "text-dim"
-            }`}
-          >
-            {t === "suivi" ? "📋 Suivi" : "📊 Métriques"}
-          </button>
-        ))}
-      </div>
+    <div
+      className="fixed inset-0 z-50 flex items-end justify-center bg-black/60 sm:items-center"
+      onClick={e => e.target === e.currentTarget && onClose()}
+    >
+      <div className="w-full max-w-md rounded-t-3xl border-t border-line bg-surface p-5 sm:rounded-3xl sm:border">
+        <div className="mb-4 flex items-center justify-between">
+          <h2 className="text-lg font-black">Nouvelle entrée</h2>
+          <button onClick={onClose} aria-label="Fermer" className="grid h-9 w-9 place-items-center rounded-full bg-surface2">✕</button>
+        </div>
 
-      {subTab === "metriques" && <MetricsTab />}
-
-      {subTab === "suivi" && <>
-      {/* Nouvelle entrée */}
-      <section className="rounded-2xl border border-line bg-surface p-4">
-        <h2 className="mb-3 font-bold">Nouvelle entrée</h2>
-
-        {/* Toggle segmenté */}
-        <div className="mb-4 flex rounded-xl bg-surface2 p-1">
-          {([
-            { id: "pain",   label: "🤕 Douleur" },
-            { id: "injury", label: "🚨 Blessure" },
-            { id: "note",   label: "📝 Note" },
-          ] as const).map(t => (
-            <button
-              key={t.id}
-              onClick={() => { setType(t.id); setDateEnd(""); }}
-              className={`flex-1 rounded-lg py-2 text-sm font-semibold transition ${
-                type === t.id
-                  ? t.id === "injury" ? "bg-danger text-white"
-                  : t.id === "pain"   ? "bg-surface text-ink border border-line shadow-sm"
-                  : "bg-accent text-[#1a1500]"
-                  : "text-dim"
-              }`}
-            >
-              {t.label}
-            </button>
-          ))}
+        {/* Type : pilules à la couleur du type */}
+        <div className="mb-4 grid grid-cols-3 gap-1 rounded-full border border-line bg-surface2 p-1">
+          {(["pain", "injury", "note"] as const).map(t => {
+            const on = type === t;
+            const c = FU_META[t].color;
+            return (
+              <button
+                key={t}
+                onClick={() => { setType(t); setDateEnd(""); }}
+                className={`rounded-full py-2 text-[13px] font-black transition ${on ? "text-white" : "text-dim"}`}
+                style={on ? { background: `linear-gradient(135deg, color-mix(in srgb, ${c} 85%, white), ${c})`, boxShadow: `0 6px 16px -8px ${c}` } : undefined}
+              >
+                {FU_META[t].label}
+              </button>
+            );
+          })}
         </div>
 
         {type === "injury" && (
           <div className="mb-3 grid grid-cols-2 gap-3">
             <label className="block">
-              <span className="mb-1.5 block text-[13px] text-dim">Début</span>
+              <span className={FU_LABEL}>Début</span>
               <input type="date" value={dateStart} onChange={e => setDateStart(e.target.value)} />
             </label>
             <label className="block">
-              <span className="mb-1.5 block text-[13px] text-dim">Fin <span className="opacity-60">(optionnel)</span></span>
+              <span className={FU_LABEL}>Fin <span className="normal-case tracking-normal opacity-70">(optionnel)</span></span>
               <input type="date" value={dateEnd} onChange={e => setDateEnd(e.target.value)} min={dateStart} />
             </label>
           </div>
         )}
 
         <label className="mb-4 block">
-          <span className="mb-1.5 block text-[13px] text-dim">
-            {type === "injury" ? "Zone, intensité, contexte…" : type === "pain" ? "Où ? Intensité ?" : "Ressenti, observation…"}
-          </span>
-          <textarea
-            value={text}
-            onChange={e => setText(e.target.value)}
-            placeholder={
-              type === "injury" ? "Ex : Épaule droite, 7/10 après développé couché" :
-              type === "pain"   ? "Ex : Genoux gauche, gêne légère en squat" :
-                                  "Ex : Récupération difficile cette semaine"
-            }
-          />
+          <span className={FU_LABEL}>{meta.hint}</span>
+          <textarea value={text} onChange={e => setText(e.target.value)} placeholder={meta.placeholder} className="min-h-[96px]" autoFocus />
         </label>
         <button
           onClick={add}
           disabled={!text.trim()}
-          className="w-full rounded-xl bg-accent py-3 font-semibold text-[#1a1500] disabled:opacity-40"
+          className={`w-full rounded-full py-3 font-black transition active:scale-[0.98] disabled:opacity-40 ${GOLD}`}
         >
           Ajouter
         </button>
-      </section>
-
-      {/* Blessures */}
-      {injuries.length > 0 && (
-        <div className="space-y-2.5">
-          <h3 className="font-bold text-danger">🚨 Blessures</h3>
-          {injuries.map(f => {
-            const active = isActive(f);
-            return (
-              <div key={f.id} className={`rounded-xl border p-3.5 ${active ? "border-danger/50 bg-danger/5" : "border-line bg-surface"}`}>
-                <div className="flex flex-wrap items-center justify-between gap-2">
-                  <div className="flex items-center gap-2">
-                    <span className="rounded-full bg-danger/20 px-2 py-0.5 text-[11px] font-bold text-danger">🚨 Blessure</span>
-                    {active && <span className="rounded-full bg-danger px-2 py-0.5 text-[11px] font-bold text-white">Active</span>}
-                  </div>
-                  <div className="flex items-center gap-2">
-                    <button onClick={() => setEditingId(f.id)} className="rounded-lg bg-surface2 px-2.5 py-1 text-[12px] text-dim">Modifier</button>
-                    <button onClick={() => update(d => { d.followups = d.followups.filter(x => x.id !== f.id); })} className="rounded-lg bg-surface2 px-2.5 py-1 text-[12px] text-dim">Suppr.</button>
-                  </div>
-                </div>
-                <div className="mt-1.5 text-[12px] text-dim">
-                  {f.dateEnd ? `Du ${frDate(f.date)} au ${frDate(f.dateEnd)}` : `Depuis le ${frDate(f.date)}`}
-                </div>
-                <p className="mt-2 whitespace-pre-wrap text-sm">{f.text}</p>
-              </div>
-            );
-          })}
-        </div>
-      )}
-
-      {/* Douleurs */}
-      {pains.length > 0 && (
-        <div className="space-y-2.5">
-          <h3 className="font-bold" style={{ color: "#f97316" }}>🤕 Douleurs</h3>
-          {pains.map(f => (
-            <div key={f.id} className="rounded-xl border border-line bg-surface p-3.5">
-              <div className="flex items-center justify-between">
-                <span className="rounded-full px-2 py-0.5 text-[11px] font-bold text-white" style={{ background: "#f97316" }}>Douleur</span>
-                <div className="flex items-center gap-2">
-                  <button onClick={() => setEditingId(f.id)} className="rounded-lg bg-surface2 px-2.5 py-1 text-[12px] text-dim">Modifier</button>
-                  <button onClick={() => update(d => { d.followups = d.followups.filter(x => x.id !== f.id); })} className="rounded-lg bg-surface2 px-2.5 py-1 text-[12px] text-dim">Suppr.</button>
-                </div>
-              </div>
-              <div className="mt-1.5 text-[12px] text-dim">{frDate(f.date)}</div>
-              <p className="mt-2 whitespace-pre-wrap text-sm">{f.text}</p>
-            </div>
-          ))}
-        </div>
-      )}
-
-      {/* Notes */}
-      {notes.length > 0 && (
-        <div className="space-y-2.5">
-          <h3 className="font-bold text-accent2">📝 Notes</h3>
-          {notes.map(f => (
-            <div key={f.id} className="rounded-xl border border-line bg-surface p-3.5">
-              <div className="flex items-center justify-between">
-                <span className="rounded-full bg-accent2/20 px-2 py-0.5 text-[11px] font-bold text-accent2">Note</span>
-                <div className="flex items-center gap-2">
-                  <button onClick={() => setEditingId(f.id)} className="rounded-lg bg-surface2 px-2.5 py-1 text-[12px] text-dim">Modifier</button>
-                  <button onClick={() => update(d => { d.followups = d.followups.filter(x => x.id !== f.id); })} className="rounded-lg bg-surface2 px-2.5 py-1 text-[12px] text-dim">Suppr.</button>
-                </div>
-              </div>
-              <div className="mt-1.5 text-[12px] text-dim">{frDate(f.date)}</div>
-              <p className="mt-2 whitespace-pre-wrap text-sm">{f.text}</p>
-            </div>
-          ))}
-        </div>
-      )}
-
-      {state.followups.length === 0 && (
-        <p className="py-8 text-center text-sm text-dim">Aucune entrée pour l&apos;instant.</p>
-      )}
-
-      {editing && <EditFollowupModal followup={editing} onClose={() => setEditingId(null)} />}
-      </>}
+      </div>
     </div>
   );
 }
@@ -1182,6 +1189,8 @@ function EditFollowupModal({ followup, onClose }: { followup: Followup; onClose:
   const [dateStart, setDateStart] = useState(followup.date);
   const [dateEnd, setDateEnd]     = useState(followup.dateEnd ?? "");
   const [text, setText]           = useState(followup.text);
+  const [confirmDelete, setConfirmDelete] = useState(false);
+  const meta = FU_META[followup.type as FollowupType] ?? FU_META.note;
 
   function save() {
     update(d => {
@@ -1194,6 +1203,11 @@ function EditFollowupModal({ followup, onClose }: { followup: Followup; onClose:
     onClose();
   }
 
+  function remove() {
+    update(d => { d.followups = d.followups.filter(x => x.id !== followup.id); });
+    onClose();
+  }
+
   return (
     <div
       className="fixed inset-0 z-50 flex items-end justify-center bg-black/60 sm:items-center"
@@ -1201,32 +1215,43 @@ function EditFollowupModal({ followup, onClose }: { followup: Followup; onClose:
     >
       <div className="w-full max-w-md rounded-t-3xl border-t border-line bg-surface p-5 sm:rounded-3xl sm:border">
         <div className="mb-4 flex items-center justify-between">
-          <h2 className="text-lg font-bold">Modifier</h2>
-          <button onClick={onClose} className="grid h-9 w-9 place-items-center rounded-lg bg-surface2">✕</button>
+          <div>
+            <span className="text-[10.5px] font-black uppercase tracking-[0.12em]" style={{ color: meta.color }}>{meta.label}</span>
+            <h2 className="text-lg font-black">Modifier</h2>
+          </div>
+          <button onClick={onClose} aria-label="Fermer" className="grid h-9 w-9 place-items-center rounded-full bg-surface2">✕</button>
         </div>
         {followup.type === "injury" ? (
           <div className="mb-3 grid grid-cols-2 gap-3">
             <label className="block">
-              <span className="mb-1.5 block text-[13px] text-dim">Début</span>
+              <span className={FU_LABEL}>Début</span>
               <input type="date" value={dateStart} onChange={e => setDateStart(e.target.value)} />
             </label>
             <label className="block">
-              <span className="mb-1.5 block text-[13px] text-dim">Fin <span className="opacity-60">(optionnel)</span></span>
+              <span className={FU_LABEL}>Fin <span className="normal-case tracking-normal opacity-70">(optionnel)</span></span>
               <input type="date" value={dateEnd} onChange={e => setDateEnd(e.target.value)} min={dateStart} />
             </label>
           </div>
         ) : (
           <label className="mb-3 block">
-            <span className="mb-1.5 block text-[13px] text-dim">Date</span>
+            <span className={FU_LABEL}>Date</span>
             <input type="date" value={dateStart} onChange={e => setDateStart(e.target.value)} />
           </label>
         )}
         <label className="mb-4 block">
-          <span className="mb-1.5 block text-[13px] text-dim">Détails</span>
-          <textarea value={text} onChange={e => setText(e.target.value)} className="min-h-[80px]" />
+          <span className={FU_LABEL}>Détails</span>
+          <textarea value={text} onChange={e => setText(e.target.value)} className="min-h-[96px]" />
         </label>
-        <button onClick={save} className="w-full rounded-xl bg-accent py-3 font-semibold text-[#1a1500]">
+        <button onClick={save} className={`w-full rounded-full py-3 font-black transition active:scale-[0.98] ${GOLD}`}>
           Enregistrer
+        </button>
+        <button
+          onClick={() => (confirmDelete ? remove() : setConfirmDelete(true))}
+          className={`mt-2 w-full rounded-full border py-2.5 text-[13px] font-black transition ${
+            confirmDelete ? "border-danger bg-danger text-white" : "border-danger/40 text-danger"
+          }`}
+        >
+          {confirmDelete ? "Confirmer la suppression" : "Supprimer"}
         </button>
       </div>
     </div>
@@ -1285,7 +1310,7 @@ function BlocNotesTab() {
     <div className="space-y-4">
       {/* Plan alimentaire du coach (conservé) */}
       <section className="rounded-2xl border border-line bg-surface p-4">
-        <h2 className="mb-1 font-bold">🥗 Plan alimentaire</h2>
+        <h2 className="mb-1 font-black">Plan alimentaire</h2>
         <p className="mb-3 text-[12px] text-dim">Rédigé par le coach</p>
         <textarea
           value={state.profile.diet}
@@ -1298,7 +1323,7 @@ function BlocNotesTab() {
 
       {/* Bloc-notes partagé */}
       <section className="rounded-2xl border border-line bg-surface p-4">
-        <h2 className="mb-1 font-bold">📓 Bloc-notes</h2>
+        <h2 className="mb-1 font-black">Bloc-notes</h2>
         <p className="mb-3 text-[12px] text-dim">
           Visible par le coach et le sportif · chacun peut ajouter
         </p>
@@ -1430,22 +1455,24 @@ export default function FollowupPage() {
   return (
     <div className="space-y-4">
       {/* Switch onglets */}
-      <div className="flex rounded-2xl bg-surface2 p-1">
+      <div className="flex rounded-full border border-line bg-surface p-1">
         {([
-          { id: "messages", label: "💬 Messages" },
-          { id: "sante",    label: "🩹 Santé" },
-          { id: "notes",    label: "📓 Bloc-notes" },
+          { id: "messages", label: "Messages" },
+          { id: "sante",    label: "Santé" },
+          { id: "notes",    label: "Bloc-notes" },
         ] as const).map(t => (
           <button
             key={t.id}
             onClick={() => setTab(t.id)}
-            className={`relative flex-1 rounded-xl py-2.5 text-[13px] font-semibold transition ${
-              tab === t.id ? "bg-accent text-[#1a1500] shadow-sm" : "text-dim"
+            className={`relative flex-1 rounded-full py-2.5 text-[13px] font-black transition ${
+              tab === t.id
+                ? "bg-gradient-to-br from-[#ffc53d] to-[#ff9f00] text-[#1a1500] shadow-[0_6px_18px_-6px_rgba(255,170,0,0.7)]"
+                : "text-dim"
             }`}
           >
             {t.label}
             {t.id === "messages" && unreadCount > 0 && (
-              <span className="absolute -right-0.5 -top-0.5 flex h-4 w-4 items-center justify-center rounded-full bg-danger text-[10px] font-bold text-white">
+              <span className="absolute right-1 top-0 flex h-4 w-4 items-center justify-center rounded-full bg-danger text-[10px] font-bold text-white">
                 {unreadCount > 9 ? "9+" : unreadCount}
               </span>
             )}
