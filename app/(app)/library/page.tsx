@@ -1246,19 +1246,22 @@ function Chip({ active, label, count, onClick }: {
   );
 }
 
+// Formats acceptés : watch?v=…, youtu.be/…, embed/…, shorts/…, live/…
 function youtubeId(url: string): string | null {
-  const m = url.match(/(?:v=|youtu\.be\/|embed\/)([a-zA-Z0-9_-]{11})/);
+  const m = url.match(/(?:[?&]v=|youtu\.be\/|\/embed\/|\/shorts\/|\/live\/)([a-zA-Z0-9_-]{11})/);
   return m?.[1] ?? null;
 }
+const isYoutubeShort = (url: string) => /youtube\.com\/shorts\//.test(url);
 
 function VideoModal({ url, onClose }: { url: string; onClose: () => void }) {
   const id = youtubeId(url);
+  const vertical = isYoutubeShort(url); // Shorts = format vertical 9:16
   return (
     <div
       className="fixed inset-0 z-50 flex items-center justify-center bg-black/75 p-4"
       onClick={(e) => e.target === e.currentTarget && onClose()}
     >
-      <div className="w-full max-w-lg">
+      <div className={vertical ? "w-full max-w-[min(24rem,calc(80vh*9/16))]" : "w-full max-w-lg"}>
         <div className="mb-2 flex justify-end">
           <button
             onClick={onClose}
@@ -1266,9 +1269,9 @@ function VideoModal({ url, onClose }: { url: string; onClose: () => void }) {
           >✕</button>
         </div>
         {id ? (
-          <div className="overflow-hidden rounded-2xl" style={{ aspectRatio: "16/9" }}>
+          <div className="overflow-hidden rounded-2xl" style={{ aspectRatio: vertical ? "9/16" : "16/9" }}>
             <iframe
-              src={`https://www.youtube.com/embed/${id}?autoplay=1&rel=0`}
+              src={`https://www.youtube.com/embed/${id}?autoplay=1&rel=0&playsinline=1`}
               allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
               allowFullScreen
               className="h-full w-full"
