@@ -5,39 +5,7 @@ import { useData } from "@/components/DataProvider";
 import { useTheme } from "@/components/ThemeProvider";
 import { clampBgForTheme } from "@/lib/themeColor";
 import NotifPrefsPanel from "@/components/NotifPrefsPanel";
-import type { AthleteAdminData, AthleteStatus, AdminOverview, CoachWithClients, Profile, CardInfoOption } from "@/lib/types";
-
-// Options d'info par carte (cartes configurables uniquement)
-const CARD_INFO_OPTS: Record<string, { value: CardInfoOption; label: string }[]> = {
-  "/plan": [
-    { value: "hidden",      label: "Masqué" },
-    { value: "nextSession", label: "Prochaine séance" },
-    { value: "weekPct",     label: "% semaine" },
-    { value: "remaining",   label: "Séances restantes" },
-  ],
-  "/records": [
-    { value: "hidden",      label: "Masqué" },
-    { value: "lastRecord",  label: "Dernier record" },
-    { value: "chosenRecord",label: "Au choix ★" },
-  ],
-  "/followup": [
-    { value: "hidden",        label: "Masqué" },
-    { value: "activeInjury",  label: "Blessure active" },
-    { value: "lastNote",      label: "Bloc-note" },
-  ],
-  "/library": [
-    { value: "hidden",           label: "Masqué" },
-    { value: "exerciseCount",    label: "Nb exercices" },
-    { value: "favoriteExercise", label: "Favori ⭐" },
-  ],
-};
-
-const CARD_INFO_LABELS: Record<string, string> = {
-  "/plan":     "🗓️ Programmation",
-  "/records":  "🏆 Mes Records",
-  "/followup": "📝 Mon Suivi",
-  "/library":  "📚 Ma Bibliothèque",
-};
+import type { AthleteAdminData, AthleteStatus, AdminOverview, CoachWithClients, Profile } from "@/lib/types";
 
 function fmtDate(iso: string | null): string {
   if (!iso) return "—";
@@ -149,7 +117,7 @@ function AthletesManager() {
                     const onVacation = !!a.vacation_start && today >= a.vacation_start && (!a.vacation_end || today <= a.vacation_end);
                     return onVacation ? (
                       <span className="rounded-full bg-orange-500/20 px-2.5 py-1 text-[12px] font-bold text-orange-400">
-                        🏖️ Vacances
+                        🌴 Vacances
                       </span>
                     ) : null;
                   })()}
@@ -232,7 +200,7 @@ function AthletesManager() {
             onClick={(e) => e.target === e.currentTarget && setDeletingId(null)}
           >
             <div className="w-full max-w-sm rounded-t-3xl border-t border-line bg-surface p-5 sm:rounded-3xl sm:border">
-              <h2 className="mb-2 text-lg font-bold text-danger">⚠️ Supprimer le sportif ?</h2>
+              <h2 className="mb-2 text-lg font-bold text-danger">Supprimer le sportif ?</h2>
               <p className="mb-1 text-sm">
                 <span className="font-semibold">{target?.name || target?.email}</span>
               </p>
@@ -445,7 +413,7 @@ function BroadcastComposer() {
 
   return (
     <section className="rounded-2xl border border-line bg-surface p-4">
-      <h2 className="mb-1 font-bold">📢 Broadcast</h2>
+      <h2 className="mb-1 font-bold">Message à tous les sportifs</h2>
       <p className="mb-3 text-[12px] text-dim">
         Envoie un message pop-up à tous tes sportifs en temps réel. Visible 24 h.
       </p>
@@ -462,7 +430,7 @@ function BroadcastComposer() {
         disabled={sending || !msg.trim()}
         className="mt-2 w-full rounded-xl bg-accent py-2.5 font-semibold text-[#1a1500] transition disabled:opacity-40"
       >
-        {sending ? "Envoi…" : sent ? "✅ Envoyé !" : "Envoyer à tous les sportifs"}
+        {sending ? "Envoi…" : sent ? "Envoyé !" : "Envoyer à tous les sportifs"}
       </button>
     </section>
   );
@@ -479,6 +447,7 @@ export default function SettingsPage() {
   const [vacationEnd, setVacationEnd] = useState<string>("");
   const [vacationLoaded, setVacationLoaded] = useState(false);
   const [vacationPending, setVacationPending] = useState(false);
+  const [vacationOpen, setVacationOpen] = useState(false);
 
   // Charger l'état initial depuis profiles (via API)
   useEffect(() => {
@@ -532,9 +501,9 @@ export default function SettingsPage() {
 
   // Définir les onglets selon le rôle
   const tabs = [
-    { id: "affichage" as const, label: "☀️ Affichage" },
-    ...(isElevated ? [{ id: "sportifs" as const, label: "👥 Sportifs" }] : []),
-    ...(role === "admin" ? [{ id: "admin" as const, label: "🛡 Admin" }] : []),
+    { id: "affichage" as const, label: "Affichage" },
+    ...(isElevated ? [{ id: "sportifs" as const, label: "Sportifs" }] : []),
+    ...(role === "admin" ? [{ id: "admin" as const, label: "Admin" }] : []),
   ];
 
   return (
@@ -558,29 +527,40 @@ export default function SettingsPage() {
             </span>
             {isCurrentlyOnVacation && (
               <span className="rounded-full bg-orange-500/20 px-2.5 py-1 text-sm font-bold text-orange-400">
-                🏖️ En vacances
+                En vacances
               </span>
             )}
           </div>
         </div>
 
-        {/* Mode vacances — sélecteur de dates */}
+        {/* Mode vacances — replié derrière un bouton « + » tant qu'aucune date n'est posée */}
+        {!vacationStart && !vacationOpen ? (
+          <button
+            onClick={() => setVacationOpen(true)}
+            className="mt-3 flex w-full items-center gap-2.5 rounded-xl border-[1.5px] border-dashed border-line px-3 py-2.5 text-left text-[13px] font-bold text-dim"
+          >
+            <span className="grid h-7 w-7 shrink-0 place-items-center rounded-full bg-orange-500/15 font-black text-orange-400">+</span>
+            Ajouter des vacances
+          </button>
+        ) : (
         <div className="mt-3 rounded-xl bg-surface2 px-3 py-3 space-y-2.5">
           <div className="flex items-center justify-between">
-            <p className="text-sm font-medium">Mode vacances 🏖️</p>
-            {vacationStart && (
+            <p className="text-sm font-bold">Mode vacances 🌴</p>
+            {vacationStart ? (
               <button
-                onClick={clearVacation}
+                onClick={() => { clearVacation(); setVacationOpen(false); }}
                 disabled={vacationPending}
                 className="text-[12px] text-dim hover:text-danger disabled:opacity-50"
               >
                 Effacer
               </button>
+            ) : (
+              <button onClick={() => setVacationOpen(false)} className="text-[12px] text-dim">Annuler</button>
             )}
           </div>
           <p className="text-[12px] text-dim -mt-1">
             {isCurrentlyOnVacation
-              ? `🏖️ En vacances${vacationEnd ? ` jusqu'au ${new Date(vacationEnd + "T00:00:00").toLocaleDateString("fr-FR", { day: "numeric", month: "long" })}` : ""}`
+              ? `En vacances${vacationEnd ? ` jusqu'au ${new Date(vacationEnd + "T00:00:00").toLocaleDateString("fr-FR", { day: "numeric", month: "long" })}` : ""}`
               : vacationStart && !isCurrentlyOnVacation
               ? `Programmé du ${new Date(vacationStart + "T00:00:00").toLocaleDateString("fr-FR", { day: "numeric", month: "long" })}${vacationEnd ? ` au ${new Date(vacationEnd + "T00:00:00").toLocaleDateString("fr-FR", { day: "numeric", month: "long" })}` : ""}`
               : "Indique à ton coach que tu ne seras pas disponible"}
@@ -614,6 +594,7 @@ export default function SettingsPage() {
             {vacationPending ? "Enregistrement…" : "Enregistrer les vacances"}
           </button>
         </div>
+        )}
 
         <button
           onClick={signOut}
@@ -648,21 +629,36 @@ export default function SettingsPage() {
             <p className="mb-2 text-sm">Thème</p>
             <div className="flex rounded-xl bg-surface2 p-1" role="group" aria-label="Thème">
               {([
-                { id: "dark", label: "🌙 Sombre" },
-                { id: "light", label: "☀️ Clair" },
-                { id: "aurora", label: "✦ Aurora" },
-              ] as const).map((t) => (
-                <button
-                  key={t.id}
-                  onClick={() => setTheme(t.id)}
-                  aria-pressed={theme === t.id}
-                  className={`flex-1 rounded-lg py-2 text-sm font-semibold transition ${
-                    theme === t.id ? "bg-accent text-[#1a1500]" : "text-dim"
-                  }`}
-                >
-                  {t.label}
-                </button>
-              ))}
+                { id: "dark", label: "Sombre" },
+                { id: "light", label: "Clair" },
+                { id: "aurora", label: "Aurora" },
+              ] as const).map((t) => {
+                // Aperçu du fond : la couleur réellement affichée pour ce thème.
+                const swatch =
+                  t.id === "aurora"
+                    ? "radial-gradient(circle at 25% 30%, #7c3aed, transparent 60%), radial-gradient(circle at 80% 70%, #06b6d4, transparent 60%), #0b0d1a"
+                    : clampBgForTheme(
+                        theme === t.id ? bgColor : t.id === "dark" ? "#0f1115" : "#f4f5f7",
+                        t.id,
+                      );
+                return (
+                  <button
+                    key={t.id}
+                    onClick={() => setTheme(t.id)}
+                    aria-pressed={theme === t.id}
+                    className={`flex flex-1 items-center justify-center gap-2 rounded-lg py-2 text-sm font-bold transition ${
+                      theme === t.id ? "bg-accent text-[#1a1500]" : "text-dim"
+                    }`}
+                  >
+                    <span
+                      aria-hidden
+                      className="h-5 w-5 shrink-0 rounded-full border border-black/25 shadow-[inset_0_0_0_1px_rgba(255,255,255,0.15)]"
+                      style={{ background: swatch }}
+                    />
+                    {t.label}
+                  </button>
+                );
+              })}
             </div>
             {isElevated && theme === "aurora" && (
               <p className="mt-3 text-[12px] text-dim">
@@ -724,74 +720,6 @@ export default function SettingsPage() {
             <NotifPrefsPanel />
           </section>
 
-          <section className="rounded-2xl border border-line bg-surface p-4">
-            <h2 className="mb-3 font-bold">Tuiles de l&apos;accueil</h2>
-            <div className="space-y-5">
-                <p className="text-[12px] text-dim -mt-1">
-                  Choisissez l&apos;info affichée sur chaque carte. &quot;Masqué&quot; = aucune info.
-                </p>
-
-                {Object.entries(CARD_INFO_OPTS).map(([href, opts]) => {
-                  const current = (state.preferences?.cardInfoMode?.[href] ?? "hidden") as CardInfoOption;
-                  return (
-                    <div key={href}>
-                      <p className="mb-2 text-sm font-semibold">{CARD_INFO_LABELS[href]}</p>
-                      <div className="flex flex-wrap gap-1.5">
-                        {opts.map((opt) => (
-                          <button
-                            key={opt.value}
-                            onClick={() =>
-                              update((s) => {
-                                if (!s.preferences.cardInfoMode) s.preferences.cardInfoMode = {};
-                                s.preferences.cardInfoMode[href] = opt.value;
-                              })
-                            }
-                            className={`rounded-full px-3 py-1.5 text-xs font-semibold transition ${
-                              current === opt.value
-                                ? "bg-accent text-[#1a1500]"
-                                : "bg-surface2 text-dim hover:text-ink"
-                            }`}
-                          >
-                            {opt.label}
-                          </button>
-                        ))}
-                      </div>
-                      {/* Picker exercice pour "Au choix ★" */}
-                      {href === "/records" && current === "chosenRecord" && (
-                        <div className="mt-2">
-                          {state.records.strength.length === 0 ? (
-                            <p className="text-[12px] text-dim">Aucun record enregistré.</p>
-                          ) : (
-                            <select
-                              value={state.preferences?.chosenRecordExerciseId ?? ""}
-                              onChange={(e) =>
-                                update((s) => {
-                                  s.preferences.chosenRecordExerciseId = e.target.value || undefined;
-                                })
-                              }
-                              className="w-full rounded-xl border border-line bg-surface2 px-3 py-2 text-sm"
-                            >
-                              <option value="">Sélectionner un exercice…</option>
-                              {state.records.strength.map((ex) => (
-                                <option key={ex.exId} value={ex.exId}>{ex.name ?? ex.exId}</option>
-                              ))}
-                            </select>
-                          )}
-                        </div>
-                      )}
-                    </div>
-                  );
-                })}
-
-                {/* Objectifs — non configurable */}
-                <div>
-                  <p className="mb-1 text-sm font-semibold">🎯 Mes Objectifs</p>
-                  <p className="text-[12px] text-dim">
-                    Toujours affiché — compte à rebours J-X, nom et lieu de la compétition.
-                  </p>
-                </div>
-            </div>
-          </section>
         </>
       )}
 

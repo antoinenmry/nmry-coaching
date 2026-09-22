@@ -47,14 +47,23 @@ function getWeekBounds(): [string, string] {
   return [fmt(mon), fmt(sun)];
 }
 
+// Sous-titres fixes (plus de réglage) ; les records tournent au hasard à chaque retour.
+const CARD_MODE: Record<string, string> = {
+  "/plan": "nextSession",
+  "/records": "randomRecord",
+  "/followup": "activeInjury",
+  "/library": "exerciseCount",
+};
+
 function getCardInfo(
   href: string,
   state: AppState,
   library: ExerciseLibrary,
   today: string,
+  seed: number,
 ): CardInfo | null {
-  const mode = state.preferences?.cardInfoMode?.[href] ?? "hidden";
-  if (mode === "hidden") return null;
+  const mode = CARD_MODE[href];
+  if (!mode) return null;
 
   switch (href) {
     case "/plan": {
@@ -81,6 +90,14 @@ function getCardInfo(
       return null;
     }
     case "/records": {
+      if (mode === "randomRecord") {
+        const withRecords = state.records.strength.filter((e) => e.visible !== false && e.entries.length > 0);
+        if (!withRecords.length) return { main: "—", sub: "Aucun record enregistré", big: true };
+        const ex = withRecords[Math.floor(seed * withRecords.length) % withRecords.length];
+        const best = [...ex.entries].sort((a, b) => b.weight - a.weight || b.reps - a.reps)[0];
+        const name = ex.name || library.exercises.find((l) => l.id === ex.exId)?.name || ex.exId;
+        return { main: `${best.weight} kg × ${best.reps}`, sub: name };
+      }
       if (mode === "lastRecord") {
         let latest: { date: string; name: string; weight: number; reps: number } | null = null;
         for (const ex of state.records.strength) {
@@ -107,7 +124,7 @@ function getCardInfo(
         const injury = state.followups.find((f) => f.type === "injury" && !f.dateEnd);
         if (!injury) return { main: "✓", sub: "Aucune blessure active", big: true };
         const txt = injury.text.length > 28 ? injury.text.slice(0, 28) + "…" : injury.text;
-        return { main: txt, sub: "🤕 Blessure active" };
+        return { main: txt, sub: "Blessure active" };
       }
       if (mode === "lastNote") {
         const last = [...state.notes].sort((a, b) => b.createdAt.localeCompare(a.createdAt))[0];
@@ -126,7 +143,7 @@ function getCardInfo(
         const favId = state.preferences?.favoriteExerciseId;
         if (!favId) return { main: "☆", sub: "Aucun favori défini", big: true };
         const fav = library.exercises.find((e) => e.id === favId);
-        return fav ? { main: fav.name, sub: "⭐ Favori" } : { main: "☆", sub: "Favori introuvable", big: true };
+        return fav ? { main: fav.name, sub: "Favori" } : { main: "☆", sub: "Favori introuvable", big: true };
       }
       return null;
     }
@@ -155,6 +172,9 @@ export default function Dashboard() {
   const today = new Date().toISOString().slice(0, 10);
   const isCoach = role === "coach" || role === "admin";
   const displayName = state.profile.name || me?.name || me?.email || "Moi";
+  // Tirage fait une fois par affichage de l'accueil → un record différent à chaque retour.
+  const [recordSeed, setRecordSeed] = useState(0);
+  useEffect(() => { setRecordSeed(Math.random()); }, []); // après montage : pas d'écart SSR / client
 
   // Messages non lus + urgents — source unique de vérité : table chat_messages via API
   // (coach = total tous sportifs ; sportif = sa conversation). Remplace l'ancienne lecture
@@ -359,7 +379,7 @@ export default function Dashboard() {
             ? "Mon profil"
             : c.href === "/goals"
               ? (nextGoal ? `${countdownLabel(nextGoal.date)} · ${nextGoal.competition}` : null)
-              : cardSubtitle(getCardInfo(c.href, state, library, today));
+              : cardSubtitle(getCardInfo(c.href, state, library, today, recordSeed));
           return (
             <Link
               key={c.href}
