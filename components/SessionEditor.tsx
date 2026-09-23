@@ -260,6 +260,7 @@ export default function SessionEditor({
   const [copyDates, setCopyDates] = useState<string[]>([]);
   const [copiedCount, setCopiedCount] = useState(0);
   const [dupOpen, setDupOpen] = useState(false);
+  const [sessionCommentOpen, setSessionCommentOpen] = useState(false);
   // Déroulé : une seule ligne d'exercice ouverte à la fois.
   const [openUid, setOpenUid] = useState<string | null>(null);
 
@@ -650,6 +651,57 @@ export default function SessionEditor({
             <p className="py-3 text-center text-[13px] text-dim">Aucun exercice.</p>
           )}
         </div>
+
+        {/* Commentaire du sportif sur la séance — replié sous le déroulé ; affiché
+            d'office s'il est rempli, pour que le coach le voie sans rien ouvrir. */}
+        {session.exercises.length > 0 && (session.clientComment || !isCoach || isSelf) && (
+          <div className="mt-3">
+            {sessionCommentOpen && (!isCoach || isSelf) ? (
+              <div className="rounded-2xl border border-accent2/40 bg-surface2 px-3.5 py-3">
+                <span className="mb-1.5 block text-[10.5px] font-black uppercase tracking-[0.12em] text-accent2">
+                  Mon commentaire
+                </span>
+                <textarea
+                  autoFocus
+                  value={session.clientComment ?? ""}
+                  onChange={(e) => patchSession({ clientComment: e.target.value })}
+                  placeholder="Ressenti général, douleur, remarque pour le coach…"
+                  className="!min-h-[80px] !text-[13.5px]"
+                />
+                <button
+                  type="button"
+                  onClick={() => setSessionCommentOpen(false)}
+                  className="mt-2 rounded-full border border-line bg-surface px-3.5 py-1.5 text-[12px] font-black text-dim"
+                >
+                  Fermer
+                </button>
+              </div>
+            ) : session.clientComment ? (
+              <button
+                type="button"
+                onClick={() => (!isCoach || isSelf) && setSessionCommentOpen(true)}
+                className="relative flex w-full items-start gap-2.5 rounded-2xl bg-surface2 py-2.5 pl-4 pr-3.5 text-left"
+              >
+                <span aria-hidden className="absolute bottom-2.5 left-0 top-2.5 w-[3px] rounded-full bg-accent2" />
+                <span className="min-w-0 flex-1">
+                  <span className="block text-[10px] font-black uppercase tracking-[0.12em] text-accent2">
+                    {isCoach && !isSelf ? "Commentaire du sportif" : "Mon commentaire"}
+                  </span>
+                  <span className="mt-0.5 block whitespace-pre-wrap text-[14px] leading-snug">{session.clientComment}</span>
+                </span>
+              </button>
+            ) : (
+              <button
+                type="button"
+                onClick={() => setSessionCommentOpen(true)}
+                className="flex w-full items-center gap-2.5 rounded-2xl border-[1.5px] border-dashed border-line px-3.5 py-2.5 text-left text-[13px] font-black text-dim"
+              >
+                <span className="grid h-7 w-7 shrink-0 place-items-center rounded-full bg-accent2/15 font-black text-accent2">+</span>
+                Commentaire
+              </button>
+            )}
+          </div>
+        )}
 
         {/* Actions coach */}
         {isCoach && (
