@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { sendPushToUser } from "@/lib/push";
+import { ensureDefaultCoach } from "@/lib/defaultCoach";
 
 /**
  * POST /api/auth/on-signup
@@ -31,6 +32,9 @@ export async function POST(req: NextRequest) {
   const displayName = userName || userEmail || "Nouvel utilisateur";
 
   const admin = createAdminClient();
+
+  // Affectation automatique au coach par défaut (l'admin peut réaffecter ensuite).
+  await ensureDefaultCoach(admin, user.id).catch(() => null);
 
   // Récupérer tous les coaches et admins
   const { data: elevated } = await admin
