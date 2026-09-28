@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import Link from "next/link";
 import { useData } from "@/components/DataProvider";
 import { createClient } from "@/lib/supabase/client";
 import { daysUntil, countdownLabel, frenchDate } from "@/lib/dates";
@@ -17,6 +18,20 @@ export default function OverviewPage() {
   const [data, setData] = useState<ClientData[]>([]);
   const [loading, setLoading] = useState(true);
   const [tab, setTab] = useState<"injuries" | "goals">("injuries");
+  // Messages urgents non lus, toutes conversations confondues.
+  const [urgents, setUrgents] = useState<
+    { id: string; clientId: string; clientName: string; text: string; isVoice: boolean; createdAt: string }[]
+  >([]);
+
+  useEffect(() => {
+    if (ctxLoading || (role !== "coach" && role !== "admin")) return;
+    let cancelled = false;
+    fetch("/api/chat/urgent")
+      .then((r) => (r.ok ? r.json() : { messages: [] }))
+      .then((d) => { if (!cancelled) setUrgents(d.messages ?? []); })
+      .catch(() => {});
+    return () => { cancelled = true; };
+  }, [ctxLoading, role]);
 
   useEffect(() => {
     if (ctxLoading) return;
@@ -99,6 +114,34 @@ export default function OverviewPage() {
   return (
     <div>
       <p className="mb-4 text-sm text-dim">{data.length} sportif{data.length > 1 ? "s" : ""}</p>
+
+      {/* Messages urgents — un tap ouvre la conversation sur le message */}
+      {urgents.length > 0 && (
+        <div className="mb-4 overflow-hidden rounded-2xl border border-danger/60 bg-[linear-gradient(135deg,color-mix(in_srgb,var(--color-danger)_22%,var(--color-surface)),var(--color-surface)_70%)]">
+          <p className="px-4 pt-3.5 text-[11px] font-black uppercase tracking-[0.12em] text-danger">
+            {urgents.length} message{urgents.length > 1 ? "s" : ""} urgent{urgents.length > 1 ? "s" : ""} non lu{urgents.length > 1 ? "s" : ""}
+          </p>
+          <div className="divide-y divide-danger/20 pb-1 pt-2">
+            {urgents.map((m) => (
+              <Link
+                key={m.id}
+                href={`/followup?client=${encodeURIComponent(m.clientId)}&msg=${encodeURIComponent(m.id)}`}
+                className="flex items-center gap-3 px-3.5 py-2.5 transition active:bg-danger/10"
+              >
+                <span aria-hidden className="min-h-[28px] w-1 shrink-0 self-stretch rounded bg-danger" />
+                <span className="min-w-0 flex-1">
+                  <span className="block text-[14px] font-black">{m.clientName}</span>
+                  <span className="block truncate text-[12.5px] text-dim">{m.text.split("\n")[0]}</span>
+                </span>
+                <span className="shrink-0 text-[11px] font-bold text-dim">
+                  {new Date(m.createdAt).toLocaleDateString("fr-FR", { day: "numeric", month: "short" })}
+                </span>
+                <span aria-hidden className="text-lg text-dim">›</span>
+              </Link>
+            ))}
+          </div>
+        </div>
+      )}
 
       {/* Bandeau blessures actives */}
       {activeInjuries.length > 0 && (

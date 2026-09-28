@@ -291,7 +291,7 @@ function VoicePlayer({ audioUrl, messageId, isMe }: { audioUrl?: string; message
 }
 
 // ─── Tab Messages ─────────────────────────────────────────────────────────────
-function MessagesTab() {
+function MessagesTab({ initialClientId, focusMsgId }: { initialClientId?: string; focusMsgId?: string }) {
   const { me, role, clients } = useData();
   const isElevated = role === "coach" || role === "admin";
 
@@ -314,12 +314,21 @@ function MessagesTab() {
   const scrollRef = useRef<HTMLDivElement>(null);
   const isPrependingRef = useRef(false);
 
-  // Sélectionne le premier sportif une fois la liste chargée (coach)
+  // Sélectionne le sportif : celui passé en paramètre (lien depuis la vue
+  // d'ensemble sur un message urgent), sinon le premier de la liste.
   useEffect(() => {
-    if (isElevated && !chatClientId && clientList.length > 0) {
+    if (!isElevated || chatClientId) return;
+    if (initialClientId && clientList.some((c) => c.id === initialClientId)) {
+      setChatClientId(initialClientId);
+    } else if (clientList.length > 0) {
       setChatClientId(clientList[0].id);
     }
-  }, [isElevated, chatClientId, clientList]);
+  }, [isElevated, chatClientId, clientList, initialClientId]);
+
+  // Message ciblé par le lien : on le met en surbrillance puis on l'oublie.
+  const [highlightId, setHighlightId] = useState<string | null>(focusMsgId ?? null);
+  const focusDoneRef = useRef<string | null>(null);
+  const moreTriesRef = useRef(0);
 
   // Première page : les 15 messages les plus récents.
   // ⚡ Cache-first : si la conversation est déjà en mémoire, on l'affiche
@@ -484,6 +493,28 @@ function MessagesTab() {
     const scroller = scrollRef.current;
     if (scroller) scroller.scrollTop = scroller.scrollHeight;
   }, [messages.length]);
+
+  // Lien « message urgent » depuis la vue d'ensemble : on amène le message ciblé
+  // dans la fenêtre du chat (scroll du conteneur seulement) et on le surligne.
+  useEffect(() => {
+    if (!focusMsgId || focusDoneRef.current === focusMsgId) return;
+    const scroller = scrollRef.current;
+    if (!scroller) return;
+    const el = scroller.querySelector<HTMLElement>(`[data-msg-id="${focusMsgId}"]`);
+    if (!el) {
+      // Pas encore chargé : on remonte l'historique (3 pages maximum).
+      if (hasMore && !loadingMore && moreTriesRef.current < 3) {
+        moreTriesRef.current += 1;
+        loadMore();
+      }
+      return;
+    }
+    focusDoneRef.current = focusMsgId;
+    scroller.scrollTop = Math.max(0, el.offsetTop - scroller.clientHeight / 2 + el.clientHeight / 2);
+    setHighlightId(focusMsgId);
+    const t = setTimeout(() => setHighlightId(null), 4000);
+    return () => clearTimeout(t);
+  }, [focusMsgId, messages, hasMore, loadingMore, loadMore]);
 
   // Envoie un message (texte, vocal ou media) via l'API chat, puis recharge la conversation.
   // Renvoie true si l'enregistrement a réussi (utile pour nettoyer un média orphelin).
@@ -775,7 +806,13 @@ function MessagesTab() {
           const showAvatar =
             !prev || prev.type === "broadcast" || prev.type === "plan_update" || prev.senderId !== msg.senderId;
           return (
-            <div key={msg.id} className={`flex items-end gap-2 ${isMe ? "flex-row-reverse" : ""} ${showAvatar ? "mt-2" : ""}`}>
+            <div
+              key={msg.id}
+              data-msg-id={msg.id}
+              className={`flex items-end gap-2 ${isMe ? "flex-row-reverse" : ""} ${showAvatar ? "mt-2" : ""} ${
+                highlightId === msg.id ? "rounded-2xl ring-2 ring-danger ring-offset-2 ring-offset-surface" : ""
+              }`}
+            >
               {showAvatar ? (
                 <Avatar name={senderName} photo={senderPhoto} size={26} />
               ) : (
@@ -1426,6 +1463,15 @@ function BlocNotesTab() {
 export default function FollowupPage() {
   const { loading } = useData();
   const [tab, setTab] = useState<"messages" | "sante" | "notes">("messages");
+  // ?client=<id>&msg=<id> — arrivée depuis un message urgent de la vue d'ensemble.
+  // Lu depuis window (pas useSearchParams : évite d'imposer un <Suspense> au build).
+  const [deepLink, setDeepLink] = useState<{ client?: string; msg?: string }>({});
+  useEffect(() => {
+    const p = new URLSearchParams(window.location.search);
+    const client = p.get("client") ?? undefined;
+    const msg = p.get("msg") ?? undefined;
+    if (client || msg) { setDeepLink({ client, msg }); setTab("messages"); }
+  }, []);
   const [unreadCount, setUnreadCount] = useState(0);
 
   // Ouvre TOUJOURS la page en haut (onglets Messages/Santé/Bloc-notes visibles),
@@ -1480,7 +1526,7 @@ export default function FollowupPage() {
         ))}
       </div>
 
-      {tab === "messages" && <MessagesTab />}
+      {tab === "messages" && <MessagesTab initialClientId={deepLink.client} focusMsgId={deepLink.msg} />}
       {tab === "sante"    && <SanteTab />}
       {tab === "notes"    && <BlocNotesTab />}
     </div>
