@@ -980,8 +980,10 @@ function ExerciseBlock({
           ? color
           : "#6b7280";
   const setsReps = [ex.setsLabel ?? (ex.sets || ""), ex.repsLabel ?? (ex.reps || "")].filter((v) => v !== "").join(" × ");
+  // Colonne de droite = TOUJOURS la prescription du coach (kg / RPE / %).
+  // Le réalisé « S-1 » reste dans la ligne ouverte : l'afficher ici prêtait à
+  // confusion avec ce qui est demandé pour aujourd'hui.
   const prescribed = ex.weightLabel || (ex.weight > 0 ? (isPace ? fmtPaceDisplay(ex.weight) : `${ex.weight} kg`) : "");
-  const realized = hasRealized ? (isPace ? fmtPaceDisplay(ex.weightClient ?? 0) : `${ex.weightClient} kg`) : "";
 
   return (
     <div
@@ -1006,12 +1008,8 @@ function ExerciseBlock({
           )}
         </span>
         <span className="whitespace-nowrap text-right text-[15px] font-black">{setsReps || "—"}</span>
-        <span
-          className={`truncate text-right text-[14px] ${
-            ex.failed ? "font-black text-danger" : realized ? "font-black text-ok" : prescribed ? "font-bold text-dim" : "text-dim"
-          }`}
-        >
-          {ex.failed ? "Raté" : realized || prescribed || "—"}
+        <span className={`truncate text-right text-[14px] ${prescribed ? "font-black text-ink" : "text-dim"}`}>
+          {prescribed || "—"}
         </span>
       </button>
 
