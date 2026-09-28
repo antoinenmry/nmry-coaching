@@ -168,10 +168,17 @@ function DashboardSkeleton() {
 }
 
 export default function Dashboard() {
-  const { me, state, library, loading, role, update, activeUserId } = useData();
+  const { me, state, library, loading, role, update, activeUserId, clients } = useData();
   const today = new Date().toISOString().slice(0, 10);
   const isCoach = role === "coach" || role === "admin";
-  const displayName = state.profile.name || me?.name || me?.email || "Moi";
+  // Profil affiché = celui du profil ACTIF. Ne jamais retomber sur le nom du
+  // compte connecté quand le coach consulte un sportif (nom du coach affiché).
+  const activeProfile = clients.find((c) => c.id === activeUserId);
+  const displayName =
+    state.profile.name ||
+    (activeUserId && activeUserId !== me?.id
+      ? activeProfile?.name || activeProfile?.email || "Sportif"
+      : me?.name || me?.email || "Moi");
   // Tirage fait une fois par affichage de l'accueil → un record différent à chaque retour.
   const [recordSeed, setRecordSeed] = useState(0);
   useEffect(() => { setRecordSeed(Math.random()); }, []); // après montage : pas d'écart SSR / client

@@ -143,6 +143,19 @@ export function DataProvider({ children }: { children: React.ReactNode }) {
         .eq("user_id", userId)
         .maybeSingle();
       const loaded = { ...emptyState(), ...(data?.data ?? {}) };
+      // Nouveau compte : le blob app_state est vide, donc `profile.name` aussi.
+      // On reprend le nom donné à l'inscription (table profiles) — sinon l'app
+      // retombait sur le nom de l'utilisateur connecté (le coach voyait SON nom
+      // sur la fiche de son sportif).
+      if (!loaded.profile?.name) {
+        const { data: prof } = await supabase
+          .from("profiles")
+          .select("name")
+          .eq("id", userId)
+          .maybeSingle();
+        const signupName = ((prof as { name?: string } | null)?.name ?? "").trim();
+        if (signupName) loaded.profile = { ...loaded.profile, name: signupName };
+      }
       setActiveUserId(userId);
       setState(loaded);
       // Amorce le baseline : on vient de charger ce blob → ne pas le réécrire tel quel.
