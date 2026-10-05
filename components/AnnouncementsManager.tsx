@@ -7,6 +7,7 @@ import type { Announcement } from "@/lib/types";
 
 const COLORS = ["#ab47bc", "#42a5f5", "#66bb6a", "#ffb300", "#ef5350", "#26c6da"];
 const LABEL = "mb-1.5 block text-[10.5px] font-black uppercase tracking-[0.12em] text-dim";
+export const todayISO = () => new Date().toISOString().slice(0, 10);
 const GOLD = "bg-gradient-to-br from-[#ffc53d] to-[#ff9f00] text-[#1a1500]";
 const todayKey = () => new Date().toISOString().slice(0, 10);
 
@@ -82,7 +83,7 @@ export default function AnnouncementsManager() {
   );
 }
 
-function AnnouncementForm({ initial, onSave, onDelete, onClose }: {
+export function AnnouncementForm({ initial, onSave, onDelete, onClose }: {
   initial: Announcement | null; onSave: (a: Announcement) => void; onDelete?: () => void; onClose: () => void;
 }) {
   const [label, setLabel] = useState(initial?.label ?? "");

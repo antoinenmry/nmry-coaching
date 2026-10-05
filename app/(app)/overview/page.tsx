@@ -147,7 +147,7 @@ export default function OverviewPage() {
       {activeInjuries.length > 0 && (
         <div className="mb-4 rounded-2xl border border-danger/50 bg-danger/8 p-4">
           <p className="mb-2.5 flex items-center gap-2 font-bold text-danger">
-            🩹 {activeInjuries.length} blessure{activeInjuries.length > 1 ? "s" : ""} active{activeInjuries.length > 1 ? "s" : ""}
+            {activeInjuries.length} blessure{activeInjuries.length > 1 ? "s" : ""} active{activeInjuries.length > 1 ? "s" : ""}
           </p>
           <div className="space-y-2">
             {activeInjuries.map((f) => (
@@ -167,13 +167,13 @@ export default function OverviewPage() {
           onClick={() => setTab("injuries")}
           className={`flex-1 rounded-md px-3 py-2 text-sm font-semibold ${tab === "injuries" ? "bg-danger text-white" : "text-dim"}`}
         >
-          🩹 Blessures{injuryCount > 0 ? ` (${injuryCount})` : ""}
+          Blessures{injuryCount > 0 ? ` (${injuryCount})` : ""}
         </button>
         <button
           onClick={() => setTab("goals")}
           className={`flex-1 rounded-md px-3 py-2 text-sm font-semibold ${tab === "goals" ? "bg-accent text-[#1a1500]" : "text-dim"}`}
         >
-          🎯 Objectifs{goalCount > 0 ? ` (${goalCount})` : ""}
+          Objectifs{goalCount > 0 ? ` (${goalCount})` : ""}
         </button>
       </div>
 
