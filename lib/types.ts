@@ -276,6 +276,19 @@ export interface UnlockedBadge {
   unlockedAt: string;  // YYYY-MM-DD
 }
 
+/** Carte d'annonce du carrousel de l'accueil (promo, info, rappel…). */
+export interface Announcement {
+  id: string;
+  label: string;        // étiquette courte au-dessus du titre (ex. « Partenaire »)
+  title: string;
+  text: string;
+  code?: string;        // code promo, copié au tap
+  link?: string;        // lien ouvert au tap
+  color: string;        // couleur du dégradé (hex)
+  endDate?: string;     // YYYY-MM-DD : n'est plus affichée après cette date (incluse)
+  createdAt: string;    // ISO
+}
+
 export interface ExerciseLibrary {
   categories: FilterCategory[];
   exercises: LibraryExercise[];
@@ -288,6 +301,7 @@ export interface ExerciseLibrary {
   challengesVisible?: boolean;  // true = carte visible côté client sur l'accueil
   customBadgeColors?: string[]; // couleurs de badge personnalisées sauvegardées (hex), en plus des presets fixes
   mapVisible?: boolean;         // true = onglet "Ma carte" visible côté sportif (off par défaut → coach/admin seulement)
+  announcements?: Announcement[]; // cartes d'annonce du carrousel de l'accueil (créées par le coach, visibles par tous)
   cardIcons?: Record<string, string>; // href → emoji ou URL Storage (icône personnalisée des cartes d'accueil, admin uniquement)
 }
 

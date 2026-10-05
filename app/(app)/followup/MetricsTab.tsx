@@ -212,11 +212,11 @@ function MetricChart({ allMetrics, visibleIds, days }: {
 }
 
 // ─── Composant principal ──────────────────────────────────────────────────────
-export default function MetricsTab() {
+export default function MetricsTab({ view }: { view: "donnees" | "tendances" }) {
   const { state, update } = useData();
+  const subTab = view; // le sélecteur Données / Tendances vit maintenant dans l'en-tête de « Santé »
   const initializedRef = useRef(false);
 
-  const [subTab, setSubTab] = useState<"donnees" | "tendances">("donnees");
   const [visibleChartIds, setVisibleChartIds] = useState<string[]>([]);
   const [chartDays, setChartDays] = useState(30);
 
@@ -358,21 +358,6 @@ export default function MetricsTab() {
 
   return (
     <div className="space-y-4">
-      {/* Switch sous-onglets */}
-      <div className="flex rounded-xl bg-surface2 p-1">
-        {(["donnees", "tendances"] as const).map(t => (
-          <button
-            key={t}
-            onClick={() => setSubTab(t)}
-            className={`flex-1 rounded-lg py-2 text-[13px] font-semibold transition ${
-              subTab === t ? "bg-surface text-ink shadow-sm" : "text-dim"
-            }`}
-          >
-            {t === "donnees" ? "Données" : "Tendances"}
-          </button>
-        ))}
-      </div>
-
       {/* ── Sous-onglet Données ─────────────────────────────────────────────── */}
       {subTab === "donnees" && (
         <div className="space-y-3">

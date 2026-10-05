@@ -17,6 +17,8 @@ interface Broadcast {
   id: string;
   message: string;
   created_at: string;
+  coachName?: string;
+  coachPhoto?: string;
 }
 
 const STORAGE_KEY = "nmry_seen_broadcasts";
@@ -98,6 +100,15 @@ export default function BroadcastPopup() {
               const seen = getSeenIds();
               if (seen.has(b.id)) return;
               setQueue((prev) => [b, ...prev]);
+              // Le payload Realtime n'a pas l'identité du coach : on la récupère
+              // (nom + photo) puis on enrichit la carte déjà affichée.
+              fetch("/api/broadcasts")
+                .then((r) => r.json())
+                .then((all: Broadcast[]) => {
+                  const full = Array.isArray(all) ? all.find((x) => x.id === b.id) : null;
+                  if (full) setQueue((prev) => prev.map((x) => (x.id === b.id ? { ...x, ...full } : x)));
+                })
+                .catch(() => {});
             }
           )
           .subscribe();
@@ -120,33 +131,31 @@ export default function BroadcastPopup() {
     return d.toLocaleString("fr-FR", { day: "numeric", month: "long", hour: "2-digit", minute: "2-digit" });
   }
 
+  const coachName = current.coachName || "Votre coach";
+  const initial = coachName.trim().charAt(0).toUpperCase() || "C";
+
   return (
-    <div className="fixed inset-0 z-[100] flex items-end justify-center bg-black/60 sm:items-center p-4">
-      <div className="w-full max-w-sm rounded-3xl border border-line bg-surface shadow-2xl overflow-hidden">
-        {/* Header */}
-        <div className="bg-accent px-5 pt-5 pb-4">
-          <div className="flex items-center gap-2">
-            <span className="text-2xl">📢</span>
-            <div>
-              <p className="font-black text-[#1a1500] text-lg leading-tight">Message de votre coach</p>
-              <p className="text-[12px] text-[#1a1500]/70">{fmtDate(current.created_at)}</p>
-            </div>
-          </div>
-        </div>
-
-        {/* Corps */}
-        <div className="px-5 py-5">
-          <p className="text-base leading-relaxed whitespace-pre-wrap">{current.message}</p>
-        </div>
-
-        {/* Bouton */}
-        <div className="px-5 pb-5">
-          <button
-            onClick={dismiss}
-            className="w-full rounded-2xl bg-accent py-3 font-bold text-[#1a1500] text-sm transition active:scale-95"
-          >
-            {queue.length > 1 ? `OK (${queue.length - 1} autre${queue.length - 1 > 1 ? "s" : ""})` : "OK, j'ai lu !"}
-          </button>
+    <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/60 p-5">
+      {/* La bulle photo déborde de la carte, en bas à droite : conteneur sans overflow-hidden */}
+      <div className="relative w-full max-w-sm rounded-3xl border border-line bg-surface px-5 pb-8 pt-5 shadow-2xl">
+        <p className="text-[10.5px] font-black uppercase tracking-[0.12em] text-accent">
+          {coachName} · votre coach
+        </p>
+        <p className="mt-0.5 text-[11.5px] text-dim">{fmtDate(current.created_at)}</p>
+        <p className="mb-5 mt-3 whitespace-pre-wrap pr-10 text-[15px] leading-relaxed">{current.message}</p>
+        <button
+          onClick={dismiss}
+          className="w-full rounded-full bg-gradient-to-br from-[#ffc53d] to-[#ff9f00] py-3 text-sm font-black text-[#1a1500] transition active:scale-95"
+        >
+          {queue.length > 1 ? `OK (${queue.length - 1} autre${queue.length - 1 > 1 ? "s" : ""})` : "OK, j'ai lu !"}
+        </button>
+        <div className="absolute -bottom-6 -right-1.5 grid h-[76px] w-[76px] place-items-center overflow-hidden rounded-full border-4 border-bg bg-gradient-to-br from-[#8b6b4a] to-[#3a2c20] text-[26px] font-black text-white shadow-[0_10px_24px_-6px_rgba(0,0,0,0.7)]">
+          {current.coachPhoto ? (
+            // eslint-disable-next-line @next/next/no-img-element
+            <img src={current.coachPhoto} alt={coachName} className="h-full w-full object-cover" />
+          ) : (
+            initial
+          )}
         </div>
       </div>
     </div>

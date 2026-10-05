@@ -1028,6 +1028,7 @@ const GOLD = "bg-gradient-to-br from-[#ffc53d] to-[#ff9f00] text-[#1a1500]";
 function SanteTab() {
   const { state } = useData();
   const [subTab, setSubTab] = useState<"suivi" | "metriques">("suivi");
+  const [metricView, setMetricView] = useState<"donnees" | "tendances">("donnees");
   const [adding, setAdding] = useState(false);
   const [editingId, setEditingId] = useState<string | null>(null);
 
@@ -1035,35 +1036,52 @@ function SanteTab() {
 
   return (
     <div className="space-y-4">
-      {/* Sous-onglets Suivi / Métriques */}
-      <div className="grid grid-cols-2 gap-1 rounded-full border border-line bg-surface p-1">
-        {(["suivi", "metriques"] as const).map(t => (
-          <button
-            key={t}
-            onClick={() => setSubTab(t)}
-            className={`rounded-full py-2 text-[13px] font-black transition ${
-              subTab === t ? "bg-surface2 text-ink shadow-[inset_0_0_0_1px_var(--color-line)]" : "text-dim"
-            }`}
-          >
-            {t === "suivi" ? "Suivi" : "Métriques"}
-          </button>
-        ))}
+      {/* Une seule ligne : sous-onglets à gauche, action ou 2ᵉ sélecteur à droite
+          (avant : 3 barres empilées avant le contenu). */}
+      <div className="flex items-center gap-2">
+        <div className="flex rounded-full border border-line bg-surface p-0.5">
+          {(["suivi", "metriques"] as const).map(t => (
+            <button
+              key={t}
+              onClick={() => setSubTab(t)}
+              className={`rounded-full px-3 py-1.5 text-[12.5px] font-black transition ${
+                subTab === t ? "bg-surface2 text-ink shadow-[inset_0_0_0_1px_var(--color-line)]" : "text-dim"
+              }`}
+            >
+              {t === "suivi" ? "Suivi" : "Métriques"}
+            </button>
+          ))}
+        </div>
+        <div className="ml-auto">
+          {subTab === "suivi" ? (
+            <button
+              onClick={() => setAdding(true)}
+              aria-label="Nouvelle entrée"
+              className={`grid h-10 w-10 place-items-center rounded-full text-2xl font-black leading-none shadow-[0_6px_18px_-6px_rgba(255,170,0,0.7)] transition active:scale-95 ${GOLD}`}
+            >
+              +
+            </button>
+          ) : (
+            <div className="flex rounded-full border border-line bg-surface p-0.5">
+              {(["donnees", "tendances"] as const).map(t => (
+                <button
+                  key={t}
+                  onClick={() => setMetricView(t)}
+                  className={`rounded-full px-2.5 py-1.5 text-[12px] font-black transition ${
+                    metricView === t ? "bg-surface2 text-ink shadow-[inset_0_0_0_1px_var(--color-line)]" : "text-dim"
+                  }`}
+                >
+                  {t === "donnees" ? "Données" : "Tendances"}
+                </button>
+              ))}
+            </div>
+          )}
+        </div>
       </div>
 
-      {subTab === "metriques" && <MetricsTab />}
+      {subTab === "metriques" && <MetricsTab view={metricView} />}
 
       {subTab === "suivi" && <>
-        <div className="flex items-center gap-2">
-          <h2 className="flex-1 text-xl font-black">Mon suivi</h2>
-          <button
-            onClick={() => setAdding(true)}
-            aria-label="Nouvelle entrée"
-            className={`grid h-11 w-11 place-items-center rounded-full text-2xl font-black leading-none shadow-[0_6px_18px_-6px_rgba(255,170,0,0.7)] transition active:scale-95 ${GOLD}`}
-          >
-            +
-          </button>
-        </div>
-
         {state.followups.length === 0 ? (
           <button
             onClick={() => setAdding(true)}

@@ -2,6 +2,7 @@
 
 import Image from "next/image";
 import Link from "next/link";
+import AnnouncementCarousel from "@/components/AnnouncementCarousel";
 import { useEffect, useRef, useState } from "react";
 import { useData } from "@/components/DataProvider";
 import { daysUntil, countdownLabel } from "@/lib/dates";
@@ -310,6 +311,9 @@ export default function Dashboard() {
           </div>
         );
       })()}
+
+      {/* Annonces du coach : carrousel automatique (5 s) */}
+      <AnnouncementCarousel />
 
       {/* Bannière Vue d'ensemble (coach uniquement) — photo panoramique, même langage que les tuiles */}
       {isCoach && (

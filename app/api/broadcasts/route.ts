@@ -123,5 +123,17 @@ export async function GET() {
     .gt("expires_at", new Date().toISOString())
     .order("created_at", { ascending: false });
 
-  return NextResponse.json(broadcasts ?? []);
+  // Identité du coach (nom + photo URL) pour afficher sa bulle sur la pop-up.
+  // Photo : uniquement une URL Storage (jamais un base64 legacy, trop lourd).
+  const [{ data: coachProfile }, { data: coachState }] = await Promise.all([
+    admin.from("profiles").select("name").eq("id", assignment.coach_id).maybeSingle(),
+    admin.from("app_state").select("photo:data->profile->>photo").eq("user_id", assignment.coach_id).maybeSingle(),
+  ]);
+  const rawPhoto = (coachState as { photo?: string | null } | null)?.photo ?? "";
+  const coachName = (coachProfile as { name?: string } | null)?.name ?? "";
+  const coachPhoto = /^https?:\/\//.test(rawPhoto) ? rawPhoto : undefined;
+
+  return NextResponse.json(
+    (broadcasts ?? []).map((b) => ({ ...b, coachName, coachPhoto })),
+  );
 }
