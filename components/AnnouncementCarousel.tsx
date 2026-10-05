@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { useData } from "@/components/DataProvider";
 import type { Announcement } from "@/lib/types";
+import Fireworks from "@/components/Fireworks";
 
 /** Carte affichable : annonce du coach, carte automatique (anniversaire, victoire) ou rappel. */
 type Item = {
@@ -56,8 +57,6 @@ export default function AnnouncementCarousel() {
     const todays = todo.filter((s) => s.date === todayLocal);
     if (todays.length > 0) {
       reminders.push({ id: "rem-today", label: "Aujourd'hui", color: "#42a5f5", title: `Séance du jour : ${todays.map((s) => s.name).join(", ")}`, text: "Bonne séance !" });
-    } else if (todo.length > 0) {
-      reminders.push({ id: "rem-week", label: "Cette semaine", color: "#42a5f5", title: `Il te reste ${todo.length} séance${todo.length > 1 ? "s" : ""} cette semaine`, text: "" });
     }
     for (const g of state.goals) {
       if (!g.date) continue;
@@ -68,6 +67,19 @@ export default function AnnouncementCarousel() {
     }
     void today;
   }
+
+  // Feu d'artifice : une fois par jour et par anniversaire, ou à chaque tap sur la carte.
+  const [fireworks, setFireworks] = useState(false);
+  const birthdayIds = feed.filter((c) => c.id.startsWith("bd-")).map((c) => c.id).join(",");
+  useEffect(() => {
+    if (!birthdayIds) return;
+    try {
+      const k = `nmry_fireworks_${todayKey()}_${birthdayIds}`;
+      if (localStorage.getItem(k)) return;
+      localStorage.setItem(k, "1");
+    } catch { /* stockage indisponible : on lance quand même */ }
+    setFireworks(true);
+  }, [birthdayIds]);
 
   const items: Item[] = [
     ...feed.filter((c) => c.id.startsWith("bd-")),
@@ -118,7 +130,8 @@ export default function AnnouncementCarousel() {
   }
 
   return (
-    <div className="mb-3.5">
+    <div className="mb-3">
+      {fireworks && <Fireworks onDone={() => setFireworks(false)} />}
       <div
         ref={trackRef}
         onScroll={onScroll}
@@ -134,10 +147,10 @@ export default function AnnouncementCarousel() {
           return (
             <div
               key={a.id}
-              role={actionable ? "button" : undefined}
+              role={actionable || a.id.startsWith("bd-") ? "button" : undefined}
               tabIndex={actionable ? 0 : undefined}
-              onClick={() => actionable && activate(a)}
-              className="relative w-full shrink-0 snap-center overflow-hidden rounded-[20px] border px-4 py-3.5 text-left"
+              onClick={() => { if (a.id.startsWith("bd-")) setFireworks(true); else if (actionable) activate(a); }}
+              className="relative w-full shrink-0 snap-center overflow-hidden rounded-[20px] border px-4 py-3 text-left"
               style={{
                 background: `linear-gradient(120deg, color-mix(in srgb, ${a.color} 32%, var(--color-surface)), var(--color-surface) 78%)`,
                 borderColor: `color-mix(in srgb, ${a.color} 45%, transparent)`,
@@ -184,7 +197,7 @@ export default function AnnouncementCarousel() {
         })}
       </div>
       {count > 1 && (
-        <div className="mt-2 flex justify-center gap-1.5">
+        <div className="mt-1.5 flex justify-center gap-1.5">
           {items.map((a, i) => (
             <button
               key={a.id}

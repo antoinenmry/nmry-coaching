@@ -13,3 +13,9 @@ export const AUTH_ENABLED = true;
 // automatique ne s'applique qu'aux comptes qui n'ont encore aucun coach.
 // Mettre "" pour désactiver l'affectation automatique.
 export const DEFAULT_COACH_EMAIL = "simon.nemery@gmail.com";
+
+// Seuls ces comptes peuvent créer / modifier / supprimer les annonces du carrousel d'accueil
+// (les autres coachs gardent tout le reste de leurs droits). Vérifié aussi côté serveur.
+export const ANNOUNCEMENT_EDITORS = [DEFAULT_COACH_EMAIL, "antoine.nmry@gmail.com"].map((e) => e.toLowerCase());
+export const canEditAnnouncements = (email?: string | null) =>
+  !!email && ANNOUNCEMENT_EDITORS.includes(email.toLowerCase());

@@ -6,6 +6,7 @@ import Link from "next/link";
 import { useData } from "@/components/DataProvider";
 import { AnnouncementForm } from "@/components/AnnouncementsManager";
 import type { Announcement } from "@/lib/types";
+import { canEditAnnouncements } from "@/lib/config";
 
 const todayKey = () => new Date().toISOString().slice(0, 10);
 
@@ -15,7 +16,8 @@ const todayKey = () => new Date().toISOString().slice(0, 10);
  *  2. Annonces : ajouter / modifier / supprimer les cartes du carrousel des sportifs.
  */
 export default function CoachBanner({ urgent }: { urgent: number }) {
-  const { library, updateLibrary } = useData();
+  const { library, updateLibrary, me } = useData();
+  const canEdit = canEditAnnouncements(me?.email); // gestion des annonces : Simon et Antoine seulement
   const list = library.announcements ?? [];
   const [page, setPage] = useState(0);
   const [editing, setEditing] = useState<Announcement | "new" | null>(null);
@@ -84,6 +86,7 @@ export default function CoachBanner({ urgent }: { urgent: number }) {
         </Link>
 
         {/* Page 2 — Gestion des annonces */}
+        {canEdit && (
         <div
           className={`relative ${H} w-full shrink-0 snap-center overflow-hidden bg-[linear-gradient(120deg,color-mix(in_srgb,var(--color-accent)_18%,var(--color-surface)),var(--color-surface)_70%)] px-4 pb-6 pt-3`}
         >
@@ -121,14 +124,15 @@ export default function CoachBanner({ urgent }: { urgent: number }) {
             </div>
           )}
         </div>
+        )}
       </div>
 
       {/* Points de page */}
-      <div className="pointer-events-none absolute inset-x-0 bottom-2 flex justify-center gap-1.5">
+      {canEdit && <div className="pointer-events-none absolute inset-x-0 bottom-2 flex justify-center gap-1.5">
         {[0, 1].map((i) => (
           <span key={i} className={`h-1.5 rounded-full transition-all ${page === i ? "w-[18px] bg-white" : "w-1.5 bg-white/40"}`} />
         ))}
-      </div>
+      </div>}
 
       {editing && (
         <AnnouncementForm

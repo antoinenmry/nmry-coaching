@@ -4,7 +4,7 @@ import Image from "next/image";
 import Link from "next/link";
 import AnnouncementCarousel from "@/components/AnnouncementCarousel";
 import CoachBanner from "@/components/CoachBanner";
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useLayoutEffect, useRef, useState } from "react";
 import { useData } from "@/components/DataProvider";
 import { daysUntil, countdownLabel } from "@/lib/dates";
 import { challengesToUnlock, conditionText } from "@/lib/challenges";
@@ -265,6 +265,34 @@ export default function Dashboard() {
     });
   }
 
+  // Mobile : les tuiles se calent sur la hauteur d'écran restante (jamais plus que carrées),
+  // pour que l'ajout du bandeau coach ou du carrousel d'annonces ne crée AUCUN scroll.
+  const gridRef = useRef<HTMLDivElement>(null);
+  const [fitH, setFitH] = useState<number | null>(null);
+  useLayoutEffect(() => {
+    const el = gridRef.current;
+    if (!el) return;
+    const compute = () => {
+      if (window.innerWidth >= 640) { setFitH(null); return; }
+      const top = el.getBoundingClientRect().top + window.scrollY;
+      const vh = window.visualViewport?.height ?? window.innerHeight;
+      const tileW = (el.clientWidth - 12) / 2;
+      const square = 3 * tileW + 24;
+      const min = 3 * 92 + 24; // jamais sous ~92 px de haut par tuile
+      setFitH(Math.round(Math.max(min, Math.min(square, vh - top - 16))));
+    };
+    compute();
+    const ro = new ResizeObserver(compute);
+    ro.observe(document.body);
+    window.addEventListener("resize", compute);
+    window.visualViewport?.addEventListener("resize", compute);
+    return () => {
+      ro.disconnect();
+      window.removeEventListener("resize", compute);
+      window.visualViewport?.removeEventListener("resize", compute);
+    };
+  }, [loading]);
+
   if (loading) return <DashboardSkeleton />;
 
 
@@ -342,7 +370,11 @@ export default function Dashboard() {
       })()}
 
       {/* Grille de tuiles photo — 2 colonnes sur mobile, 3 dès 640 px */}
-      <div className="grid grid-cols-2 gap-3 sm:grid-cols-3">
+      <div
+        ref={gridRef}
+        className="grid grid-cols-2 gap-3 sm:grid-cols-3"
+        style={fitH ? { height: fitH, gridTemplateRows: "repeat(3, minmax(0, 1fr))" } : undefined}
+      >
         {CARDS.map((c) => {
           const isProfile = c.href === "/profile";
           // Tuile Profil : la photo du sportif s'il en a une, sinon la photo par défaut.
@@ -357,7 +389,7 @@ export default function Dashboard() {
             <Link
               key={c.href}
               href={c.href}
-              className="@container relative isolate block aspect-square overflow-hidden rounded-[20px] bg-surface2 text-white transition active:scale-[0.97] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent"
+              className="@container relative isolate block h-full min-h-0 overflow-hidden rounded-[20px] sm:aspect-square sm:h-auto bg-surface2 text-white transition active:scale-[0.97] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent"
             >
               {ownPhoto ? (
                 // Photo de profil (Supabase ou base64 historique) : <img> simple, next/image

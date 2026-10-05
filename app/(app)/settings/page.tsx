@@ -6,6 +6,7 @@ import { useTheme } from "@/components/ThemeProvider";
 import { clampBgForTheme } from "@/lib/themeColor";
 import NotifPrefsPanel from "@/components/NotifPrefsPanel";
 import AnnouncementsManager from "@/components/AnnouncementsManager";
+import { canEditAnnouncements } from "@/lib/config";
 import type { AthleteAdminData, AthleteStatus, AdminOverview, CoachWithClients, Profile } from "@/lib/types";
 
 function fmtDate(iso: string | null): string {
@@ -728,7 +729,7 @@ export default function SettingsPage() {
       {tab === "sportifs" && isElevated && (
         <>
           <BroadcastComposer />
-          <AnnouncementsManager />
+          {canEditAnnouncements(me?.email) && <AnnouncementsManager />}
           <section className="rounded-2xl border border-line bg-surface p-4">
             <AthletesManager />
           </section>

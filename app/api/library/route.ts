@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { requireRole } from "@/lib/apiAuth";
+import { canEditAnnouncements } from "@/lib/config";
 
 /**
  * PUT /api/library
@@ -14,6 +15,17 @@ export async function PUT(req: NextRequest) {
   const body = await req.json().catch(() => null);
   if (!body) return NextResponse.json({ error: "Corps de requête invalide" }, { status: 400 });
   const adminClient = createAdminClient();
+
+  // Annonces d'accueil : seuls les éditeurs désignés (lib/config) peuvent les modifier.
+  // On compare avec la version enregistrée : un autre coach qui sauvegarde la
+  // bibliothèque renvoie les annonces inchangées, et passe donc sans problème.
+  const { data: current } = await adminClient.from("library_state").select("data").eq("id", 1).maybeSingle();
+  const before = JSON.stringify((current?.data as { announcements?: unknown } | null)?.announcements ?? []);
+  const after = JSON.stringify((body as { announcements?: unknown }).announcements ?? []);
+  if (before !== after && !canEditAnnouncements(caller.user.email)) {
+    return NextResponse.json({ error: "Annonces réservées à Simon et Antoine" }, { status: 403 });
+  }
+
   const { error } = await adminClient
     .from("library_state")
     .upsert({ id: 1, data: body, updated_at: new Date().toISOString() }, { onConflict: "id" });
