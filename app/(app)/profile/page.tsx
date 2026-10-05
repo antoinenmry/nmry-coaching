@@ -21,6 +21,53 @@ const PILL_ON =
 const PILL_OFF =
   "border-line bg-[linear-gradient(180deg,color-mix(in_srgb,var(--color-surface2)_100%,white_4%),var(--color-surface2))] text-dim";
 
+// Tuiles en verre : s'adaptent au thème (encre à 8 % sur le fond, bord à 20 %).
+const GLASS =
+  "rounded-[18px] border border-[color-mix(in_srgb,var(--color-ink)_20%,transparent)] bg-[color-mix(in_srgb,var(--color-ink)_8%,transparent)] backdrop-blur-[14px]";
+const TILE_LABEL = "flex items-center gap-1.5 text-[10.5px] font-black uppercase tracking-[0.12em] text-dim";
+// Champs sans cadre à l'intérieur des tuiles.
+const BARE: React.CSSProperties = { border: "none", background: "transparent", padding: 0, boxShadow: "none", borderRadius: 0, width: "100%" };
+
+const ICONS: Record<string, string> = {
+  cal: "M3.5 8a3 3 0 0 1 3-3h11a3 3 0 0 1 3 3v9a3 3 0 0 1-3 3h-11a3 3 0 0 1-3-3zM8 3v4M16 3v4M3.5 10h17",
+  usr: "M8 8a4 4 0 1 0 8 0a4 4 0 1 0-8 0M4.5 20c.8-4 3.7-6 7.5-6s6.7 2 7.5 6",
+  at: "M8 12a4 4 0 1 0 8 0a4 4 0 1 0-8 0M16 8v5a3 3 0 0 0 6 0v-1a10 10 0 1 0-4 8",
+  pin: "M12 21s7-6.2 7-11.5A7 7 0 0 0 5 9.5C5 14.8 12 21 12 21zM9.5 9.5a2.5 2.5 0 1 0 5 0a2.5 2.5 0 1 0-5 0",
+  map: "M9 4 3 6v14l6-2 6 2 6-2V4l-6 2zM9 4v14M15 6v14",
+  grp: "M5.5 8a3.5 3.5 0 1 0 7 0a3.5 3.5 0 1 0-7 0M2.5 19c.6-3.4 3-5 6.5-5s5.9 1.6 6.5 5M15 9a2.5 2.5 0 1 0 5 0a2.5 2.5 0 1 0-5 0M17.5 14c2.4 0 3.6 1.3 4 4",
+  cam: "M4 8h3l1.6-2.5h6.8L17 8h3a1 1 0 0 1 1 1v9a1 1 0 0 1-1 1H4a1 1 0 0 1-1-1V9a1 1 0 0 1 1-1zM8.5 13a3.5 3.5 0 1 0 7 0a3.5 3.5 0 1 0-7 0",
+  ok: "m5 12.5 4.5 4.5L19 7.5",
+  x: "M6 6l12 12M18 6 6 18",
+  Strongman: "M9 9V7a3 3 0 0 1 6 0v2M6 15a6 6 0 1 0 12 0a6 6 0 1 0-12 0",
+  Hybrid: "M4 9h13l-3-3M20 15H7l3 3",
+  Powerlifting: "M3 12a9 9 0 1 0 18 0a9 9 0 1 0-18 0M9.5 12a2.5 2.5 0 1 0 5 0a2.5 2.5 0 1 0-5 0M12 3v3M12 18v3M3 12h3M18 12h3",
+  Running: "M12.5 4.5a2 2 0 1 0 4 0a2 2 0 1 0-4 0M8 21l3-6-3-3 2-4 4 2 3 3M11 15l3 2v4",
+  Hyrox: "M3 18h14l4-3M6 18v-5h8v5M8 13V9h4",
+  Trail: "m2 20 7-13 4 7 3-4 6 10z",
+  Pilates: "M9.8 6a2.2 2.2 0 1 0 4.4 0a2.2 2.2 0 1 0-4.4 0M4 19c3-1 5-4 8-4s5 3 8 4M12 9v6",
+  Musculation: "M3 9v6M6 7v10M18 7v10M21 9v6M6 12h12",
+  Powerbuilding: "M4 20V11M10 20V4M16 20v-7M2 20h20",
+  "Préparation physique": "M12 20s-8-5-8-11a4.5 4.5 0 0 1 8-2.5A4.5 4.5 0 0 1 20 9c0 6-8 11-8 11z",
+};
+
+function Ico({ name, className = "" }: { name: string; className?: string }) {
+  return (
+    <svg aria-hidden width="1em" height="1em" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.9" strokeLinecap="round" strokeLinejoin="round" className={`shrink-0 ${className}`}>
+      <path d={ICONS[name]} />
+    </svg>
+  );
+}
+
+function ageOf(birth?: string): number | null {
+  if (!birth) return null;
+  const d = new Date(birth);
+  if (Number.isNaN(d.getTime())) return null;
+  const n = new Date();
+  let a = n.getFullYear() - d.getFullYear();
+  if (n.getMonth() < d.getMonth() || (n.getMonth() === d.getMonth() && n.getDate() < d.getDate())) a--;
+  return a >= 0 && a < 120 ? a : null;
+}
+
 function PinIcon({ className = "" }: { className?: string }) {
   return (
     <svg aria-hidden width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round" className={className}>
@@ -77,10 +124,18 @@ function LocationPicker({
 
   if (value) {
     return (
-      <div className="flex items-center gap-2.5 rounded-xl border border-accent/30 bg-[linear-gradient(105deg,rgba(255,179,0,0.14),var(--color-surface2)_75%)] px-3 py-2.5">
-        <PinIcon className="shrink-0 text-accent" />
-        <span className="flex-1 text-sm font-semibold">{value.label}</span>
-        <button onClick={() => onChange(null)} aria-label="Retirer la localisation" className="grid h-7 w-7 shrink-0 place-items-center rounded-full bg-black/25 text-[12px] text-dim hover:text-danger">✕</button>
+      <div
+        className="relative h-[78px] overflow-hidden rounded-xl"
+        style={{
+          background:
+            "radial-gradient(circle at 72% 45%, rgba(255,179,0,0.4), transparent 55%), repeating-linear-gradient(35deg, color-mix(in srgb, var(--color-ink) 7%, transparent) 0 2px, transparent 2px 20px), color-mix(in srgb, var(--color-bg) 40%, transparent)",
+        }}
+      >
+        <span aria-hidden className="absolute right-[26%] top-[34%] h-3.5 w-3.5 rounded-full bg-accent shadow-[0_0_0_5px_rgba(255,179,0,0.28),0_0_0_12px_rgba(255,179,0,0.1)]" />
+        <span className="absolute bottom-2 left-3 right-12 truncate text-[14px] font-black">{value.label}</span>
+        <button onClick={() => onChange(null)} aria-label="Retirer la localisation" className="absolute right-2 top-2 grid h-7 w-7 place-items-center rounded-full bg-black/35 text-dim hover:text-danger">
+          <Ico name="x" className="text-[14px]" />
+        </button>
       </div>
     );
   }
@@ -271,175 +326,213 @@ export default function ProfilePage() {
 
   return (
     <div className="space-y-3.5">
-      <section className={CARD}>
-        <h2 className="mb-4 text-xl font-black">Informations</h2>
+      <section className="relative overflow-hidden rounded-[20px] border border-line bg-surface">
+        {/* Ambiance : la photo floutée baigne toute la carte */}
+        <div aria-hidden className="absolute inset-[-30px] bg-cover bg-center opacity-70 blur-[30px] saturate-150" style={{ backgroundImage: "url(/tiles/profile.jpg)" }} />
+        <div aria-hidden className="absolute inset-0 bg-[radial-gradient(circle_at_50%_14%,rgba(255,110,20,0.28),transparent_55%),linear-gradient(180deg,transparent_35%,color-mix(in_srgb,var(--color-bg)_55%,transparent)),color-mix(in_srgb,var(--color-bg)_45%,transparent)]" />
 
-        {/* Nom + Photo */}
-        <div className="mb-4 flex items-center gap-4">
-          <label className="min-w-0 flex-1 block">
-            <span className={LABEL}>Prénom Nom</span>
-            <input value={p.name} onChange={set("name")} placeholder="Prénom Nom" />
-          </label>
+        <div className="relative">
+          {/* Couverture */}
+          <div
+            aria-hidden
+            className="h-[190px] bg-cover"
+            style={{
+              backgroundImage: "linear-gradient(180deg, rgba(0,0,0,0.2), rgba(255,106,26,0.16)), url(/tiles/profile.jpg)",
+              backgroundPosition: "center 38%",
+              WebkitMaskImage: "linear-gradient(180deg, #000 55%, transparent 100%)",
+              maskImage: "linear-gradient(180deg, #000 55%, transparent 100%)",
+            }}
+          />
+          <h2 className="absolute left-[18px] top-4 text-[12px] font-black uppercase tracking-[0.14em] text-white [text-shadow:0_1px_8px_rgba(0,0,0,0.6)]">
+            Informations
+          </h2>
+          {p.photo && (
+            <button onClick={removePhoto} className="absolute right-3.5 top-3.5 rounded-full bg-black/40 px-3 py-1 text-[11px] font-bold text-white backdrop-blur">
+              Retirer la photo
+            </button>
+          )}
 
-          {/* Photo */}
-          <div className="flex shrink-0 flex-col items-center gap-1.5">
-            <button
-              onClick={() => fileRef.current?.click()}
-              disabled={photoBusy}
-              className={`relative grid h-[72px] w-[72px] place-items-center rounded-full p-[3px] transition active:scale-95 disabled:opacity-60 ${
-                p.photo
-                  ? "bg-gradient-to-br from-[#ffc53d] to-[#ff9f00] shadow-[0_6px_20px_-8px_rgba(255,170,0,0.8)]"
-                  : "border-2 border-line hover:border-accent"
-              }`}
-              title="Changer la photo"
-            >
-              <span className="grid h-full w-full place-items-center overflow-hidden rounded-full bg-surface2">
+          {/* Avatar + nom + puces */}
+          <div className="relative -mt-[58px] px-4">
+            <div className="relative h-[104px] w-[104px] rounded-full bg-[conic-gradient(from_200deg,#ffc53d,#ff6a1a,#ffc53d)] p-1 shadow-[0_10px_34px_-8px_rgba(255,140,0,0.9)]">
+              <button
+                onClick={() => fileRef.current?.click()}
+                disabled={photoBusy}
+                title="Changer la photo"
+                className="grid h-full w-full place-items-center overflow-hidden rounded-full border-4 border-[#0d0f15] bg-surface2 transition active:scale-95 disabled:opacity-60"
+              >
                 {photoBusy ? (
                   <span className="h-5 w-5 animate-spin rounded-full border-2 border-accent border-t-transparent" />
                 ) : p.photo ? (
                   <img src={p.photo} alt="photo" className="h-full w-full object-cover" />
                 ) : (
-                  <svg aria-hidden width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="text-accent">
-                    <path d="M4 8h3l2-3h6l2 3h3v11H4z" /><circle cx="12" cy="13" r="3.5" />
-                  </svg>
+                  <Ico name="cam" className="text-[28px] text-accent" />
                 )}
-              </span>
-            </button>
-            {p.photo ? (
-              <button onClick={removePhoto} className="rounded-full bg-surface2 px-2.5 py-0.5 text-[10.5px] font-bold text-dim">Retirer</button>
-            ) : (
-              <span className="text-[10.5px] font-bold text-dim">Photo</span>
-            )}
-            <input ref={fileRef} type="file" accept="image/*" className="hidden" onChange={handlePhoto} />
-          </div>
-        </div>
+              </button>
+              <button
+                onClick={() => fileRef.current?.click()}
+                aria-label="Changer la photo"
+                className="absolute bottom-1 right-[-2px] grid h-[30px] w-[30px] place-items-center rounded-full border-[3px] border-[#0d0f15] bg-gradient-to-br from-[#ffc53d] to-[#ff9f00] text-[15px] text-[#1a1500]"
+              >
+                <Ico name="cam" />
+              </button>
+              <input ref={fileRef} type="file" accept="image/*" className="hidden" onChange={handlePhoto} />
+            </div>
 
-        {/* Date de naissance + Genre */}
-        <div className="mb-4 flex flex-col gap-3">
-          <label className="block">
-            <span className={LABEL}>Date de naissance</span>
             <input
-              type="date"
-              value={p.birthDate ?? ""}
-              onChange={set("birthDate")}
+              value={p.name}
+              onChange={set("name")}
+              placeholder="Prénom Nom"
+              aria-label="Prénom Nom"
+              className="mt-2.5 !text-[28px] font-black tracking-tight"
+              style={{ ...BARE, borderBottom: "1.5px solid color-mix(in srgb, var(--color-ink) 18%, transparent)", paddingBottom: 6, fontSize: 28 }}
             />
-          </label>
-          <div>
-            <span className={LABEL}>Genre</span>
-            <div className="grid grid-cols-2 gap-1 rounded-full border border-line bg-surface p-1">
-              {(["homme", "femme"] as const).map((g) => (
+            {(ageOf(p.birthDate) !== null || p.location || p.instagram) && (
+              <div className="mt-3 flex flex-wrap gap-1.5">
+                {ageOf(p.birthDate) !== null && (
+                  <span className="inline-flex items-center gap-1.5 rounded-full border border-accent/40 bg-accent/15 px-3 py-1.5 text-[12.5px] font-black text-accent"><Ico name="cal" />{ageOf(p.birthDate)} ans</span>
+                )}
+                {p.location && (
+                  <span className="inline-flex items-center gap-1.5 rounded-full border border-accent/40 bg-accent/15 px-3 py-1.5 text-[12.5px] font-black text-accent"><Ico name="pin" />{p.location.label.split(",")[0]}</span>
+                )}
+                {p.instagram && (
+                  <span className="inline-flex items-center gap-1.5 rounded-full border border-accent/40 bg-accent/15 px-3 py-1.5 text-[12.5px] font-black text-accent"><Ico name="at" />{p.instagram.replace(/^@/, "")}</span>
+                )}
+              </div>
+            )}
+          </div>
+
+          <div className="space-y-5 p-3.5 pt-4">
+            {/* Tuiles d'information */}
+            <div className="grid grid-cols-2 gap-[9px]">
+              <label className={`${GLASS} block p-3`}>
+                <span className={TILE_LABEL}><Ico name="cal" className="text-[14px] text-accent" />Naissance</span>
+                <input
+                  type="date"
+                  value={p.birthDate ?? ""}
+                  onChange={set("birthDate")}
+                  className="mt-2 block text-[16px] font-black"
+                  style={{ ...BARE, height: 26 }}
+                />
+              </label>
+              <div className={`${GLASS} p-3`}>
+                <span className={TILE_LABEL}><Ico name="usr" className="text-[14px] text-accent" />Genre</span>
+                <div className="mt-[7px] grid grid-cols-2 gap-0.5 rounded-full border border-line bg-black/25 p-[3px]">
+                  {(["homme", "femme"] as const).map((g) => (
+                    <button
+                      key={g}
+                      type="button"
+                      onClick={() => setGender(g)}
+                      className={`rounded-full border py-[5px] text-[13px] font-black transition ${p.gender === g ? PILL_ON : "border-transparent text-dim"}`}
+                    >
+                      {g === "homme" ? "Homme" : "Femme"}
+                    </button>
+                  ))}
+                </div>
+              </div>
+
+              <div className={`${GLASS} col-span-2 p-3`}>
+                <span className={TILE_LABEL}><Ico name="at" className="text-[14px] text-accent" />Instagram</span>
+                <div className="mt-2 flex items-center">
+                  <span className="shrink-0 select-none pr-1 text-base text-dim" aria-hidden="true">@</span>
+                  <input
+                    value={(p.instagram ?? "").replace(/^@/, "")}
+                    onChange={e => update(d => { d.profile.instagram = e.target.value ? `@${e.target.value.replace(/^@/, "")}` : ""; })}
+                    placeholder="username"
+                    className="text-[16px] font-black"
+                    style={BARE}
+                  />
+                  {p.instagram && (
+                    <a
+                      href={`https://instagram.com/${(p.instagram ?? "").replace(/^@/, "")}`}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="shrink-0 pl-2 text-dim transition-opacity hover:opacity-70"
+                      title="Voir le profil Instagram"
+                    >
+                      <svg width="18" height="18" viewBox="0 0 24 24" fill="currentColor">
+                        <path d="M10 6v2H5v11h11v-5h2v6a1 1 0 0 1-1 1H4a1 1 0 0 1-1-1V7a1 1 0 0 1 1-1h6zm11-3v7h-2V6.413l-7.793 7.794-1.414-1.414L17.585 5H13V3h8z"/>
+                      </svg>
+                    </a>
+                  )}
+                </div>
+              </div>
+
+              <div className={`${GLASS} col-span-2 p-3`}>
+                <span className={`${TILE_LABEL} mb-2`}><Ico name="pin" className="text-[14px] text-accent" />Localisation</span>
+                <LocationPicker
+                  value={p.location}
+                  onChange={loc =>
+                    update(d => { d.profile.location = loc ?? undefined; })
+                  }
+                />
+              </div>
+
+              {([
+                { icon: "map", title: "Visible sur la carte", sub: "Carte de la communauté", on: !!p.mapConsent, toggle: () => update((d) => { d.profile.mapConsent = !d.profile.mapConsent; }) },
+                { icon: "grp", title: "Partager avec le groupe", sub: "Anniversaire et records, visibles par ton coach et les autres sportifs", on: !!p.shareWins, toggle: () => update((d) => { d.profile.shareWins = !d.profile.shareWins; }) },
+              ]).map((t) => (
                 <button
-                  key={g}
+                  key={t.title}
                   type="button"
-                  onClick={() => setGender(g)}
-                  className={`rounded-full border py-2 text-[13px] font-black transition ${p.gender === g ? PILL_ON : "border-transparent text-dim"}`}
+                  onClick={t.toggle}
+                  role="switch"
+                  aria-checked={t.on}
+                  className={`${GLASS} col-span-2 flex items-center gap-3 p-3 text-left`}
                 >
-                  {g === "homme" ? "Homme" : "Femme"}
+                  <span className="grid h-[38px] w-[38px] shrink-0 place-items-center rounded-xl bg-accent/20 text-[19px] text-accent"><Ico name={t.icon} /></span>
+                  <span className="min-w-0 flex-1">
+                    <span className="block text-[15px] font-black">{t.title}</span>
+                    <span className="mt-px block text-[12px] leading-snug text-dim">{t.sub}</span>
+                  </span>
+                  <span className={`relative h-[30px] w-[50px] shrink-0 rounded-full border transition ${t.on ? "border-transparent bg-gradient-to-br from-[#ffc53d] to-[#ff9f00] shadow-[0_0_16px_-2px_rgba(255,170,0,0.7)]" : "border-line bg-line/60"}`}>
+                    <span className={`absolute top-[3px] h-[22px] w-[22px] rounded-full bg-white shadow transition-all ${t.on ? "left-[23px]" : "left-[3px]"}`} />
+                  </span>
                 </button>
               ))}
             </div>
-          </div>
-        </div>
 
-        {/* Instagram + Localisation */}
-        <div className="mb-4 flex flex-col gap-3">
-          <label className="block">
-            <span className={LABEL}>Instagram</span>
-            <div className="flex items-center overflow-hidden rounded-[10px] border border-[var(--color-line)] bg-[var(--color-surface2)]">
-              <span className="shrink-0 select-none pl-3 text-base text-dim" aria-hidden="true">@</span>
-              <input
-                value={(p.instagram ?? "").replace(/^@/, "")}
-                onChange={e => update(d => { d.profile.instagram = e.target.value ? `@${e.target.value.replace(/^@/, "")}` : ""; })}
-                placeholder="username"
-                style={{ border: "none", background: "transparent", borderRadius: 0, paddingLeft: 4, boxShadow: "none", width: "100%" }}
-              />
-              {p.instagram && (
-                <a
-                  href={`https://instagram.com/${(p.instagram ?? "").replace(/^@/, "")}`}
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  className="shrink-0 pr-3 text-dim transition-opacity hover:opacity-70"
-                  title="Voir le profil Instagram"
-                >
-                  <svg width="18" height="18" viewBox="0 0 24 24" fill="currentColor">
-                    <path d="M10 6v2H5v11h11v-5h2v6a1 1 0 0 1-1 1H4a1 1 0 0 1-1-1V7a1 1 0 0 1 1-1h6zm11-3v7h-2V6.413l-7.793 7.794-1.414-1.414L17.585 5H13V3h8z"/>
-                  </svg>
-                </a>
-              )}
+            {/* Sports */}
+            <div>
+              <span className="mb-2.5 flex items-center gap-2 px-0.5 text-[11px] font-black uppercase tracking-[0.14em] text-dim">
+                Mes sports
+                {sports.length > 0 && (
+                  <span className="rounded-full bg-accent/20 px-2 text-[11px] tracking-normal text-accent">{sports.length}</span>
+                )}
+              </span>
+              <div className="grid grid-cols-3 gap-2">
+                {SPORTS.map((sport, i) => {
+                  const active = sports.includes(sport);
+                  const wide = i === SPORTS.length - 1;
+                  return (
+                    <button
+                      key={sport}
+                      onClick={() => toggleSport(sport)}
+                      aria-pressed={active}
+                      className={`relative overflow-hidden rounded-2xl border p-[11px] text-[12.5px] font-black transition active:scale-[0.97] ${
+                        wide ? "col-span-3 flex items-center gap-2.5 text-left" : "flex aspect-[1/1.05] flex-col justify-between text-left"
+                      } ${
+                        active
+                          ? "border-transparent bg-gradient-to-br from-[#ffc53d] to-[#ff7a00] text-[#1a1100] shadow-[0_10px_26px_-10px_rgba(255,140,0,0.9)]"
+                          : "border-[color-mix(in_srgb,var(--color-ink)_18%,transparent)] bg-[color-mix(in_srgb,var(--color-ink)_7%,transparent)]"
+                      }`}
+                    >
+                      {active && <span aria-hidden className="pointer-events-none absolute -right-[18px] -top-[18px] h-[60px] w-[60px] rounded-full bg-white/25" />}
+                      <Ico name={sport} className={`text-[22px] ${active ? "text-[#1a1100]" : "text-dim"}`} />
+                      <span className="leading-tight">{sport}</span>
+                      <span
+                        aria-hidden
+                        className={`absolute right-2.5 top-2.5 grid h-5 w-5 place-items-center rounded-full border-[1.5px] text-[12px] ${
+                          active ? "border-[#1a1100] bg-[#1a1100] text-[#ffc53d]" : "border-[color-mix(in_srgb,var(--color-ink)_30%,transparent)]"
+                        } ${wide ? "!static ml-auto" : ""}`}
+                      >
+                        {active && <Ico name="ok" />}
+                      </span>
+                    </button>
+                  );
+                })}
+              </div>
             </div>
-          </label>
-          <div>
-            <span className={LABEL}>Localisation</span>
-            <LocationPicker
-              value={p.location}
-              onChange={loc =>
-                update(d => { d.profile.location = loc ?? undefined; })
-              }
-            />
-            {p.location && (
-              <p className="mt-1 text-[11px] text-dim">
-                {p.location.lat.toFixed(4)}, {p.location.lng.toFixed(4)}
-              </p>
-            )}
-            {/* Consentement carte communauté */}
-            <button
-              type="button"
-              onClick={() => update((d) => { d.profile.mapConsent = !d.profile.mapConsent; })}
-              role="switch"
-              aria-checked={!!p.mapConsent}
-              className="mt-2 flex w-full items-center gap-3 rounded-xl border border-line bg-surface2 px-3 py-2.5 text-left"
-            >
-              <span className="flex-1">
-                <span className="block text-[13px] font-bold text-ink">Visible sur la carte</span>
-                <span className="block text-[11px] text-dim">Carte de la communauté</span>
-              </span>
-              <span className={`relative h-6 w-11 shrink-0 rounded-full transition ${p.mapConsent ? "bg-gradient-to-br from-[#ffc53d] to-[#ff9f00]" : "bg-line"}`}>
-                <span className={`absolute top-0.5 h-5 w-5 rounded-full bg-white shadow transition-all ${p.mapConsent ? "left-[22px]" : "left-0.5"}`} />
-              </span>
-            </button>
-            <button
-              type="button"
-              onClick={() => update((d) => { d.profile.shareWins = !d.profile.shareWins; })}
-              role="switch"
-              aria-checked={!!p.shareWins}
-              className="mt-2 flex w-full items-center gap-3 rounded-xl border border-line bg-surface2 px-3 py-2.5 text-left"
-            >
-              <span className="flex-1">
-                <span className="block text-[13px] font-bold text-ink">Partager avec le groupe</span>
-                <span className="block text-[11px] text-dim">Anniversaire et records, visibles par ton coach et les autres sportifs</span>
-              </span>
-              <span className={`relative h-6 w-11 shrink-0 rounded-full transition ${p.shareWins ? "bg-gradient-to-br from-[#ffc53d] to-[#ff9f00]" : "bg-line"}`}>
-                <span className={`absolute top-0.5 h-5 w-5 rounded-full bg-white shadow transition-all ${p.shareWins ? "left-[22px]" : "left-0.5"}`} />
-              </span>
-            </button>
-          </div>
-        </div>
-
-        {/* Sports */}
-        <div>
-          <span className={`${LABEL} flex items-center gap-1.5`}>
-            Sports
-            {sports.length > 0 && (
-              <span className="inline-grid h-[18px] min-w-[18px] place-items-center rounded-full bg-accent/20 px-1 text-[10px] tracking-normal text-accent">
-                {sports.length}
-              </span>
-            )}
-          </span>
-          <div className="flex flex-wrap gap-2">
-            {SPORTS.map((sport) => {
-              const active = sports.includes(sport);
-              return (
-                <button
-                  key={sport}
-                  onClick={() => toggleSport(sport)}
-                  className={`rounded-full border px-3.5 py-1.5 text-[13px] font-bold transition active:scale-95 ${
-                    active ? PILL_ON : PILL_OFF
-                  }`}
-                >
-                  {sport}
-                </button>
-              );
-            })}
           </div>
         </div>
       </section>
