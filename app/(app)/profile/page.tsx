@@ -289,7 +289,7 @@ export default function ProfilePage() {
               className={`relative grid h-[72px] w-[72px] place-items-center rounded-full p-[3px] transition active:scale-95 disabled:opacity-60 ${
                 p.photo
                   ? "bg-gradient-to-br from-[#ffc53d] to-[#ff9f00] shadow-[0_6px_20px_-8px_rgba(255,170,0,0.8)]"
-                  : "border-2 border-dashed border-line hover:border-accent"
+                  : "border-2 border-line hover:border-accent"
               }`}
               title="Changer la photo"
             >
@@ -461,7 +461,7 @@ export default function ProfilePage() {
                         : {}
                     }
                     className={`flex h-[76px] w-[76px] items-center justify-center rounded-full border-2 transition active:scale-95 ${
-                      ch ? "" : "border-dashed border-line bg-surface2 hover:border-accent/60"
+                      ch ? "" : "border-line bg-surface2 hover:border-accent/60"
                     }`}
                   >
                     {ch ? (

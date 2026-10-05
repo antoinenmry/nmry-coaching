@@ -175,7 +175,7 @@ function EventsEditor({
       <button
         onClick={addEvent}
         type="button"
-        className="flex items-center gap-1.5 rounded-lg border border-dashed border-line px-3 py-1.5 text-[13px] text-dim hover:border-accent hover:text-accent"
+        className="flex items-center gap-1.5 rounded-lg border border-line px-3 py-1.5 text-[13px] text-dim hover:border-accent hover:text-accent"
       >
         + Ajouter une épreuve
       </button>
@@ -288,7 +288,7 @@ export default function GoalsPage() {
       {sorted.length === 0 ? (
         <button
           onClick={() => setCreating(true)}
-          className="flex w-full items-center gap-3 rounded-2xl border-[1.5px] border-dashed border-line p-4 text-left text-[13px] leading-snug text-dim"
+          className="flex w-full items-center gap-3 rounded-2xl border-[1.5px] border-line p-4 text-left text-[13px] leading-snug text-dim"
         >
           <span className="grid h-9 w-9 shrink-0 place-items-center rounded-full bg-surface2 text-lg font-black text-accent">+</span>
           Aucun objectif. Ajoute ta prochaine compétition.

@@ -167,7 +167,7 @@ function AthletesManager() {
 
       {/* Sportifs sans coach (coach uniquement) */}
       {role === "coach" && unassigned.length > 0 && (
-        <div className="mt-4 rounded-2xl border border-dashed border-line p-4">
+        <div className="mt-4 rounded-2xl border border-line p-4">
           <p className="mb-3 text-sm font-semibold text-dim">
             Sportifs sans coach ({unassigned.length})
           </p>
@@ -341,7 +341,7 @@ function AdminManager() {
 
       {/* Clients sans coach */}
       {overview.unassigned.length > 0 && (
-        <div className="rounded-2xl border border-dashed border-line p-4">
+        <div className="rounded-2xl border border-line p-4">
           <p className="mb-3 text-sm font-semibold text-dim">
             Clients sans coach ({overview.unassigned.length})
           </p>
@@ -537,7 +537,7 @@ export default function SettingsPage() {
         {!vacationStart && !vacationOpen ? (
           <button
             onClick={() => setVacationOpen(true)}
-            className="mt-3 flex w-full items-center gap-2.5 rounded-xl border-[1.5px] border-dashed border-line px-3 py-2.5 text-left text-[13px] font-bold text-dim"
+            className="mt-3 flex w-full items-center gap-2.5 rounded-xl border-[1.5px] border-line px-3 py-2.5 text-left text-[13px] font-bold text-dim"
           >
             <span className="grid h-7 w-7 shrink-0 place-items-center rounded-full bg-orange-500/15 font-black text-orange-400">+</span>
             Ajouter des vacances

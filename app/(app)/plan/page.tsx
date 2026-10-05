@@ -831,7 +831,7 @@ function ComposeModal({ onClose, onCreated }: { onClose: () => void; onCreated: 
         />
 
         {/* Exercice personnalisé */}
-        <div className="mt-4 rounded-xl border border-dashed border-line bg-surface2 p-3">
+        <div className="mt-4 rounded-xl border border-line bg-surface2 p-3">
           <p className="mb-2 text-[13px] font-semibold text-dim">Nouvel exercice personnalisé</p>
 
           <div className="flex gap-2">
@@ -1464,7 +1464,7 @@ function SessionPill({ s, onOpen, todayKey }: { s: SessionInstance; onOpen: (id:
       title={`${s.name}${s.done ? " · validée" : missed ? " · manquée" : ""}`}
       className={`w-full rounded-md border px-1 py-1 text-left text-[10px] font-black leading-[1.15] sm:px-1.5 sm:text-[11px] ${
         s.done ? "text-[#06121f]" : "text-ink"
-      } ${missed ? "border-dashed" : ""}`}
+      } ${missed ? "" : ""}`}
       style={
         s.done
           ? { background: s.color, borderColor: s.color }

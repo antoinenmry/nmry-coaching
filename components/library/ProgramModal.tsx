@@ -149,7 +149,7 @@ export default function ProgramModal({
 
             {draft.weeks.length === 0 ? (
               weekTemplates.length > 0 && (
-                <p className="rounded-xl border border-dashed border-line bg-surface2 p-3 text-[12px] text-dim">
+                <p className="rounded-xl border border-line bg-surface2 p-3 text-[12px] text-dim">
                   Ajoute des semaines types pour composer le programme. Tu peux répéter une même semaine plusieurs fois.
                 </p>
               )

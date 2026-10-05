@@ -200,7 +200,7 @@ export default function FiltersModal({
 
         <button
           onClick={addCategory}
-          className="mt-4 w-full rounded-xl border border-dashed border-line py-3 font-semibold text-dim"
+          className="mt-4 w-full rounded-xl border border-line py-3 font-semibold text-dim"
         >
           + Ajouter une catégorie de filtre
         </button>

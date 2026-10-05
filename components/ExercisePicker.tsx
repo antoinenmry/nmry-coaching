@@ -115,7 +115,7 @@ export default function ExercisePicker({
           <ExerciseMultiSelect picked={picked} onAdd={addOne} onRemove={removeOne} />
 
         {/* Création inline */}
-        <div className="mt-4 rounded-xl border border-dashed border-line bg-surface2 p-3">
+        <div className="mt-4 rounded-xl border border-line bg-surface2 p-3">
           <p className="mb-2 text-[13px] font-semibold text-dim">Nouvel exercice</p>
 
           {/* Nom + bouton Ajouter */}

@@ -243,7 +243,7 @@ export default function PartnersModal({ onClose }: { onClose: () => void }) {
           <div className="border-t border-line/60 px-5 py-4">
             <button
               onClick={openNew}
-              className="flex w-full items-center justify-center gap-2 rounded-xl border-2 border-dashed border-line py-3 text-[13px] font-semibold text-dim transition hover:border-accent/40 hover:bg-accent/5 hover:text-accent"
+              className="flex w-full items-center justify-center gap-2 rounded-xl border-2 border-line py-3 text-[13px] font-semibold text-dim transition hover:border-accent/40 hover:bg-accent/5 hover:text-accent"
             >
               <span className="text-base">＋</span>
               Ajouter un partenaire

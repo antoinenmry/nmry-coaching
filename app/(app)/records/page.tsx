@@ -289,7 +289,7 @@ function RecordsTab({
       {activeSports.length === 0 && (
         <button
           onClick={() => setAddOpen(true)}
-          className="flex w-full items-center gap-3 rounded-2xl border-[1.5px] border-dashed border-line p-4 text-left text-[13px] leading-snug text-dim"
+          className="flex w-full items-center gap-3 rounded-2xl border-[1.5px] border-line p-4 text-left text-[13px] leading-snug text-dim"
         >
           <span className="grid h-9 w-9 shrink-0 place-items-center rounded-full bg-surface2 text-lg font-black text-accent">+</span>
           Aucun record. Ajoute un sport pour commencer à suivre tes perfs.
@@ -331,7 +331,7 @@ function RecordsTab({
               items.length === 0 ? (
                 <button
                   onClick={() => setPicker(sport)}
-                  className="w-full rounded-2xl border-[1.5px] border-dashed border-line p-3 text-center text-[13px] font-bold text-dim"
+                  className="w-full rounded-2xl border-[1.5px] border-line p-3 text-center text-[13px] font-bold text-dim"
                 >
                   + Ajouter {sport === "strength" ? "un exercice" : sport === "cap" ? "une distance" : "une catégorie"}
                 </button>
@@ -421,7 +421,7 @@ function RecordsTab({
             {activeSports.length < SPORT_META.length && (
               <button
                 onClick={() => { setAddOpen(false); setPicker("sport"); }}
-                className="flex w-full items-center gap-3 rounded-2xl border-[1.5px] border-dashed border-line p-3.5 text-left text-[14px] font-black text-dim"
+                className="flex w-full items-center gap-3 rounded-2xl border-[1.5px] border-line p-3.5 text-left text-[14px] font-black text-dim"
               >
                 <span className="h-2.5 w-2.5 shrink-0 rounded-full bg-dim" />
                 <span className="flex-1">Un nouveau sport</span>

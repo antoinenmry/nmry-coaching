@@ -816,7 +816,7 @@ export default function LibraryPage() {
                       type="button"
                       onClick={() => badgeFileRef.current?.click()}
                       disabled={badgeImgBusy}
-                      className="relative flex h-10 w-full items-center justify-center overflow-hidden rounded-[10px] border border-dashed border-line bg-surface2 transition hover:border-accent disabled:opacity-60"
+                      className="relative flex h-10 w-full items-center justify-center overflow-hidden rounded-[10px] border border-line bg-surface2 transition hover:border-accent disabled:opacity-60"
                       title="Uploader une image de badge"
                     >
                       {badgeImgBusy ? (
@@ -877,7 +877,7 @@ export default function LibraryPage() {
                     {(() => {
                       const others = (lib.challenges ?? []).filter((c) => c.id !== editingChallengeId);
                       if (others.length === 0) {
-                        return <p className="rounded-xl border border-dashed border-line p-3 text-[12px] text-dim">Crée d&apos;abord d&apos;autres badges pour composer une collection.</p>;
+                        return <p className="rounded-xl border border-line p-3 text-[12px] text-dim">Crée d&apos;abord d&apos;autres badges pour composer une collection.</p>;
                       }
                       return (
                         <div className="max-h-52 space-y-1.5 overflow-y-auto rounded-xl border border-line bg-surface2 p-2">
@@ -951,7 +951,7 @@ export default function LibraryPage() {
                       </div>
                     ))}
                     {/* Nouvelle couleur personnalisée + sauvegarde */}
-                    <label className="flex h-8 w-8 cursor-pointer items-center justify-center overflow-hidden rounded-full border-2 border-dashed border-line hover:border-ink transition">
+                    <label className="flex h-8 w-8 cursor-pointer items-center justify-center overflow-hidden rounded-full border-2 border-line hover:border-ink transition">
                       <input
                         type="color"
                         value={cColor}

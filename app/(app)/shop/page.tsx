@@ -235,7 +235,7 @@ function ParrainageTab({ isCoach }: { isCoach: boolean }) {
                       "flex w-full items-center justify-between rounded-xl border-2 px-4 py-3 transition-all",
                       copied === p.id
                         ? "border-ok/50 bg-ok/10"
-                        : "border-dashed border-line hover:border-accent/40 hover:bg-accent/5",
+                        : "border-line hover:border-accent/40 hover:bg-accent/5",
                     ].join(" ")}
                   >
                     <span className={`font-mono text-xl font-black tracking-[0.25em] ${copied === p.id ? "text-ok" : "text-ink"}`}>
@@ -409,7 +409,7 @@ function PlanTab({ isCoach }: { isCoach: boolean }) {
         <SectionLabel emoji="🏷️" text={`Mes plans (${plans.length})`} />
 
         {plans.length === 0 && (
-          <p className="rounded-xl border border-dashed border-line bg-surface2 p-4 text-center text-[13px] text-dim">
+          <p className="rounded-xl border border-line bg-surface2 p-4 text-center text-[13px] text-dim">
             Aucun plan publié. Mets un programme en vente ci-dessous ↓
           </p>
         )}
@@ -444,11 +444,11 @@ function PlanTab({ isCoach }: { isCoach: boolean }) {
         <SectionLabel emoji="📦" text="Mettre un programme en vente" />
 
         {programs.length === 0 ? (
-          <p className="rounded-xl border border-dashed border-line bg-surface2 p-4 text-center text-[13px] text-dim">
+          <p className="rounded-xl border border-line bg-surface2 p-4 text-center text-[13px] text-dim">
             Aucun programme dans la bibliothèque. Crée-en un dans <span className="font-semibold text-ink">Bibliothèque → Programmes</span>.
           </p>
         ) : unpublished.length === 0 ? (
-          <p className="rounded-xl border border-dashed border-line bg-surface2 p-4 text-center text-[13px] text-dim">
+          <p className="rounded-xl border border-line bg-surface2 p-4 text-center text-[13px] text-dim">
             ✅ Tous tes programmes sont déjà en vente.
           </p>
         ) : (
@@ -616,7 +616,7 @@ function PlanCard({ plan, coach }: {
           /* CTA sportif */
           <button
             disabled
-            className="w-full cursor-not-allowed rounded-xl border border-dashed border-line bg-surface px-4 py-3 text-center text-[13px] font-semibold text-dim"
+            className="w-full cursor-not-allowed rounded-xl border border-line bg-surface px-4 py-3 text-center text-[13px] font-semibold text-dim"
           >
             🔒 Achat bientôt disponible
           </button>
@@ -982,7 +982,7 @@ function AddButton({ onClick, label }: { onClick: () => void; label: string }) {
   return (
     <button
       onClick={onClick}
-      className="flex w-full items-center justify-center gap-2 rounded-2xl border-2 border-dashed border-line py-4 text-[13px] font-semibold text-dim transition hover:border-accent/40 hover:bg-accent/5 hover:text-accent"
+      className="flex w-full items-center justify-center gap-2 rounded-2xl border-2 border-line py-4 text-[13px] font-semibold text-dim transition hover:border-accent/40 hover:bg-accent/5 hover:text-accent"
     >
       <span className="text-base">＋</span> {label}
     </button>

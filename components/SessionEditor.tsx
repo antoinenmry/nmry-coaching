@@ -611,7 +611,7 @@ export default function SessionEditor({
                                     onClick={() => editLinks(cutAt, idx)}
                                     title="Couper le groupe ici"
                                     aria-label="Délier ces deux exercices"
-                                    className="rounded-full border border-dashed border-accent/40 px-2.5 text-[11px] font-bold leading-4 text-accent/80 transition hover:border-danger hover:text-danger"
+                                    className="rounded-full border border-accent/40 px-2.5 text-[11px] font-bold leading-4 text-accent/80 transition hover:border-danger hover:text-danger"
                                   >
                                     ✂
                                   </button>
@@ -634,7 +634,7 @@ export default function SessionEditor({
                           type="button"
                           onClick={() => editLinks(linkAt, last)}
                           aria-label={`Lier ${session.exercises[last].name} et ${session.exercises[last + 1].name}`}
-                          className="rounded-full border border-dashed border-line px-3 py-0.5 text-[11.5px] font-bold text-dim opacity-75 transition hover:border-accent hover:text-accent hover:opacity-100"
+                          className="rounded-full border border-line px-3 py-0.5 text-[11.5px] font-bold text-dim opacity-75 transition hover:border-accent hover:text-accent hover:opacity-100"
                         >
                           + lier
                         </button>
@@ -694,7 +694,7 @@ export default function SessionEditor({
               <button
                 type="button"
                 onClick={() => setSessionCommentOpen(true)}
-                className="flex w-full items-center gap-2.5 rounded-2xl border-[1.5px] border-dashed border-line px-3.5 py-2.5 text-left text-[13px] font-black text-dim"
+                className="flex w-full items-center gap-2.5 rounded-2xl border-[1.5px] border-line px-3.5 py-2.5 text-left text-[13px] font-black text-dim"
               >
                 <span className="grid h-7 w-7 shrink-0 place-items-center rounded-full bg-accent2/15 font-black text-accent2">+</span>
                 Commentaire
@@ -708,7 +708,7 @@ export default function SessionEditor({
           <>
             <button
               onClick={() => setPicking(true)}
-              className="mt-3 w-full rounded-xl border border-dashed border-line py-3 font-semibold text-dim"
+              className="mt-3 w-full rounded-xl border border-line py-3 font-semibold text-dim"
             >
               + Ajouter des exercices
             </button>
@@ -890,7 +890,7 @@ function SetLogsSection({
           <button
             type="button"
             onClick={addRow}
-            className="flex w-full items-center justify-center gap-1.5 border-t border-dashed border-line px-3 py-2 text-[12px] text-dim hover:text-ink"
+            className="flex w-full items-center justify-center gap-1.5 border-t border-line px-3 py-2 text-[12px] text-dim hover:text-ink"
           >
             + Ajouter une série
           </button>

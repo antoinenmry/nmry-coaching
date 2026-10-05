@@ -368,7 +368,7 @@ export default function MetricsTab() {
               subTab === t ? "bg-surface text-ink shadow-sm" : "text-dim"
             }`}
           >
-            {t === "donnees" ? "📋 Données" : "📈 Tendances"}
+            {t === "donnees" ? "Données" : "Tendances"}
           </button>
         ))}
       </div>
@@ -392,12 +392,8 @@ export default function MetricsTab() {
                 {isEditingThis ? (
                   <div className="space-y-3">
                     <p className="text-[12px] font-semibold uppercase tracking-wide text-accent">Modifier la métrique</p>
-                    <div className="grid grid-cols-3 gap-2">
+                    <div className="grid grid-cols-1 gap-2">
                       <label className="block">
-                        <span className="mb-1 block text-[12px] text-dim">Emoji</span>
-                        <input value={editEmoji} onChange={e => setEditEmoji(e.target.value)} className="text-center text-lg" />
-                      </label>
-                      <label className="col-span-2 block">
                         <span className="mb-1 block text-[12px] text-dim">Nom</span>
                         <input value={editName} onChange={e => setEditName(e.target.value)} />
                       </label>
@@ -411,7 +407,7 @@ export default function MetricsTab() {
                         onClick={() => saveMetricEdit(m.id)}
                         className="flex-1 rounded-xl bg-accent py-2.5 text-[13px] font-semibold text-[#1a1500]"
                       >
-                        ✓ Enregistrer
+                        Enregistrer
                       </button>
                       <button
                         onClick={() => setEditingMetricId(null)}
@@ -423,7 +419,7 @@ export default function MetricsTab() {
                         onClick={() => { deleteMetric(m.id); setEditingMetricId(null); }}
                         className="rounded-xl px-4 py-2.5 text-[13px] text-danger"
                       >
-                        🗑
+                        Supprimer
                       </button>
                     </div>
                   </div>
@@ -432,7 +428,7 @@ export default function MetricsTab() {
                     {/* Header : emoji + nom + dernière valeur */}
                     <div className="mb-2 flex items-start justify-between gap-2">
                       <div className="flex items-center gap-2.5">
-                        <span className="text-2xl leading-none">{m.emoji ?? "📊"}</span>
+                        <span aria-hidden className="grid h-9 w-9 shrink-0 place-items-center rounded-xl bg-gradient-to-br from-[#ffc53d] to-[#ff9f00] text-[15px] font-black text-[#1a1500]">{(m.name || "?").trim().charAt(0).toUpperCase()}</span>
                         <div>
                           <p className="font-bold leading-tight">{m.name}</p>
                           {last ? (
@@ -456,7 +452,7 @@ export default function MetricsTab() {
                           }}
                           className="text-[11px] text-dim hover:text-ink"
                         >
-                          ✏️
+                          Modifier
                         </button>
                       </div>
                     </div>
@@ -482,7 +478,7 @@ export default function MetricsTab() {
                                     }}
                                     className="text-[10px] text-dim hover:text-accent"
                                   >
-                                    {e.note ? "📝" : "+ note"}
+                                    {e.note ? "note" : "+ note"}
                                   </button>
                                   <button
                                     onClick={() => deleteEntry(m.id, e.id)}
@@ -505,7 +501,7 @@ export default function MetricsTab() {
                                     <button
                                       onClick={() => saveEntryNote(m.id, e.id)}
                                       className="rounded-lg bg-accent px-2.5 py-1 text-[11px] font-semibold text-[#1a1500]"
-                                    >✓ Enregistrer</button>
+                                    >Enregistrer</button>
                                     <button
                                       onClick={() => setEditingEntryNote(null)}
                                       className="rounded-lg bg-surface px-2.5 py-1 text-[11px] text-dim"
@@ -581,7 +577,7 @@ export default function MetricsTab() {
                             disabled={!entryValue}
                             className="flex-1 rounded-xl bg-accent py-2 text-[13px] font-semibold text-[#1a1500] disabled:opacity-40"
                           >
-                            ✓ Enregistrer
+                            Enregistrer
                           </button>
                           <button
                             onClick={() => { setAddingEntryFor(null); setEntryValue(""); setEntryNote(""); }}
@@ -599,7 +595,7 @@ export default function MetricsTab() {
                           setEntryValue("");
                           setEntryNote("");
                         }}
-                        className="mt-1 flex w-full items-center justify-center gap-1.5 rounded-xl border border-dashed border-line py-2 text-[13px] font-semibold text-dim transition hover:border-accent/40 hover:text-accent"
+                        className="mt-1 flex w-full items-center justify-center gap-1.5 rounded-xl border border-line py-2 text-[13px] font-semibold text-dim transition hover:border-accent/40 hover:text-accent"
                       >
                         + Entrée
                       </button>
@@ -647,7 +643,7 @@ export default function MetricsTab() {
                   disabled={!newName.trim() || !newUnit.trim()}
                   className="flex-1 rounded-xl bg-accent py-2.5 text-[13px] font-semibold text-[#1a1500] disabled:opacity-40"
                 >
-                  ✓ Créer
+                  Créer
                 </button>
                 <button
                   onClick={() => setAddingMetric(false)}
@@ -660,7 +656,7 @@ export default function MetricsTab() {
           ) : (
             <button
               onClick={() => setAddingMetric(true)}
-              className="flex w-full items-center justify-center gap-2 rounded-2xl border-2 border-dashed border-line py-3.5 text-[13px] font-semibold text-dim transition hover:border-accent/40 hover:text-accent"
+              className="flex w-full items-center justify-center gap-2 rounded-2xl border-2 border-line py-3.5 text-[13px] font-semibold text-dim transition hover:border-accent/40 hover:text-accent"
             >
               ＋ Nouvelle métrique
             </button>
@@ -695,7 +691,7 @@ export default function MetricsTab() {
                       }`}
                       style={active ? { background: color } : {}}
                     >
-                      {m.emoji ?? "📊"} {m.name}
+                      {m.name}
                     </button>
                   );
                 })}
