@@ -10,7 +10,8 @@ import { createAdminClient } from "@/lib/supabase/admin";
  * avec UNIQUEMENT prénom + ville + coordonnées ARRONDIES (centre-ville).
  * Les coordonnées précises ne quittent jamais le serveur.
  *
- * Masqué aux sportifs pour l'instant : réservé coach/admin (requireRole).
+ * Un sportif ne reçoit la carte que s'il a lui-même accepté d'y figurer (échange :
+ * tu la vois si tu t'y montres). Coach/admin : toujours.
  */
 
 // Arrondi ~ville (1 décimale ≈ 11 km) → impossible de remonter au quartier/à la rue.
@@ -31,6 +32,14 @@ export async function GET() {
   if (!user) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
 
   const admin = createAdminClient();
+  const { data: me } = await admin.from("profiles").select("role").eq("id", user.id).maybeSingle();
+  const isStaff = (me as { role?: string } | null)?.role === "coach" || (me as { role?: string } | null)?.role === "admin";
+  if (!isStaff) {
+    const { data: mine } = await admin.from("app_state").select("consent:data->profile->mapConsent").eq("user_id", user.id).maybeSingle();
+    if ((mine as { consent?: boolean | null } | null)?.consent !== true) {
+      return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+    }
+  }
   // On ne sélectionne que les sous-champs utiles (jamais la photo base64).
   const { data, error } = await admin
     .from("app_state")

@@ -16,14 +16,17 @@ export async function PUT(req: NextRequest) {
   if (!body) return NextResponse.json({ error: "Corps de requête invalide" }, { status: 400 });
   const adminClient = createAdminClient();
 
-  // Annonces d'accueil : seuls les éditeurs désignés (lib/config) peuvent les modifier.
-  // On compare avec la version enregistrée : un autre coach qui sauvegarde la
-  // bibliothèque renvoie les annonces inchangées, et passe donc sans problème.
+  // Annonces d'accueil et liste des sports : seuls les éditeurs désignés (lib/config) peuvent les
+  // modifier. On compare avec la version enregistrée : un autre coach qui sauvegarde la
+  // bibliothèque renvoie ces champs inchangés, et passe donc sans problème.
   const { data: current } = await adminClient.from("library_state").select("data").eq("id", 1).maybeSingle();
-  const before = JSON.stringify((current?.data as { announcements?: unknown } | null)?.announcements ?? []);
-  const after = JSON.stringify((body as { announcements?: unknown }).announcements ?? []);
-  if (before !== after && !canEditAnnouncements(caller.user.email)) {
-    return NextResponse.json({ error: "Annonces réservées à Simon et Antoine" }, { status: 403 });
+  const cur = (current?.data ?? {}) as Record<string, unknown>;
+  const next = body as Record<string, unknown>;
+  const norm = (v: unknown) => JSON.stringify(Array.isArray(v) ? v : []);
+  for (const key of ["announcements", "sports"] as const) {
+    if (norm(cur[key]) !== norm(next[key]) && !canEditAnnouncements(caller.user.email)) {
+      return NextResponse.json({ error: "Annonces et sports réservés à Simon et Antoine" }, { status: 403 });
+    }
   }
 
   const { error } = await adminClient

@@ -4,6 +4,7 @@ import { useEffect, useState } from "react";
 import { createPortal } from "react-dom";
 import { useData } from "@/components/DataProvider";
 import type { Announcement } from "@/lib/types";
+import { sportsOf, sportTarget } from "@/lib/sports";
 
 const COLORS = ["#ab47bc", "#42a5f5", "#66bb6a", "#ffb300", "#ef5350", "#26c6da"];
 const LABEL = "mb-1.5 block text-[10.5px] font-black uppercase tracking-[0.12em] text-dim";
@@ -108,7 +109,8 @@ const inDays = (n: number) => {
 export function AnnouncementForm({ initial, onSave, onDelete, onClose }: {
   initial: Announcement | null; onSave: (a: Announcement) => void; onDelete?: () => void; onClose: () => void;
 }) {
-  const { clients } = useData();
+  const { clients, library } = useData();
+  const allSports = sportsOf(library);
   const athletes = clients.filter((c) => c.role === "client");
   const initialKind: Kind = initial?.poll ? "poll" : initial?.code || initial?.link ? "promo" : "message";
 
@@ -245,10 +247,20 @@ export function AnnouncementForm({ initial, onSave, onDelete, onClose }: {
 
             {/* 3 · Destinataires + durée */}
             <div className="w-full shrink-0 overflow-y-auto px-5 pb-5">
-              <span className={LABEL}>Destinataires</span>
+              <span className={LABEL}>Destinataires · sports puis personnes</span>
               <div className="mb-4 flex flex-wrap gap-1.5">
                 <button type="button" onClick={() => setTargets([])}
                   className={`rounded-full border px-3 py-1.5 text-[12px] font-black ${targets.length === 0 ? "border-transparent " + GOLD : "border-line bg-surface2 text-dim"}`}>Tous</button>
+                {allSports.map((sp) => {
+                  const t = sportTarget(sp);
+                  const on = targets.includes(t);
+                  return (
+                    <button key={t} type="button" onClick={() => setTargets((x) => (on ? x.filter((y) => y !== t) : [...x, t]))}
+                      className={`rounded-full border px-3 py-1.5 text-[12px] font-black ${on ? "border-transparent " + GOLD : "border-line bg-surface2 text-dim"}`}>
+                      {sp}
+                    </button>
+                  );
+                })}
                 {athletes.map((c) => {
                   const on = targets.includes(c.id);
                   return (

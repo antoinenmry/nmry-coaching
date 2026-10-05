@@ -4,8 +4,9 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { useData } from "@/components/DataProvider";
 import type { Announcement } from "@/lib/types";
 import Fireworks from "@/components/Fireworks";
+import { sportTarget } from "@/lib/sports";
 
-/** Carte affichable : annonce du coach, carte automatique (anniversaire, victoire) ou rappel. */
+/** Carte affichable : annonce du coach, carte automatique (anniversaire, compétition) ou rappel. */
 type Item = {
   id: string; label: string; title: string; text: string; color: string;
   code?: string; link?: string; poll?: { options: string[] };
@@ -17,10 +18,15 @@ const todayKey = () => new Date().toISOString().slice(0, 10);
 const normalizeUrl = (u: string) => (/^https?:\/\//i.test(u) ? u : `https://${u}`);
 
 /** Annonces actuellement affichables : non expirées et destinées à `userId` (ou à tous). */
-export function activeAnnouncements(list: Announcement[] | undefined, userId?: string | null): Announcement[] {
+export function activeAnnouncements(
+  list: Announcement[] | undefined, userId?: string | null, sports: string[] = [],
+): Announcement[] {
   const t = todayKey();
+  const mine = new Set(sports.map(sportTarget));
   return (list ?? []).filter(
-    (a) => (!a.endDate || a.endDate >= t) && (!a.targets?.length || (!!userId && a.targets.includes(userId))),
+    (a) =>
+      (!a.endDate || a.endDate >= t) &&
+      (!a.targets?.length || a.targets.some((x) => x === userId || mine.has(x))),
   );
 }
 
@@ -33,7 +39,7 @@ export default function AnnouncementCarousel() {
   const { library, state, update, me, activeUserId } = useData();
   const [feed, setFeed] = useState<Item[]>([]);
 
-  // Cartes automatiques du groupe (anniversaires, records, badges) — calculées côté serveur.
+  // Cartes automatiques du groupe (anniversaires, compétitions) — calculées côté serveur.
   useEffect(() => {
     if (!me) return;
     let cancelled = false;
@@ -83,7 +89,7 @@ export default function AnnouncementCarousel() {
 
   const items: Item[] = [
     ...feed.filter((c) => c.id.startsWith("bd-")),
-    ...activeAnnouncements(library.announcements, me?.id),
+    ...activeAnnouncements(library.announcements, me?.id, activeUserId === me?.id ? state.profile.sports ?? [] : []),
     ...feed.filter((c) => !c.id.startsWith("bd-")),
     ...reminders,
   ];

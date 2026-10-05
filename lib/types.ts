@@ -287,7 +287,7 @@ export interface Announcement {
   link?: string;        // lien ouvert au tap
   color: string;        // couleur du dégradé (hex)
   endDate?: string;     // YYYY-MM-DD : n'est plus affichée après cette date (incluse)
-  targets?: string[];   // ids des sportifs ciblés ; absent/vide = tous
+  targets?: string[];   // ids des sportifs ciblés et/ou groupes « sport:Nom » ; absent/vide = tous
   poll?: { options: string[] }; // sondage : 2 à 4 réponses ; le vote de chacun vit dans son AppState.pollVotes
   createdAt: string;    // ISO
 }
@@ -304,6 +304,7 @@ export interface ExerciseLibrary {
   challengesVisible?: boolean;  // true = carte visible côté client sur l'accueil
   customBadgeColors?: string[]; // couleurs de badge personnalisées sauvegardées (hex), en plus des presets fixes
   mapVisible?: boolean;         // true = onglet "Ma carte" visible côté sportif (off par défaut → coach/admin seulement)
+  sports?: string[];            // sports proposés dans le profil (éditeurs : Simon et Antoine) ; absent = liste par défaut
   announcements?: Announcement[]; // cartes d'annonce du carrousel de l'accueil (créées par le coach, visibles par tous)
   cardIcons?: Record<string, string>; // href → emoji ou URL Storage (icône personnalisée des cartes d'accueil, admin uniquement)
 }

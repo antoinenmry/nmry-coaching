@@ -6,6 +6,8 @@ import { useTheme } from "@/components/ThemeProvider";
 import { clampBgForTheme } from "@/lib/themeColor";
 import NotifPrefsPanel from "@/components/NotifPrefsPanel";
 import AnnouncementsManager from "@/components/AnnouncementsManager";
+import SportsManager from "@/components/SportsManager";
+import { sportsOf } from "@/lib/sports";
 import { canEditAnnouncements } from "@/lib/config";
 import type { AthleteAdminData, AthleteStatus, AdminOverview, CoachWithClients, Profile } from "@/lib/types";
 
@@ -385,6 +387,9 @@ function AdminManager() {
 
 // ─── Composer Broadcast ──────────────────────────────────────────────────────
 function BroadcastComposer() {
+  const { library } = useData();
+  const allSports = sportsOf(library);
+  const [sportsSel, setSportsSel] = useState<string[]>([]);
   const [msg, setMsg] = useState("");
   const [sending, setSending] = useState(false);
   const [sent, setSent] = useState(false);
@@ -397,13 +402,14 @@ function BroadcastComposer() {
       const res = await fetch("/api/broadcasts", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ message: msg.trim(), expiresInHours: 24 }),
+        body: JSON.stringify({ message: msg.trim(), expiresInHours: 24, ...(sportsSel.length ? { sports: sportsSel } : {}) }),
       });
       if (!res.ok) {
         const body = await res.json().catch(() => ({}));
         throw new Error(body.error ?? "Erreur inconnue");
       }
       setMsg("");
+      setSportsSel([]);
       setSent(true);
       setTimeout(() => setSent(false), 3000);
     } catch (e) {
@@ -415,10 +421,21 @@ function BroadcastComposer() {
 
   return (
     <section className="rounded-2xl border border-line bg-surface p-4">
-      <h2 className="mb-1 font-bold">Message à tous les sportifs</h2>
+      <h2 className="mb-1 font-bold">Message aux sportifs</h2>
       <p className="mb-3 text-[12px] text-dim">
-        Envoie un message pop-up à tous tes sportifs en temps réel. Visible 24 h.
+        Envoie un message pop-up en temps réel, à tous tes sportifs ou à un ou plusieurs sports. Visible 24 h.
       </p>
+      <div className="mb-3 flex flex-wrap gap-1.5">
+        <button type="button" onClick={() => setSportsSel([])}
+          className={`rounded-full border px-3 py-1.5 text-[12px] font-black ${sportsSel.length === 0 ? "border-transparent bg-gradient-to-br from-[#ffc53d] to-[#ff9f00] text-[#1a1500]" : "border-line bg-surface2 text-dim"}`}>Tous</button>
+        {allSports.map((sp) => {
+          const on = sportsSel.includes(sp);
+          return (
+            <button key={sp} type="button" onClick={() => setSportsSel((a) => (on ? a.filter((x) => x !== sp) : [...a, sp]))}
+              className={`rounded-full border px-3 py-1.5 text-[12px] font-black ${on ? "border-transparent bg-gradient-to-br from-[#ffc53d] to-[#ff9f00] text-[#1a1500]" : "border-line bg-surface2 text-dim"}`}>{sp}</button>
+          );
+        })}
+      </div>
       <textarea
         value={msg}
         onChange={(e) => setMsg(e.target.value)}
@@ -432,7 +449,7 @@ function BroadcastComposer() {
         disabled={sending || !msg.trim()}
         className="mt-2 w-full rounded-xl bg-accent py-2.5 font-semibold text-[#1a1500] transition disabled:opacity-40"
       >
-        {sending ? "Envoi…" : sent ? "Envoyé !" : "Envoyer à tous les sportifs"}
+        {sending ? "Envoi…" : sent ? "Envoyé !" : sportsSel.length ? `Envoyer : ${sportsSel.join(", ")}` : "Envoyer à tous les sportifs"}
       </button>
     </section>
   );
@@ -730,6 +747,7 @@ export default function SettingsPage() {
         <>
           <BroadcastComposer />
           {canEditAnnouncements(me?.email) && <AnnouncementsManager />}
+          {canEditAnnouncements(me?.email) && <SportsManager />}
           <section className="rounded-2xl border border-line bg-surface p-4">
             <AthletesManager />
           </section>

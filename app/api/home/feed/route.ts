@@ -8,13 +8,13 @@ import { groupIdsFor } from "@/lib/groupIds";
  * Cartes automatiques du carrousel d'accueil, calculées sur le GROUPE de l'appelant
  * (son coach + les sportifs de ce coach) :
  *  - anniversaires du jour ;
- *  - records et badges des 7 derniers jours.
+ *  - compétitions des 7 prochains jours (« Antoine participe à … demain ! »).
  * Confidentialité : seuls les membres ayant coché « partager avec le groupe »
  * (profile.shareWins) sont concernés. Jamais d'âge, d'email ni de date de naissance.
  */
 export const dynamic = "force-dynamic";
 
-const WIN_DAYS = 7;
+const GOAL_DAYS = 7;
 const firstName = (n: string) => (n || "").trim().split(/\s+/)[0] || "Un membre";
 
 function parisMonthDay(): string {
@@ -24,12 +24,11 @@ function parisMonthDay(): string {
     .replace("/", "-"); // MM-DD
 }
 
-function fmtTime(s: number) {
-  const h = Math.floor(s / 3600), m = Math.floor((s % 3600) / 60), sec = s % 60;
-  return h > 0 ? `${h}h${String(m).padStart(2, "0")}` : `${m}:${String(sec).padStart(2, "0")}`;
+function parisDate(): string {
+  return new Intl.DateTimeFormat("en-CA", { timeZone: "Europe/Paris" }).format(new Date()); // YYYY-MM-DD
 }
 
-type Card = { id: string; kind: "birthday" | "win"; label: string; title: string; text: string; color: string };
+type Card = { id: string; kind: "birthday" | "goal"; label: string; title: string; text: string; color: string };
 
 export async function GET() {
   const supabase = await createClient();
@@ -42,27 +41,22 @@ export async function GET() {
   const { ids } = await groupIdsFor(admin, user.id, role);
   if (ids.length === 0) return NextResponse.json({ cards: [] });
 
-  const [{ data: states }, { data: profs }, { data: lib }] = await Promise.all([
+  const [{ data: states }, { data: profs }] = await Promise.all([
     admin
       .from("app_state")
-      .select("user_id, name:data->profile->>name, birth:data->profile->>birthDate, share:data->profile->shareWins, records:data->records, badges:data->badges")
+      .select("user_id, name:data->profile->>name, birth:data->profile->>birthDate, share:data->profile->shareWins, goals:data->goals")
       .in("user_id", ids),
     admin.from("profiles").select("id, name").in("id", ids),
-    admin.from("library_state").select("data").eq("id", 1).maybeSingle(),
   ]);
 
   const profName = new Map(((profs as { id: string; name?: string }[] | null) ?? []).map((p) => [p.id, p.name ?? ""]));
-  const challenges = ((lib?.data as { challenges?: { id: string; title: string }[] } | null)?.challenges ?? []);
-  const chTitle = new Map(challenges.map((c) => [c.id, c.title]));
-
   const today = parisMonthDay();
-  const cutoff = new Date(Date.now() - WIN_DAYS * 86_400_000).toISOString().slice(0, 10);
+  const todayIso = parisDate();
   const cards: Card[] = [];
 
   type Row = {
     user_id: string; name: string | null; birth: string | null; share: boolean | null;
-    records: { strength?: { name?: string; exId: string; visible?: boolean; entries: { date: string; weight: number; reps: number }[] }[]; cap?: Record<string, { date: string; timeSeconds: number }[]>; hyrox?: Record<string, { date: string; timeSeconds: number }[]> } | null;
-    badges: { challengeId: string; unlockedAt: string }[] | null;
+    goals: { id: string; competition?: string; date?: string; place?: string }[] | null;
   };
 
   for (const r of ((states as unknown as Row[] | null) ?? [])) {
@@ -81,40 +75,23 @@ export async function GET() {
 
     if (isMe || !shares) continue; // victoires des AUTRES, avec leur accord
 
-    for (const ex of r.records?.strength ?? []) {
-      if (ex.visible === false || !ex.entries?.length) continue;
-      const best = [...ex.entries].sort((a, b) => b.weight - a.weight || b.reps - a.reps)[0];
-      if (best.date >= cutoff && ex.entries.length > 1) {
-        cards.push({
-          id: `win-${r.user_id}-${ex.exId}`, kind: "win", label: "Nouveau record", color: "#66bb6a",
-          title: `${name} : ${ex.name ?? "record"}`, text: `${best.weight} kg × ${best.reps}`,
-        });
-      }
-    }
-    for (const group of [r.records?.cap ?? {}, r.records?.hyrox ?? {}]) {
-      for (const [dist, entries] of Object.entries(group)) {
-        if (!entries?.length || entries.length < 2) continue;
-        const best = [...entries].sort((a, b) => a.timeSeconds - b.timeSeconds)[0];
-        if (best.date >= cutoff) {
-          cards.push({
-            id: `win-${r.user_id}-${dist}`, kind: "win", label: "Nouveau record", color: "#66bb6a",
-            title: `${name} : ${dist}`, text: fmtTime(best.timeSeconds),
-          });
-        }
-      }
-    }
-    for (const b of r.badges ?? []) {
-      if (b.unlockedAt >= cutoff && chTitle.has(b.challengeId)) {
-        cards.push({
-          id: `badge-${r.user_id}-${b.challengeId}`, kind: "win", label: "Badge débloqué", color: "#ab47bc",
-          title: `${name} a débloqué « ${chTitle.get(b.challengeId)} »`, text: "Bravo !",
-        });
-      }
+    // Compétitions à venir (7 jours), des AUTRES, avec leur accord.
+    for (const g of r.goals ?? []) {
+      if (!g.date || !g.competition) continue;
+      const n = Math.round((Date.parse(g.date) - Date.parse(todayIso)) / 86_400_000);
+      if (n < 0 || n > GOAL_DAYS) continue;
+      const when = n === 0 ? "aujourd'hui" : n === 1 ? "demain" : `dans ${n} jours`;
+      cards.push({
+        id: `goal-${r.user_id}-${g.id}-${n}`, kind: "goal", label: "Compétition", color: "#66bb6a",
+        title: `${name} participe à ${g.competition} ${when} !`,
+        text: g.place ? `${g.place} · un petit mot d'encouragement dans le chat ?` : "Un petit mot d'encouragement dans le chat ?",
+      });
+      void n;
     }
   }
 
-  // Anniversaires d'abord, puis 6 victoires maximum.
+  // Anniversaires d'abord, puis 6 compétitions maximum (les plus proches en premier).
   const bd = cards.filter((c) => c.kind === "birthday");
-  const wins = cards.filter((c) => c.kind === "win").slice(0, 6);
-  return NextResponse.json({ cards: [...bd, ...wins] });
+  const goals = cards.filter((c) => c.kind === "goal").slice(0, 6);
+  return NextResponse.json({ cards: [...bd, ...goals] });
 }

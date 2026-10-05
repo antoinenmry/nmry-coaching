@@ -16,7 +16,7 @@ interface MapMember {
 // Couleur accent (violet NMRY) pour les pastilles de ville.
 const PIN = "#534AB7";
 
-export default function CommunityMap() {
+export default function CommunityMap({ compact = false }: { compact?: boolean }) {
   const mapDiv = useRef<HTMLDivElement>(null);
   const mapObj = useRef<LeafletMap | null>(null);
   const markers = useRef<LayerGroup | null>(null);
@@ -158,7 +158,7 @@ export default function CommunityMap() {
 
       {/* Carte */}
       <div className="overflow-hidden rounded-2xl border border-line shadow-sm">
-        <div ref={mapDiv} style={{ height: 440, width: "100%", background: "#14141a" }} />
+        <div ref={mapDiv} style={{ height: compact ? 320 : 440, width: "100%", background: "#14141a" }} />
       </div>
 
       {/* États */}
@@ -174,7 +174,7 @@ export default function CommunityMap() {
       )}
 
       {/* Liste des membres */}
-      {members && members.length > 0 && (
+      {!compact && members && members.length > 0 && (
         <div className="mt-4">
           <p className="mb-2 text-[11px] font-semibold uppercase tracking-wide text-dim">Membres</p>
           <div className="space-y-2">
