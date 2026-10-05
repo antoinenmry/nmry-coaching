@@ -4,15 +4,23 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { useData } from "@/components/DataProvider";
 import type { Announcement } from "@/lib/types";
 
+/** Carte affichable : annonce du coach, carte automatique (anniversaire, victoire) ou rappel. */
+type Item = {
+  id: string; label: string; title: string; text: string; color: string;
+  code?: string; link?: string; poll?: { options: string[] };
+};
+
 const AUTO_MS = 5000; // défilement automatique toutes les 5 s
 
 const todayKey = () => new Date().toISOString().slice(0, 10);
 const normalizeUrl = (u: string) => (/^https?:\/\//i.test(u) ? u : `https://${u}`);
 
-/** Annonces actuellement affichables (non expirées). */
-export function activeAnnouncements(list: Announcement[] | undefined): Announcement[] {
+/** Annonces actuellement affichables : non expirées et destinées à `userId` (ou à tous). */
+export function activeAnnouncements(list: Announcement[] | undefined, userId?: string | null): Announcement[] {
   const t = todayKey();
-  return (list ?? []).filter((a) => !a.endDate || a.endDate >= t);
+  return (list ?? []).filter(
+    (a) => (!a.endDate || a.endDate >= t) && (!a.targets?.length || (!!userId && a.targets.includes(userId))),
+  );
 }
 
 /**
@@ -21,8 +29,52 @@ export function activeAnnouncements(list: Announcement[] | undefined): Announcem
  * Un tap copie le code promo (s'il y en a un) ou ouvre le lien.
  */
 export default function AnnouncementCarousel() {
-  const { library } = useData();
-  const items = activeAnnouncements(library.announcements);
+  const { library, state, update, me, activeUserId } = useData();
+  const [feed, setFeed] = useState<Item[]>([]);
+
+  // Cartes automatiques du groupe (anniversaires, records, badges) — calculées côté serveur.
+  useEffect(() => {
+    if (!me) return;
+    let cancelled = false;
+    fetch("/api/home/feed")
+      .then((r) => (r.ok ? r.json() : { cards: [] }))
+      .then((d) => { if (!cancelled) setFeed(d.cards ?? []); })
+      .catch(() => {});
+    return () => { cancelled = true; };
+  }, [me]);
+
+  // Rappels personnels : calculés ici, sur SES données (jamais sur le profil d'un sportif consulté).
+  const reminders: Item[] = [];
+  if (me && activeUserId === me.id) {
+    const today = todayKey();
+    const d = new Date();
+    const mon = new Date(d); mon.setDate(d.getDate() - ((d.getDay() + 6) % 7));
+    const sun = new Date(mon); sun.setDate(mon.getDate() + 6);
+    const key = (x: Date) => `${x.getFullYear()}-${String(x.getMonth() + 1).padStart(2, "0")}-${String(x.getDate()).padStart(2, "0")}`;
+    const todayLocal = key(d);
+    const todo = state.sessions.filter((s) => s.date && !s.done && s.date >= todayLocal && s.date <= key(sun));
+    const todays = todo.filter((s) => s.date === todayLocal);
+    if (todays.length > 0) {
+      reminders.push({ id: "rem-today", label: "Aujourd'hui", color: "#42a5f5", title: `Séance du jour : ${todays.map((s) => s.name).join(", ")}`, text: "Bonne séance !" });
+    } else if (todo.length > 0) {
+      reminders.push({ id: "rem-week", label: "Cette semaine", color: "#42a5f5", title: `Il te reste ${todo.length} séance${todo.length > 1 ? "s" : ""} cette semaine`, text: "" });
+    }
+    for (const g of state.goals) {
+      if (!g.date) continue;
+      const n = Math.round((new Date(g.date + "T00:00:00").getTime() - new Date(todayLocal + "T00:00:00").getTime()) / 86_400_000);
+      if (n >= 0 && n <= 7) {
+        reminders.push({ id: `rem-goal-${g.id}`, label: "Objectif", color: "#66bb6a", title: n === 0 ? `C'est aujourd'hui : ${g.competition}` : `J-${n} · ${g.competition}`, text: g.place ?? "" });
+      }
+    }
+    void today;
+  }
+
+  const items: Item[] = [
+    ...feed.filter((c) => c.id.startsWith("bd-")),
+    ...activeAnnouncements(library.announcements, me?.id),
+    ...feed.filter((c) => !c.id.startsWith("bd-")),
+    ...reminders,
+  ];
   const [index, setIndex] = useState(0);
   const [copied, setCopied] = useState<string | null>(null);
   const trackRef = useRef<HTMLDivElement>(null);
@@ -55,7 +107,7 @@ export default function AnnouncementCarousel() {
     if (i !== index) setIndex(Math.min(Math.max(i, 0), count - 1));
   }
 
-  function activate(a: Announcement) {
+  function activate(a: Item) {
     if (a.code) {
       navigator.clipboard?.writeText(a.code).catch(() => {});
       setCopied(a.id);
@@ -78,10 +130,12 @@ export default function AnnouncementCarousel() {
       >
         {items.map((a) => {
           const actionable = !!(a.code || a.link);
+          const myVote = state.pollVotes?.[a.id];
           return (
-            <button
+            <div
               key={a.id}
-              type="button"
+              role={actionable ? "button" : undefined}
+              tabIndex={actionable ? 0 : undefined}
               onClick={() => actionable && activate(a)}
               className="relative w-full shrink-0 snap-center overflow-hidden rounded-[20px] border px-4 py-3.5 text-left"
               style={{
@@ -105,7 +159,27 @@ export default function AnnouncementCarousel() {
                 </span>
               )}
               {!a.code && a.link && <span className="mt-2 block text-[12px] font-black text-accent">Ouvrir le lien ›</span>}
-            </button>
+              {a.poll && (
+                <span className="mt-2.5 flex flex-wrap gap-1.5">
+                  {a.poll.options.map((o) => (
+                    <button
+                      key={o}
+                      type="button"
+                      disabled={activeUserId !== me?.id}
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        update((d) => { (d.pollVotes ??= {})[a.id] = o; });
+                      }}
+                      className={`rounded-full border px-3.5 py-1.5 text-[12.5px] font-black transition active:scale-95 ${
+                        myVote === o ? "border-transparent bg-gradient-to-br from-[#ffc53d] to-[#ff9f00] text-[#1a1500]" : "border-line bg-black/25"
+                      }`}
+                    >
+                      {o}
+                    </button>
+                  ))}
+                </span>
+              )}
+            </div>
           );
         })}
       </div>

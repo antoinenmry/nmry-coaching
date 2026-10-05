@@ -397,6 +397,21 @@ export default function ProfilePage() {
                 <span className={`absolute top-0.5 h-5 w-5 rounded-full bg-white shadow transition-all ${p.mapConsent ? "left-[22px]" : "left-0.5"}`} />
               </span>
             </button>
+            <button
+              type="button"
+              onClick={() => update((d) => { d.profile.shareWins = !d.profile.shareWins; })}
+              role="switch"
+              aria-checked={!!p.shareWins}
+              className="mt-2 flex w-full items-center gap-3 rounded-xl border border-line bg-surface2 px-3 py-2.5 text-left"
+            >
+              <span className="flex-1">
+                <span className="block text-[13px] font-bold text-ink">Partager avec le groupe</span>
+                <span className="block text-[11px] text-dim">Anniversaire et records, visibles par ton coach et les autres sportifs</span>
+              </span>
+              <span className={`relative h-6 w-11 shrink-0 rounded-full transition ${p.shareWins ? "bg-gradient-to-br from-[#ffc53d] to-[#ff9f00]" : "bg-line"}`}>
+                <span className={`absolute top-0.5 h-5 w-5 rounded-full bg-white shadow transition-all ${p.shareWins ? "left-[22px]" : "left-0.5"}`} />
+              </span>
+            </button>
           </div>
         </div>
 

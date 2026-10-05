@@ -107,6 +107,7 @@ export interface UserProfileData {
   instagram?: string;   // @username ou URL complète
   location?: { label: string; lat: number; lng: number };
   mapConsent?: boolean; // true = accepte d'apparaître sur la carte communauté (ville uniquement). Off par défaut.
+  shareWins?: boolean;  // true = anniversaire et records partagés avec le groupe (annonces auto de l'accueil). Off par défaut.
 }
 
 export interface GoalEvent {
@@ -286,6 +287,8 @@ export interface Announcement {
   link?: string;        // lien ouvert au tap
   color: string;        // couleur du dégradé (hex)
   endDate?: string;     // YYYY-MM-DD : n'est plus affichée après cette date (incluse)
+  targets?: string[];   // ids des sportifs ciblés ; absent/vide = tous
+  poll?: { options: string[] }; // sondage : 2 à 4 réponses ; le vote de chacun vit dans son AppState.pollVotes
   createdAt: string;    // ISO
 }
 
@@ -440,6 +443,7 @@ export interface UserPreferences {
 
 /** Document complet d'un client (stocké en JSON dans app_state.data). */
 export interface AppState {
+  pollVotes?: Record<string, string>; // annonceId → réponse choisie (sondages du carrousel d'accueil)
   profile: UserProfileData;
   sessions: SessionInstance[]; // toutes les séances (date = null si dans la banque)
   goals: Goal[];

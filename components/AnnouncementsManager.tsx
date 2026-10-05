@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { createPortal } from "react-dom";
 import { useData } from "@/components/DataProvider";
 import type { Announcement } from "@/lib/types";
@@ -94,6 +94,20 @@ export function AnnouncementForm({ initial, onSave, onDelete, onClose }: {
   const [color, setColor] = useState(initial?.color ?? COLORS[0]);
   const [endDate, setEndDate] = useState(initial?.endDate ?? "");
   const [confirmDelete, setConfirmDelete] = useState(false);
+  const { clients } = useData();
+  const athletes = clients.filter((c) => c.role === "client");
+  const [targets, setTargets] = useState<string[]>(initial?.targets ?? []);
+  const [pollOn, setPollOn] = useState(!!initial?.poll);
+  const [options, setOptions] = useState<string[]>(initial?.poll?.options ?? ["Oui", "Non"]);
+  // Résultats du sondage (annonce déjà publiée)
+  const [results, setResults] = useState<{ votes: { name: string; option: string }[]; total: number } | null>(null);
+  useEffect(() => {
+    if (!initial?.poll) return;
+    fetch(`/api/polls/results?id=${encodeURIComponent(initial.id)}`)
+      .then((r) => (r.ok ? r.json() : null))
+      .then((d) => d && setResults(d))
+      .catch(() => {});
+  }, [initial]);
 
   return createPortal(
     <div
@@ -119,6 +133,59 @@ export function AnnouncementForm({ initial, onSave, onDelete, onClose }: {
         </div>
         <label className="mb-3 block"><span className={LABEL}>Affichée jusqu&apos;au (optionnel)</span>
           <input type="date" value={endDate} min={todayKey()} onChange={(e) => setEndDate(e.target.value)} /></label>
+        <span className={LABEL}>Destinataires</span>
+        <div className="mb-3 flex flex-wrap gap-1.5">
+          <button type="button" onClick={() => setTargets([])}
+            className={`rounded-full border px-3 py-1.5 text-[12px] font-black ${targets.length === 0 ? "border-transparent " + GOLD : "border-line bg-surface2 text-dim"}`}>
+            Tous
+          </button>
+          {athletes.map((c) => {
+            const on = targets.includes(c.id);
+            return (
+              <button key={c.id} type="button"
+                onClick={() => setTargets((t) => (on ? t.filter((x) => x !== c.id) : [...t, c.id]))}
+                className={`rounded-full border px-3 py-1.5 text-[12px] font-black ${on ? "border-transparent " + GOLD : "border-line bg-surface2 text-dim"}`}>
+                {(c.name || c.email).split(" ")[0]}
+              </button>
+            );
+          })}
+        </div>
+        <span className={LABEL}>Sondage</span>
+        <div className="mb-3 rounded-xl border border-line bg-surface2 p-3">
+          <button type="button" onClick={() => setPollOn((v) => !v)} role="switch" aria-checked={pollOn}
+            className="flex w-full items-center gap-3 text-left">
+            <span className="flex-1 text-[13px] font-bold">Ajouter des réponses à choisir</span>
+            <span className={`relative h-6 w-11 shrink-0 rounded-full transition ${pollOn ? "bg-gradient-to-br from-[#ffc53d] to-[#ff9f00]" : "bg-line"}`}>
+              <span className={`absolute top-0.5 h-5 w-5 rounded-full bg-white shadow transition-all ${pollOn ? "left-[22px]" : "left-0.5"}`} />
+            </span>
+          </button>
+          {pollOn && (
+            <div className="mt-3 space-y-2">
+              {options.map((o, i) => (
+                <div key={i} className="flex gap-2">
+                  <input value={o} onChange={(e) => setOptions((arr) => arr.map((x, j) => (j === i ? e.target.value : x)))} placeholder={`Réponse ${i + 1}`} />
+                  {options.length > 2 && (
+                    <button type="button" onClick={() => setOptions((arr) => arr.filter((_, j) => j !== i))} aria-label="Retirer" className="grid h-11 w-11 shrink-0 place-items-center rounded-xl border border-line text-dim">✕</button>
+                  )}
+                </div>
+              ))}
+              {options.length < 4 && (
+                <button type="button" onClick={() => setOptions((arr) => [...arr, ""])} className="text-[12px] font-black text-accent">+ Ajouter une réponse</button>
+              )}
+              {results && (
+                <div className="mt-2 rounded-xl border border-line p-2.5">
+                  <p className="mb-1.5 text-[11px] font-black uppercase tracking-[0.12em] text-dim">Résultats · {results.votes.length} / {results.total} réponses</p>
+                  {options.filter((o) => o.trim()).map((o) => {
+                    const v = results.votes.filter((x) => x.option === o);
+                    return (
+                      <p key={o} className="text-[12.5px]"><b>{o}</b> : {v.length}{v.length > 0 && <span className="text-dim"> ({v.map((x) => x.name.split(" ")[0]).join(", ")})</span>}</p>
+                    );
+                  })}
+                </div>
+              )}
+            </div>
+          )}
+        </div>
         <span className={LABEL}>Couleur</span>
         <div className="mb-4 flex gap-2">
           {COLORS.map((c) => (
@@ -133,7 +200,10 @@ export function AnnouncementForm({ initial, onSave, onDelete, onClose }: {
             id: initial?.id ?? crypto.randomUUID(),
             label: label.trim(), title: title.trim(), text: text.trim(),
             code: code.trim() || undefined, link: link.trim() || undefined,
-            color, endDate: endDate || undefined, createdAt: initial?.createdAt ?? new Date().toISOString(),
+            color, endDate: endDate || undefined,
+            targets: targets.length ? targets : undefined,
+            poll: pollOn && options.filter((o) => o.trim()).length >= 2 ? { options: options.map((o) => o.trim()).filter(Boolean) } : undefined,
+            createdAt: initial?.createdAt ?? new Date().toISOString(),
           })}
           className={`w-full rounded-full py-3 font-black disabled:opacity-40 ${GOLD}`}
         >
