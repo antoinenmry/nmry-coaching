@@ -24,11 +24,11 @@ async function appendPlanUpdateToChat(
 
 /**
  * POST /api/plan/notify
- * Corps optionnel : { targetUserId: string }
+ * Corps : { targetUserId: string }
  *
  * - Si targetUserId fourni → notifie uniquement ce sportif (vérifie qu'il est bien
  *   un client du coach connecté).
- * - Sinon → notifie tous les sportifs du coach (comportement legacy).
+ * - Sans targetUserId → refusé (400) : jamais de diffusion à tous les sportifs.
  */
 export async function POST(req: NextRequest) {
   const supabase = await createClient();
@@ -98,23 +98,8 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ sent: 1 });
   }
 
-  // ── Cas 2 : tous les sportifs du coach (legacy / vue propre profil) ─────────
-  const { data: links } = await admin
-    .from("coach_client")
-    .select("client_id")
-    .eq("coach_id", user.id);
-
-  if (!links?.length) return NextResponse.json({ sent: 0 });
-
-  let sent = 0;
-  await Promise.allSettled(
-    links.map(async ({ client_id }) => {
-      const prefs = await getUserNotifPrefs(client_id);
-      if (prefs.newPlan) { await sendPushToUser(client_id, NOTIF_PAYLOAD); sent++; }
-      await appendPlanUpdateToChat(admin, client_id, user.id, coachName);
-    })
-  );
-  await updateCoachPlanNotif(links.map((l) => l.client_id));
-
-  return NextResponse.json({ sent });
+  // Pas de diffusion « à tous » : une notification de programme vise TOUJOURS un
+  // sportif précis. (Avant, un corps vide notifiait tous les sportifs du coach — c'est
+  // ainsi qu'un coach éditant SA propre programmation prévenait tout le monde.)
+  return NextResponse.json({ error: "targetUserId requis" }, { status: 400 });
 }

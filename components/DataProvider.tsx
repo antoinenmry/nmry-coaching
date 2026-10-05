@@ -135,6 +135,27 @@ export function DataProvider({ children }: { children: React.ReactNode }) {
   modeRef.current = mode;
   meRef.current = me;
 
+  // Le nom affiché dans les listes (sélecteur de sportif…) doit être celui du PROFIL
+  // du sportif (app_state.profile.name, modifiable par lui), pas seulement celui saisi à
+  // l'inscription (profiles.name) → sinon « Hugo » reste « Hugo » alors que son profil
+  // dit « Hugo Dupont ». Requête légère : le seul champ name, pas le blob.
+  const withProfileNames = useCallback(
+    async (list: Profile[]): Promise<Profile[]> => {
+      if (list.length === 0) return list;
+      const { data } = await supabase
+        .from("app_state")
+        .select("user_id, name:data->profile->>name")
+        .in("user_id", list.map((p) => p.id));
+      const names = new Map(
+        ((data ?? []) as { user_id: string; name: string | null }[])
+          .filter((r) => r.name && r.name.trim())
+          .map((r) => [r.user_id, r.name!.trim()]),
+      );
+      return list.map((p) => (names.has(p.id) ? { ...p, name: names.get(p.id)! } : p));
+    },
+    [supabase],
+  );
+
   const loadStateFor = useCallback(
     async (userId: string) => {
       const { data } = await supabase
@@ -233,7 +254,7 @@ export function DataProvider({ children }: { children: React.ReactNode }) {
           .from("profiles")
           .select("id,email,name,role,status,vacation_start,vacation_end")
           .order("created_at");
-        const list = (all ?? []) as Profile[];
+        const list = await withProfileNames((all ?? []) as Profile[]);
         setClients(list);
         const savedId = typeof window !== "undefined" ? localStorage.getItem(COACH_CLIENT_KEY) : null;
         const savedClient = savedId ? list.find((c) => c.id === savedId) : null;
@@ -255,7 +276,7 @@ export function DataProvider({ children }: { children: React.ReactNode }) {
             .select("id,email,name,role,status,vacation_start,vacation_end")
             .in("id", assignedIds)
             .order("created_at");
-          list = (assigned ?? []) as Profile[];
+          list = await withProfileNames((assigned ?? []) as Profile[]);
         }
         setClients(list);
         const savedId = typeof window !== "undefined" ? localStorage.getItem(COACH_CLIENT_KEY) : null;

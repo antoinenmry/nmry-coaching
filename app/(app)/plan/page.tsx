@@ -51,16 +51,20 @@ export default function PlanPage() {
   // Surcharge locale des dates vacances (mise à jour immédiate après sauvegarde sans reload)
   const [localVacation, setLocalVacation] = useState<{ start: string | null; end: string | null } | null>(null);
 
+  // Un coach peut avoir SA propre programmation : elle n'est destinée à personne, donc
+  // pas de notification sur son propre profil.
+  const canNotify = !!activeUserId && activeUserId !== me?.id;
+
   async function notifyNewPlan() {
+    if (!canNotify || !activeUserId) return;
     setNotifying(true);
-    // Si on consulte le profil d'un sportif spécifique, ne notifier que lui
-    const targetUserId = activeUserId && activeUserId !== me?.id ? activeUserId : undefined;
+    const targetUserId = activeUserId;
     const res = await fetch("/api/plan/notify", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify(targetUserId ? { targetUserId } : {}),
+      body: JSON.stringify({ targetUserId }),
     }).catch(() => null);
-    if (res?.ok && targetUserId) recordPlanNotif(targetUserId);
+    if (res?.ok) recordPlanNotif(targetUserId);
     setNotifying(false);
     setNotifSent(true);
     setTimeout(() => setNotifSent(false), 3000);
@@ -320,6 +324,7 @@ export default function PlanPage() {
               className={`${TILE} ${TILE_SECONDARY}`}>
               Copier<br />vers
             </button>
+            {canNotify && (
             <button
               onClick={notifyNewPlan}
               disabled={notifying}
@@ -328,6 +333,7 @@ export default function PlanPage() {
             >
               {notifying ? "…" : notifSent ? "Envoyé" : "Notif"}
             </button>
+            )}
           </div>
         )}
         {bank.length === 0 ? null : (

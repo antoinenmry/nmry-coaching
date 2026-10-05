@@ -271,6 +271,8 @@ export default function MetricsTab() {
   const [entryNote, setEntryNote] = useState("");
   // Note d'une entrée déjà enregistrée : { metricId, entryId } en cours d'édition
   const [editingEntryNote, setEditingEntryNote] = useState<{ metricId: string; entryId: string } | null>(null);
+  // Page courante de l'historique, par métrique (3 entrées par page).
+  const [entryPage, setEntryPage] = useState<Record<string, number>>({});
   const [editingNoteText, setEditingNoteText] = useState("");
   const [editingMetricId, setEditingMetricId] = useState<string | null>(null);
   const [editName, setEditName] = useState("");
@@ -459,10 +461,13 @@ export default function MetricsTab() {
                       </div>
                     </div>
 
-                    {/* Historique (3 dernières entrées) */}
-                    {sorted.length > 1 && (
+                    {/* Historique : toutes les entrées, par pages de 3 (les plus récentes d'abord) */}
+                    {sorted.length > 1 && (() => {
+                      const pageCount = Math.ceil(sorted.length / 3);
+                      const page = Math.min(entryPage[m.id] ?? 0, pageCount - 1);
+                      return (
                       <div className="mb-3 space-y-1.5 rounded-xl bg-surface2 px-3 py-2">
-                        {sorted.slice(0, 3).map(e => {
+                        {sorted.slice(page * 3, page * 3 + 3).map(e => {
                           const isEditingNote = editingEntryNote?.metricId === m.id && editingEntryNote?.entryId === e.id;
                           return (
                             <div key={e.id} className="text-[12px]">
@@ -513,8 +518,28 @@ export default function MetricsTab() {
                             </div>
                           );
                         })}
+                        {pageCount > 1 && (
+                          <div className="flex items-center justify-between border-t border-line/60 pt-1.5">
+                            <button
+                              onClick={() => setEntryPage(p => ({ ...p, [m.id]: Math.max(0, page - 1) }))}
+                              disabled={page === 0}
+                              aria-label="Entrées plus récentes"
+                              className="grid h-7 w-9 place-items-center rounded-lg bg-surface text-dim disabled:opacity-30"
+                            >‹</button>
+                            <span className="text-[11px] font-bold text-dim">
+                              {page + 1} / {pageCount} · {sorted.length} entrées
+                            </span>
+                            <button
+                              onClick={() => setEntryPage(p => ({ ...p, [m.id]: Math.min(pageCount - 1, page + 1) }))}
+                              disabled={page >= pageCount - 1}
+                              aria-label="Entrées plus anciennes"
+                              className="grid h-7 w-9 place-items-center rounded-lg bg-surface text-dim disabled:opacity-30"
+                            >›</button>
+                          </div>
+                        )}
                       </div>
-                    )}
+                      );
+                    })()}
 
                     {/* Formulaire ajout d'entrée */}
                     {isAddingEntry ? (
