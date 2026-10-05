@@ -126,3 +126,8 @@ textarea { min-height: 90px; resize: vertical; }
 /* Masque la molette des inputs number sur mobile pour l'esthétique */
 input[type="number"]::-webkit-outer-spin-button,
 input[type="number"]::-webkit-inner-spin-button { -webkit-appearance: none; margin: 0; }
+
+/* Carte communauté : tuiles OpenStreetMap passées en thème sombre. */
+.nmry-dark-tiles {
+  filter: invert(1) hue-rotate(180deg) brightness(0.92) contrast(0.88) saturate(0.7);
+}

@@ -49,9 +49,12 @@ export default function CommunityMap({ compact = false }: { compact?: boolean })
       map.attributionControl.setPrefix(false);
       leaflet.control.zoom({ zoomInTitle: "Zoomer", zoomOutTitle: "Dézoomer" }).addTo(map);
       leaflet
-        .tileLayer("https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png", {
-          attribution: "&copy; OpenStreetMap, &copy; CARTO",
+        // Fond OpenStreetMap (sans clé), assombri par le filtre CSS `.nmry-dark-tiles`.
+        // CARTO exige désormais une clé API : ses tuiles affichaient « API KEY REQUIRED ».
+        .tileLayer("https://tile.openstreetmap.org/{z}/{x}/{y}.png", {
+          attribution: "&copy; OpenStreetMap",
           maxZoom: 19,
+          className: "nmry-dark-tiles",
         })
         .addTo(map);
       markers.current = leaflet.layerGroup().addTo(map);
