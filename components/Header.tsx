@@ -33,7 +33,7 @@ export default function Header() {
   // Bouton 🎁 : toujours visible coach/admin, visible client seulement si contenu existe
   const hasShopContent =
     (library.partnerLinks?.length ?? 0) > 0 ||
-    ((library.merchandiseItems?.length ?? 0) > 0 && library.shopTabsVisible?.merch) ||
+    ((library.merchandiseItems?.length ?? 0) > 0 && library.shopTabsVisible?.shop) ||
     ((library.shopItems?.length ?? 0) > 0 && library.shopTabsVisible?.shop);
   const showPartners = isElevated || hasShopContent;
 

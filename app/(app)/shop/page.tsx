@@ -4,6 +4,7 @@ import { useMemo, useState } from "react";
 import { useData } from "@/components/DataProvider";
 import type { PartnerLink, ShopItem, TrainingPlan } from "@/lib/types";
 import { countProgramSessions } from "@/lib/program";
+import Boutique from "@/components/shop/Boutique";
 
 /* ── Helpers ────────────────────────────────────────────────────────────── */
 
@@ -43,7 +44,7 @@ export default function ShopPage() {
       { id: "parrainage", label: "🤝 Parrainage" },
     ];
     if (isCoach || tabsVisible.plan) tabs.push({ id: "plan", label: "📋 Plans", locked: isCoach && !tabsVisible.plan });
-    if (isCoach || tabsVisible.shop) tabs.push({ id: "shop", label: "🛒 Shop", locked: isCoach && !tabsVisible.shop });
+    if (isCoach || tabsVisible.shop) tabs.push({ id: "shop", label: "Boutique", locked: isCoach && !tabsVisible.shop });
     return tabs;
   }, [isCoach, tabsVisible]);
 
@@ -86,7 +87,7 @@ export default function ShopPage() {
       {/* Contenu des onglets */}
       {currentTab === "parrainage" && <ParrainageTab isCoach={isCoach} />}
       {currentTab === "plan" && <PlanTab isCoach={isCoach} />}
-      {currentTab === "shop" && <ShopTab isCoach={isCoach} />}
+      {currentTab === "shop" && <Boutique isCoach={isCoach} />}
 
       {/* Panneau gestion onglets — coach uniquement */}
       {isCoach && (
@@ -96,7 +97,7 @@ export default function ShopPage() {
             {(["plan", "shop"] as const).map((tab) => (
               <div key={tab} className="flex items-center justify-between">
                 <div>
-                  <p className="text-sm font-semibold">{tab === "plan" ? "📋 Plans" : "🛒 Shop"}</p>
+                  <p className="text-sm font-semibold">{tab === "plan" ? "📋 Plans" : "Boutique"}</p>
                   <p className="text-[12px] text-dim">
                     {tabsVisible[tab] ? "Visible par tous les sportifs" : "Masqué aux sportifs"}
                   </p>

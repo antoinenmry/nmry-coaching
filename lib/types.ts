@@ -206,11 +206,13 @@ export interface PartnerLink {
 /** Produit de la boutique merch (ex: NMRY Hoodie). */
 export interface MerchItem {
   id: string;
-  image: string;   // URL image externe
+  image: string;     // photo de couverture (= images[0]), conservée pour compatibilité
+  images?: string[]; // toutes les photos, affichées en carrousel (la 1re est la couverture)
   name: string;
-  price: string;   // texte libre "59 €"
-  url: string;     // lien d'achat
-  comment?: string;
+  price: string;     // « 40 » ou « 40,00 » ; affiché « 40,00 € »
+  url: string;       // lien d'achat externe (facultatif tant que le paiement in-app n'existe pas)
+  comment?: string;  // description
+  createdAt?: string;
 }
 
 /** Recommandation produit dans l'onglet Shop. */
