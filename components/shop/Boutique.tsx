@@ -48,29 +48,33 @@ function PhotoCarousel({ photos, name, ratio, onTap }: { photos: string[]; name:
   const boxStyle = ratio ? undefined : { aspectRatio: String(r ?? 0.8) };
   if (photos.length === 0) {
     return (
-      <button onClick={onTap} style={boxStyle} className={`${box} grid w-full place-items-center bg-[#eceef1] text-[#9aa3b2]`}>
+      <button onClick={onTap} style={boxStyle} className={`${box} grid w-full place-items-center bg-surface2 text-[#9aa3b2]`}>
         <Svg d={I.img} className="text-4xl" />
       </button>
     );
   }
   return (
-    <div style={boxStyle} className={`relative ${box} w-full overflow-hidden bg-[#eceef1]`}>
+    <div style={boxStyle} className={`relative ${box} w-full overflow-hidden bg-surface2`}>
       <div
         ref={ref}
         onScroll={() => { const el = ref.current; if (el) setI(Math.round(el.scrollLeft / el.clientWidth)); }}
         className="flex h-full snap-x snap-mandatory overflow-x-auto [scrollbar-width:none] [&::-webkit-scrollbar]:hidden"
       >
         {photos.map((src, k) => (
-          // eslint-disable-next-line @next/next/no-img-element
-          <img key={src + k} src={src} alt={`${name} ${k + 1}`} loading="lazy" draggable={false} onClick={onTap}
-            onLoad={k === 0 ? (e) => { const t = e.currentTarget; if (t.naturalHeight) setR(Math.min(1.25, Math.max(0.6, t.naturalWidth / t.naturalHeight))); } : undefined}
-            className="h-full w-full shrink-0 snap-center object-contain" />
+          // Photo entière (jamais recadrée) ; si les formats diffèrent, le fond reprend la photo floutée.
+          <div key={src + k} className="relative h-full w-full shrink-0 snap-center overflow-hidden" onClick={onTap}>
+            <div aria-hidden className="absolute inset-[-12px] bg-cover bg-center opacity-90 blur-xl" style={{ backgroundImage: `url(${src})` }} />
+            {/* eslint-disable-next-line @next/next/no-img-element */}
+            <img src={src} alt={`${name} ${k + 1}`} loading="lazy" draggable={false}
+              onLoad={k === 0 ? (e) => { const t = e.currentTarget; if (t.naturalHeight) setR(Math.min(1.6, Math.max(0.5, t.naturalWidth / t.naturalHeight))); } : undefined}
+              className="relative h-full w-full object-contain" />
+          </div>
         ))}
       </div>
       {photos.length > 1 && (
         <div className="pointer-events-none absolute inset-x-0 bottom-2 flex justify-center gap-1.5">
           {photos.map((_, k) => (
-            <span key={k} className={`h-1.5 rounded-full transition-all ${k === i ? "w-4 bg-black/70" : "w-1.5 bg-black/25"}`} />
+            <span key={k} className={`h-1.5 rounded-full shadow-[0_0_0_1px_rgba(0,0,0,0.45)] transition-all ${k === i ? "w-4 bg-white" : "w-1.5 bg-white/55"}`} />
           ))}
         </div>
       )}
