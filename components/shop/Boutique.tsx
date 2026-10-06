@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import { useData } from "@/components/DataProvider";
 import { createClient } from "@/lib/supabase/client";
@@ -39,18 +39,22 @@ const I = {
 };
 
 /** Carrousel de photos : défilement tactile avec points. */
-function PhotoCarousel({ photos, name, ratio = "aspect-[4/5]", onTap }: { photos: string[]; name: string; ratio?: string; onTap?: () => void }) {
+function PhotoCarousel({ photos, name, ratio, onTap }: { photos: string[]; name: string; ratio?: string; onTap?: () => void }) {
   const ref = useRef<HTMLDivElement>(null);
   const [i, setI] = useState(0);
+  // Cadrage : la tuile prend la proportion de la 1re photo (bornée), les photos ne sont jamais recadrées.
+  const [r, setR] = useState<number | null>(null);
+  const box = ratio ?? "";
+  const boxStyle = ratio ? undefined : { aspectRatio: String(r ?? 0.8) };
   if (photos.length === 0) {
     return (
-      <button onClick={onTap} className={`${ratio} grid w-full place-items-center bg-[#eceef1] text-[#9aa3b2]`}>
+      <button onClick={onTap} style={boxStyle} className={`${box} grid w-full place-items-center bg-[#eceef1] text-[#9aa3b2]`}>
         <Svg d={I.img} className="text-4xl" />
       </button>
     );
   }
   return (
-    <div className={`relative ${ratio} w-full overflow-hidden bg-[#eceef1]`}>
+    <div style={boxStyle} className={`relative ${box} w-full overflow-hidden bg-[#eceef1]`}>
       <div
         ref={ref}
         onScroll={() => { const el = ref.current; if (el) setI(Math.round(el.scrollLeft / el.clientWidth)); }}
@@ -59,7 +63,8 @@ function PhotoCarousel({ photos, name, ratio = "aspect-[4/5]", onTap }: { photos
         {photos.map((src, k) => (
           // eslint-disable-next-line @next/next/no-img-element
           <img key={src + k} src={src} alt={`${name} ${k + 1}`} loading="lazy" draggable={false} onClick={onTap}
-            className="h-full w-full shrink-0 snap-center object-cover" />
+            onLoad={k === 0 ? (e) => { const t = e.currentTarget; if (t.naturalHeight) setR(Math.min(1.25, Math.max(0.6, t.naturalWidth / t.naturalHeight))); } : undefined}
+            className="h-full w-full shrink-0 snap-center object-contain" />
         ))}
       </div>
       {photos.length > 1 && (
@@ -207,7 +212,7 @@ function ProductDetail({ item, isCoach, onEdit, onClose }: { item: MerchItem; is
   return (
     <Sheet onClose={onClose}>
       <div className="relative">
-        <PhotoCarousel photos={photosOf(item)} name={item.name} ratio="aspect-[4/5]" />
+        <PhotoCarousel photos={photosOf(item)} name={item.name} />
         <button onClick={onClose} aria-label="Fermer" className="absolute right-3 top-3 grid h-9 w-9 place-items-center rounded-full bg-white/85 text-[#111]"><Svg d={I.x} /></button>
       </div>
       <div className="space-y-2 p-5">
@@ -226,13 +231,15 @@ function ProductDetail({ item, isCoach, onEdit, onClose }: { item: MerchItem; is
 }
 
 type Sort = "recent" | "asc" | "desc";
-type Density = 2 | 1;
+type Density = 4 | 2 | 1;
 
 export default function Boutique({ isCoach }: { isCoach: boolean }) {
   const { library, updateLibrary } = useData();
   const items = library.merchandiseItems ?? [];
   const [sort, setSort] = useState<Sort>("recent");
   const [density, setDensity] = useState<Density>(2);
+  // Écran large : 4 colonnes par défaut (téléphone : 2).
+  useEffect(() => { if (window.matchMedia("(min-width: 640px)").matches) setDensity(4); }, []);
   const [detail, setDetail] = useState<MerchItem | null>(null);
   const [form, setForm] = useState<MerchItem | "new" | null>(null);
 
@@ -262,10 +269,10 @@ export default function Boutique({ isCoach }: { isCoach: boolean }) {
       {/* Barre d'outils : nombre de produits, densité, tri */}
       <div className="mb-4 flex items-center gap-2 border-y border-line py-2.5">
         <div className="flex rounded-full border border-line bg-surface p-0.5" role="group" aria-label="Affichage">
-          {([2, 1] as const).map((d) => (
+          {([4, 2, 1] as const).map((d) => (
             <button key={d} onClick={() => setDensity(d)} aria-pressed={density === d}
               className={`${seg} ${density === d ? "bg-surface2 text-ink shadow-[inset_0_0_0_1px_var(--color-line)]" : "text-dim"}`}>
-              {d === 2 ? "2 colonnes" : "1 colonne"}
+              {d} col.
             </button>
           ))}
         </div>
@@ -295,18 +302,18 @@ export default function Boutique({ isCoach }: { isCoach: boolean }) {
           <p className="mt-1 text-[13px] text-dim">{isCoach ? "Ajoute ton premier produit avec « Produit »." : "Les produits arrivent bientôt."}</p>
         </div>
       ) : (
-        <div className={`grid gap-x-3 gap-y-6 ${density === 2 ? "grid-cols-2" : "grid-cols-1"}`}>
+        <div className={`grid items-start gap-x-3 gap-y-6 ${density === 4 ? "grid-cols-4" : density === 2 ? "grid-cols-2" : "grid-cols-1"}`}>
           {sorted.map((m) => (
             <article key={m.id} className="min-w-0">
               <div className="relative overflow-hidden">
                 <PhotoCarousel photos={photosOf(m)} name={m.name} onTap={() => setDetail(m)} />
                 <button onClick={() => setDetail(m)} aria-label={`Voir ${m.name}`}
-                  className="absolute bottom-2 right-2 grid h-9 w-9 place-items-center bg-white text-[#111] shadow-[0_2px_10px_rgba(0,0,0,0.25)] transition active:scale-95">
+                  className={`absolute bottom-2 right-2 grid place-items-center ${density === 4 ? "h-7 w-7" : "h-9 w-9"} bg-white text-[#111] shadow-[0_2px_10px_rgba(0,0,0,0.25)] transition active:scale-95`}>
                   <Svg d={I.plus} className="text-lg" />
                 </button>
               </div>
               <button onClick={() => setDetail(m)} className="mt-2.5 block w-full text-center">
-                <span className="block truncate text-[12px] font-black uppercase tracking-[0.14em]">{m.name}</span>
+                <span className={`block truncate font-black uppercase ${density === 4 ? "text-[10.5px] tracking-[0.1em]" : "text-[12px] tracking-[0.14em]"}`}>{m.name}</span>
                 <span className="mt-1 block text-[12.5px] tracking-[0.1em] text-dim">{formatPrice(m.price)}</span>
               </button>
             </article>
