@@ -9,18 +9,15 @@ import dynamic from "next/dynamic";
 // Modales chargées à la demande (à l'ouverture) → bundle initial de /library allégé.
 const ExerciseModal = dynamic(() => import("@/components/library/ExerciseModal"));
 const FiltersModal = dynamic(() => import("@/components/library/FiltersModal"));
+const Faq = dynamic(() => import("@/components/library/Faq"));
 const SessionTemplateModal = dynamic(() => import("@/components/library/SessionTemplateModal"));
 const WeekTemplateModal = dynamic(() => import("@/components/library/WeekTemplateModal"));
 const ProgramModal = dynamic(() => import("@/components/library/ProgramModal"));
-// Carte communauté : Leaflet chargé à la demande (ssr:false) → zéro impact bundle global.
-const CommunityMap = dynamic(() => import("@/components/library/CommunityMap"), {
-  ssr: false,
-  loading: () => <p className="py-10 text-center text-dim">Chargement de la carte…</p>,
-});
 import type { LibraryExercise, SessionTemplate, WeekTemplate, Program, Challenge, ChallengeConditionType } from "@/lib/types";
 import { computeChallengeProgress, challengesToUnlock } from "@/lib/challenges";
 
-type Tab = "exercises" | "sessions" | "weeks" | "programs" | "challenges" | "map";
+// « challenges » n'a plus d'onglet : le coach y accède depuis Réglages › Sportifs (?tab=challenges).
+type Tab = "exercises" | "sessions" | "weeks" | "programs" | "challenges" | "faq";
 
 const uid = () => Math.random().toString(36).slice(2, 9);
 const today = () => new Date().toISOString().slice(0, 10);
@@ -67,6 +64,10 @@ export default function LibraryPage() {
   const { library: lib, updateLibrary, templates, updateTemplates, loading, role, state, update } = useData();
   const canEdit = role === "coach" || role === "admin";
   const [tab, setTab] = useState<Tab>("exercises");
+  useEffect(() => {
+    const t = new URLSearchParams(window.location.search).get("tab");
+    if (t === "challenges" && canEdit) setTab("challenges");
+  }, [canEdit]);
 
   // --- Onglet Exercices ---
   const [selected, setSelected] = useState<Record<string, string[]>>({});
@@ -211,10 +212,7 @@ export default function LibraryPage() {
             <TabButton active={tab === "programs"} onClick={() => setTab("programs")} label="Programmes" count={(templates.programs ?? []).length} />
           </>
         )}
-        {(canEdit || (lib.challenges ?? []).length > 0) && (
-          <TabButton active={tab === "challenges"} onClick={() => setTab("challenges")} label="Défis" count={(lib.challenges ?? []).length} />
-        )}
-        <TabButton active={tab === "map"} onClick={() => setTab("map")} label="Ma carte" />
+        <TabButton active={tab === "faq"} onClick={() => setTab("faq")} label="FAQ" />
       </div>
 
       {/* ===== TAB : EXERCICES ===== */}
@@ -1114,12 +1112,8 @@ export default function LibraryPage() {
         );
       })()}
 
-      {/* ===== TAB : MA CARTE ===== */}
-      {tab === "map" && (
-        <div>
-          <CommunityMap />
-        </div>
-      )}
+      {/* ===== TAB : FAQ ===== */}
+      {tab === "faq" && <Faq />}
     </div>
   );
 }

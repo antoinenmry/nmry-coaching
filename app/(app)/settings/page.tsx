@@ -748,6 +748,13 @@ export default function SettingsPage() {
           <BroadcastComposer />
           {canEditAnnouncements(me?.email) && <AnnouncementsManager />}
           {canEditAnnouncements(me?.email) && <SportsManager />}
+          <a href="/library?tab=challenges" className="flex items-center justify-between rounded-2xl border border-line bg-surface p-4">
+            <span>
+              <span className="block font-bold">Défis et badges</span>
+              <span className="block text-[12px] text-dim">Créer et modifier les défis que les sportifs débloquent.</span>
+            </span>
+            <span aria-hidden className="text-lg text-dim">›</span>
+          </a>
           <section className="rounded-2xl border border-line bg-surface p-4">
             <AthletesManager />
           </section>

@@ -131,9 +131,10 @@ export default function PlanPage() {
     return m;
   }, [state.goals, otherGoals]);
 
+  // Blessures : repères quotidiens réservés au coach (le sportif sait qu'il est blessé).
   const injuries = useMemo(
-    () => state.followups.filter((f) => f.type === "injury"),
-    [state.followups],
+    () => (isCoach ? state.followups.filter((f) => f.type === "injury") : []),
+    [state.followups, isCoach],
   );
 
   // Dates de vacances du sportif actif (localVacation prend le dessus après une sauvegarde)
