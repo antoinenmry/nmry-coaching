@@ -27,6 +27,8 @@ export default function ClientSelector() {
       top: r.bottom + 6,
       left: r.left,
       minWidth: Math.max(r.width, 240),
+      // Liste longue : elle défile dans l'écran restant (barre Safari du bas comprise).
+      maxHeight: Math.max(220, window.innerHeight - r.bottom - 96),
       zIndex: 9999,
     });
   }, [open]);
@@ -111,7 +113,7 @@ export default function ClientSelector() {
     <div
       ref={dropdownRef}
       style={dropdownStyle}
-      className="overflow-hidden rounded-2xl border border-line bg-surface shadow-xl"
+      className="overflow-y-auto overscroll-contain rounded-2xl border border-line bg-surface shadow-xl [-webkit-overflow-scrolling:touch]"
     >
       {/* Moi en premier */}
       {me && (
