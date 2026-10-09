@@ -241,6 +241,9 @@ function frenchDate(key: string) {
   return `${d} ${months[m - 1]} ${y}`;
 }
 
+// Repli : un exercice dont le nom évoque la course/le cardio s'exprime en allure (min/km) même sans étiquette « allure ».
+const CARDIO_NAME = /cardio|course|running|footing|jogging|trail|allure|endurance/i;
+
 export default function SessionEditor({
   sessionId,
   role,
@@ -558,7 +561,7 @@ export default function SessionEditor({
                   video={videoById[ex.exId]}
                   isCoach={isCoach}
                   isSelf={isSelf}
-                  isPace={paceExIds.has(ex.exId)}
+                  isPace={paceExIds.has(ex.exId) || CARDIO_NAME.test(ex.name)}
                   onPatch={(patch) => patchEx(ex.uid, patch)}
                   onRemove={() => removeExercise(ex.uid)}
                   onMove={(dir) => moveExercise(ex.uid, dir)}
@@ -588,12 +591,12 @@ export default function SessionEditor({
                             onClick={() => editLinks(toggleGroupType, g.indices[0])}
                             title="Basculer SUPERSET / CIRCUIT"
                             aria-label={`${label} — basculer en ${g.type === "circuit" ? "superset" : "circuit"}`}
-                            className="my-1.5 rotate-180 rounded-md py-1 text-[11px] font-black leading-[22px] tracking-[0.22em] text-accent [writing-mode:vertical-rl] focus-visible:outline focus-visible:outline-2 focus-visible:outline-accent"
+                            style={{ writingMode: "vertical-rl", transform: "rotate(180deg)" }} className="my-1.5 rounded-md py-1 text-[11px] font-black leading-[22px] tracking-[0.22em] text-accent focus-visible:outline focus-visible:outline-2 focus-visible:outline-accent"
                           >
                             {label}
                           </button>
                         ) : (
-                          <span className="my-1.5 rotate-180 py-1 text-[11px] font-black leading-[22px] tracking-[0.22em] text-accent [writing-mode:vertical-rl]">
+                          <span style={{ writingMode: "vertical-rl", transform: "rotate(180deg)" }} className="my-1.5 py-1 text-[11px] font-black leading-[22px] tracking-[0.22em] text-accent">
                             {label}
                           </span>
                         )}
