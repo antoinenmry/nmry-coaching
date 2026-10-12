@@ -31,24 +31,33 @@ export function activeAnnouncements(
   );
 }
 
-/** Liste qui défile doucement vers le haut (3 lignes visibles) ; fixe si elle tient dans la fenêtre. */
+/** Liste qui défile à l'horizontale, une entrée à la fois (même hauteur qu'une carte d'annonce). */
 function TickerRows({ rows, color }: { rows: { who: string; what: string; when: string }[]; color: string }) {
-  const ROW = 30;
-  const scroll = rows.length > 3;
-  const list = scroll ? [...rows, ...rows] : rows;
+  const [i, setI] = useState(0);
+  useEffect(() => {
+    if (rows.length < 2) return;
+    const id = setInterval(() => {
+      if (document.hidden) return;
+      setI((n) => (n + 1) % rows.length);
+    }, 3000);
+    return () => clearInterval(id);
+  }, [rows.length]);
+  const cur = Math.min(i, rows.length - 1);
   return (
-    <span className="mt-1 block overflow-hidden" style={{ height: ROW * Math.min(3, rows.length) }}>
-      <span
-        className={`block ${scroll ? "nmry-ticker" : ""}`}
-        style={scroll ? { animationDuration: `${rows.length * 3}s` } : undefined}
-      >
-        {list.map((r, i) => (
-          <span key={i} className="flex items-center gap-2 text-[14px]" style={{ height: ROW }}>
-            <b className="shrink-0 font-black">{r.who}</b>
-            <span className="min-w-0 flex-1 truncate text-dim">{r.what}</span>
-            <span className="shrink-0 rounded-full px-2 py-0.5 text-[11.5px] font-black" style={{ background: `color-mix(in srgb, ${color} 22%, transparent)`, color: `color-mix(in srgb, ${color} 70%, var(--color-ink))` }}>{r.when}</span>
-          </span>
-        ))}
+    <span className="mt-0.5 block">
+      <span className="block overflow-hidden">
+        <span className="flex transition-transform duration-500 ease-out" style={{ transform: `translateX(-${cur * 100}%)` }}>
+          {rows.map((r, k) => (
+            <span key={k} className="block w-full shrink-0 pr-2" aria-hidden={k !== cur}>
+              <span className="block truncate text-[17px] font-black leading-tight">{r.what}</span>
+              <span className="mt-1 flex items-center gap-2 text-[13px] leading-snug">
+                <b className="font-black">{r.who}</b>
+                <span className="rounded-full px-2 py-0.5 text-[11.5px] font-black" style={{ background: `color-mix(in srgb, ${color} 22%, transparent)`, color: `color-mix(in srgb, ${color} 70%, var(--color-ink))` }}>{r.when}</span>
+                {rows.length > 1 && <span className="ml-auto text-[11px] font-bold tabular-nums text-dim">{k + 1}/{rows.length}</span>}
+              </span>
+            </span>
+          ))}
+        </span>
       </span>
     </span>
   );
