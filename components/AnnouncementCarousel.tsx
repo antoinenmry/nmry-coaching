@@ -10,6 +10,7 @@ import { sportTarget } from "@/lib/sports";
 type Item = {
   id: string; label: string; title: string; text: string; color: string;
   code?: string; link?: string; poll?: { options: string[] };
+  rows?: { who: string; what: string; when: string }[]; // liste défilante (compétitions, anniversaires)
 };
 
 const AUTO_MS = 5000; // défilement automatique toutes les 5 s
@@ -27,6 +28,29 @@ export function activeAnnouncements(
     (a) =>
       (!a.endDate || a.endDate >= t) &&
       (!a.targets?.length || a.targets.some((x) => x === userId || mine.has(x))),
+  );
+}
+
+/** Liste qui défile doucement vers le haut (3 lignes visibles) ; fixe si elle tient dans la fenêtre. */
+function TickerRows({ rows, color }: { rows: { who: string; what: string; when: string }[]; color: string }) {
+  const ROW = 30;
+  const scroll = rows.length > 3;
+  const list = scroll ? [...rows, ...rows] : rows;
+  return (
+    <span className="mt-1 block overflow-hidden" style={{ height: ROW * Math.min(3, rows.length) }}>
+      <span
+        className={`block ${scroll ? "nmry-ticker" : ""}`}
+        style={scroll ? { animationDuration: `${rows.length * 3}s` } : undefined}
+      >
+        {list.map((r, i) => (
+          <span key={i} className="flex items-center gap-2 text-[14px]" style={{ height: ROW }}>
+            <b className="shrink-0 font-black">{r.who}</b>
+            <span className="min-w-0 flex-1 truncate text-dim">{r.what}</span>
+            <span className="shrink-0 rounded-full px-2 py-0.5 text-[11.5px] font-black" style={{ background: `color-mix(in srgb, ${color} 22%, transparent)`, color: `color-mix(in srgb, ${color} 70%, var(--color-ink))` }}>{r.when}</span>
+          </span>
+        ))}
+      </span>
+    </span>
   );
 }
 
@@ -169,7 +193,8 @@ export default function AnnouncementCarousel() {
                   {a.label}
                 </span>
               )}
-              <span className="mt-0.5 block text-[17px] font-black leading-tight">{a.title}</span>
+              {a.rows && <TickerRows rows={a.rows} color={a.color} />}
+              {a.title && <span className="mt-0.5 block text-[17px] font-black leading-tight">{a.title}</span>}
               {a.text && <span className="mt-1 block whitespace-pre-wrap text-[13px] leading-snug text-dim">{a.text}</span>}
               {a.code && (
                 <span className="mt-2 inline-flex items-center gap-2 rounded-full border border-line bg-black/25 px-3 py-1 text-[12px] font-black">

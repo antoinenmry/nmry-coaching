@@ -131,3 +131,9 @@ input[type="number"]::-webkit-inner-spin-button { -webkit-appearance: none; marg
 .nmry-dark-tiles {
   filter: invert(1) hue-rotate(180deg) brightness(0.92) contrast(0.88) saturate(0.7);
 }
+
+/* Liste défilante de l'accueil (compétitions / anniversaires). */
+@keyframes nmry-ticker-up { to { transform: translateY(-50%); } }
+.nmry-ticker { animation: nmry-ticker-up linear infinite; }
+.nmry-ticker:hover { animation-play-state: paused; }
+@media (prefers-reduced-motion: reduce) { .nmry-ticker { animation: none; } }

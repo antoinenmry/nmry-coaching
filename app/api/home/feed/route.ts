@@ -8,14 +8,23 @@ import { groupIdsFor } from "@/lib/groupIds";
  * Cartes automatiques du carrousel d'accueil, calculées sur le GROUPE de l'appelant
  * (son coach + les sportifs de ce coach) :
  *  - anniversaires du jour ;
- *  - compétitions des 7 prochains jours (« Antoine participe à … demain ! »).
+ *  - liste défilante des compétitions à venir (nom, épreuve, date) ;
+ *  - liste défilante des anniversaires des 30 prochains jours.
  * Confidentialité : seuls les membres ayant coché « partager avec le groupe »
  * (profile.shareWins) sont concernés. Jamais d'âge, d'email ni de date de naissance.
  */
 export const dynamic = "force-dynamic";
 
-const GOAL_DAYS = 7;
-const firstName = (n: string) => (n || "").trim().split(/\s+/)[0] || "Un membre";
+const BDAY_DAYS = 30;
+const MAX_ROWS = 30;
+/** « Prénom N. » : prénom + initiale du nom, jamais le nom complet. */
+const shortName = (n: string) => {
+  const p = (n || "").trim().split(/\s+/).filter(Boolean);
+  if (p.length === 0) return "Un membre";
+  return p.length > 1 ? `${p[0]} ${p[p.length - 1][0].toUpperCase()}.` : p[0];
+};
+const MONTHS = ["janv.", "févr.", "mars", "avr.", "mai", "juin", "juil.", "août", "sept.", "oct.", "nov.", "déc."];
+const frDay = (iso: string) => `${Number(iso.slice(8, 10))} ${MONTHS[Number(iso.slice(5, 7)) - 1]}`;
 
 function parisMonthDay(): string {
   return new Intl.DateTimeFormat("en-CA", { timeZone: "Europe/Paris", month: "2-digit", day: "2-digit" })
@@ -28,7 +37,8 @@ function parisDate(): string {
   return new Intl.DateTimeFormat("en-CA", { timeZone: "Europe/Paris" }).format(new Date()); // YYYY-MM-DD
 }
 
-type Card = { id: string; kind: "birthday" | "goal"; label: string; title: string; text: string; color: string };
+type Row3 = { who: string; what: string; when: string };
+type Card = { id: string; kind: "birthday" | "goal" | "list"; label: string; title: string; text: string; color: string; rows?: Row3[] };
 
 export async function GET() {
   const supabase = await createClient();
@@ -53,6 +63,8 @@ export async function GET() {
   const today = parisMonthDay();
   const todayIso = parisDate();
   const cards: Card[] = [];
+  const goalRows: (Row3 & { iso: string })[] = [];
+  const bdayRows: (Row3 & { iso: string })[] = [];
 
   type Row = {
     user_id: string; name: string | null; birth: string | null; share: boolean | null;
@@ -61,7 +73,7 @@ export async function GET() {
 
   for (const r of ((states as unknown as Row[] | null) ?? [])) {
     const isMe = r.user_id === user.id;
-    const name = firstName(r.name || profName.get(r.user_id) || "");
+    const name = shortName(r.name || profName.get(r.user_id) || "");
     const shares = r.share === true;
 
     // Anniversaire : partagé avec le groupe, ou toujours pour la personne elle-même.
@@ -73,25 +85,35 @@ export async function GET() {
       });
     }
 
-    if (isMe || !shares) continue; // victoires des AUTRES, avec leur accord
+    if (!shares && !isMe) continue; // listes : seulement avec l'accord de la personne
 
-    // Compétitions à venir (7 jours), des AUTRES, avec leur accord.
+    // Compétitions à venir
     for (const g of r.goals ?? []) {
-      if (!g.date || !g.competition) continue;
-      const n = Math.round((Date.parse(g.date) - Date.parse(todayIso)) / 86_400_000);
-      if (n < 0 || n > GOAL_DAYS) continue;
-      const when = n === 0 ? "aujourd'hui" : n === 1 ? "demain" : `dans ${n} jours`;
-      cards.push({
-        id: `goal-${r.user_id}-${g.id}-${n}`, kind: "goal", label: "Compétition", color: "#66bb6a",
-        title: `${name} participe à ${g.competition} ${when} !`,
-        text: g.place ? `${g.place} · un petit mot d'encouragement dans le chat ?` : "Un petit mot d'encouragement dans le chat ?",
-      });
-      void n;
+      if (!g.date || !g.competition || g.date < todayIso) continue;
+      goalRows.push({ iso: g.date, who: name, what: g.competition, when: frDay(g.date) });
+    }
+
+    // Prochains anniversaires (jour exact masqué : prénom + initiale, jamais l'âge)
+    if (r.birth && r.birth.length >= 10 && r.birth.slice(5) !== today) {
+      const y = Number(todayIso.slice(0, 4));
+      for (const yy of [y, y + 1]) {
+        const iso = `${yy}-${r.birth.slice(5, 10)}`;
+        const n = Math.round((Date.parse(iso) - Date.parse(todayIso)) / 86_400_000);
+        if (n > 0 && n <= BDAY_DAYS) { bdayRows.push({ iso, who: name, what: "Anniversaire", when: frDay(iso) }); break; }
+      }
     }
   }
 
-  // Anniversaires d'abord, puis 6 compétitions maximum (les plus proches en premier).
+  const strip = (rows: (Row3 & { iso: string })[]): Row3[] =>
+    rows.sort((x, y) => x.iso.localeCompare(y.iso)).slice(0, MAX_ROWS).map(({ who, what, when }) => ({ who, what, when }));
+  const lists: Card[] = [];
+  if (goalRows.length > 0) {
+    lists.push({ id: "list-goals", kind: "list", label: "Compétitions à venir", color: "#66bb6a", title: "", text: "", rows: strip(goalRows) });
+  }
+  if (bdayRows.length > 0) {
+    lists.push({ id: "list-bdays", kind: "list", label: "Anniversaires à venir", color: "#ffb300", title: "", text: "", rows: strip(bdayRows) });
+  }
+  // Anniversaires du jour d'abord, puis les listes défilantes.
   const bd = cards.filter((c) => c.kind === "birthday");
-  const goals = cards.filter((c) => c.kind === "goal").slice(0, 6);
-  return NextResponse.json({ cards: [...bd, ...goals] });
+  return NextResponse.json({ cards: [...bd, ...lists] });
 }
