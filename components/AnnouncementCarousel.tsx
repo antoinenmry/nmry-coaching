@@ -5,6 +5,7 @@ import { useData } from "@/components/DataProvider";
 import type { Announcement } from "@/lib/types";
 import Fireworks from "@/components/Fireworks";
 import { sportTarget } from "@/lib/sports";
+import { orderedSlots, slotOf, DEFAULT_INTERVAL_SEC } from "@/lib/carousel";
 
 /** Carte affichable : annonce du coach, carte automatique (anniversaire, compétition) ou rappel. */
 type Item = {
@@ -13,7 +14,6 @@ type Item = {
   rows?: { who: string; what: string; when: string }[]; // liste défilante (compétitions, anniversaires)
 };
 
-const AUTO_MS = 5000; // défilement automatique toutes les 5 s
 
 const todayKey = () => new Date().toISOString().slice(0, 10);
 const normalizeUrl = (u: string) => (/^https?:\/\//i.test(u) ? u : `https://${u}`);
@@ -98,9 +98,22 @@ export default function AnnouncementCarousel() {
     void today;
   }
 
+  // Pages : ordre et visibilité réglés par les éditeurs (library.carousel).
+  const cfg = library.carousel;
+  const hidden = new Set(cfg?.hidden ?? []);
+  const allItems: (Item & { slot: string })[] = [
+    ...feed,
+    ...activeAnnouncements(library.announcements, me?.id, activeUserId === me?.id ? state.profile.sports ?? [] : []),
+    ...reminders,
+  ].map((it) => ({ ...it, slot: slotOf(it.id) }));
+  const order = orderedSlots(library);
+  const items = allItems
+    .filter((it) => !hidden.has(it.slot))
+    .sort((a, b) => order.indexOf(a.slot) - order.indexOf(b.slot));
+
   // Feu d'artifice : une fois par jour et par anniversaire, ou à chaque tap sur la carte.
   const [fireworks, setFireworks] = useState(false);
-  const birthdayIds = feed.filter((c) => c.id.startsWith("bd-")).map((c) => c.id).join(",");
+  const birthdayIds = items.filter((c) => c.id.startsWith("bd-")).map((c) => c.id).join(",");
   useEffect(() => {
     if (!birthdayIds) return;
     try {
@@ -111,12 +124,8 @@ export default function AnnouncementCarousel() {
     setFireworks(true);
   }, [birthdayIds]);
 
-  const items: Item[] = [
-    ...feed.filter((c) => c.id.startsWith("bd-")),
-    ...activeAnnouncements(library.announcements, me?.id, activeUserId === me?.id ? state.profile.sports ?? [] : []),
-    ...feed.filter((c) => !c.id.startsWith("bd-")),
-    ...reminders,
-  ];
+  const autoMs = Math.min(30, Math.max(2, cfg?.intervalSec ?? DEFAULT_INTERVAL_SEC)) * 1000;
+  const autoOn = cfg?.auto !== false;
   const [index, setIndex] = useState(0);
   const [copied, setCopied] = useState<string | null>(null);
   const trackRef = useRef<HTMLDivElement>(null);
@@ -132,13 +141,13 @@ export default function AnnouncementCarousel() {
 
   // Défilement automatique (désactivé s'il n'y a qu'une carte)
   useEffect(() => {
-    if (count < 2) return;
+    if (count < 2 || !autoOn) return;
     const id = setInterval(() => {
       if (pausedRef.current || document.hidden) return;
       goTo((index + 1) % count);
-    }, AUTO_MS);
+    }, autoMs);
     return () => clearInterval(id);
-  }, [count, index, goTo]);
+  }, [count, index, goTo, autoMs, autoOn]);
 
   if (count === 0) return null;
 

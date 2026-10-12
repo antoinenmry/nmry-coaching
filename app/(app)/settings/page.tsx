@@ -460,6 +460,10 @@ export default function SettingsPage() {
   const { me, role, signOut, state, update } = useData();
   const { theme, setTheme, bgColor, setBgColor, resetBgColor } = useTheme();
   const [tab, setTab] = useState<"affichage" | "sportifs" | "admin">("affichage");
+  useEffect(() => {
+    const t = new URLSearchParams(window.location.search).get("tab");
+    if (t === "sportifs") setTab("sportifs");
+  }, []);
 
   // Mode vacances — dates de début/fin (null = pas en vacances)
   const [vacationStart, setVacationStart] = useState<string>("");

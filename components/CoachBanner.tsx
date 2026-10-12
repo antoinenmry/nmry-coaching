@@ -93,6 +93,7 @@ export default function CoachBanner({ urgent }: { urgent: number }) {
           <div className="flex items-center gap-2">
             <span className="text-[11px] font-black uppercase tracking-[0.12em] text-accent">Annonces</span>
             <span className="grid h-[18px] min-w-[18px] place-items-center rounded-full bg-black/30 px-1 text-[10px] font-black text-dim">{list.length}</span>
+            <Link href="/settings?tab=sportifs" className="ml-1 text-[11.5px] font-black text-dim underline-offset-2 hover:underline">Ordre et réglages ›</Link>
             <button
               onClick={() => setEditing("new")}
               aria-label="Nouvelle annonce"

@@ -5,6 +5,7 @@ import { createPortal } from "react-dom";
 import { useData } from "@/components/DataProvider";
 import type { Announcement } from "@/lib/types";
 import { sportsOf, sportTarget } from "@/lib/sports";
+import { AUTO_SLOTS, DEFAULT_INTERVAL_SEC, orderedSlots } from "@/lib/carousel";
 
 const COLORS = ["#ab47bc", "#42a5f5", "#66bb6a", "#ffb300", "#ef5350", "#26c6da"];
 const LABEL = "mb-1.5 block text-[10.5px] font-black uppercase tracking-[0.12em] text-dim";
@@ -12,66 +13,168 @@ export const todayISO = () => new Date().toISOString().slice(0, 10);
 const GOLD = "bg-gradient-to-br from-[#ffc53d] to-[#ff9f00] text-[#1a1500]";
 const todayKey = () => new Date().toISOString().slice(0, 10);
 
-/** Gestion des annonces du carrousel d'accueil (coach / admin). */
+const SPEEDS = [3, 5, 8, 12];
+
+function Ico({ d, className = "" }: { d: string; className?: string }) {
+  return (
+    <svg aria-hidden width="1em" height="1em" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.1" strokeLinecap="round" strokeLinejoin="round" className={`shrink-0 ${className}`}>
+      <path d={d} />
+    </svg>
+  );
+}
+const P = {
+  up: "m6 15 6-6 6 6",
+  down: "m6 9 6 6 6-6",
+  eye: "M2 12s3.5-7 10-7 10 7 10 7-3.5 7-10 7S2 12 2 12zM9 12a3 3 0 1 0 6 0a3 3 0 1 0-6 0",
+  eyeOff: "M3 3l18 18M10.6 5.2A9.8 9.8 0 0 1 12 5c6.5 0 10 7 10 7a17 17 0 0 1-3.2 4.2M6.5 6.6C3.7 8.4 2 12 2 12s3.5 7 10 7c1.5 0 2.8-.4 4-.9",
+  edit: "M4 20h4L19 9l-4-4L4 16zM13.5 6.5l4 4",
+  plus: "M12 5v14M5 12h14",
+};
+
+/**
+ * Menu du carrousel d'accueil (éditeurs) : ordre des pages, pages affichées ou masquées,
+ * vitesse et défilement automatique, création / modification / suppression des annonces.
+ */
 export default function AnnouncementsManager() {
   const { library, updateLibrary } = useData();
-  const list = library.announcements ?? [];
+  const anns = library.announcements ?? [];
+  const cfg = library.carousel ?? {};
   const [editing, setEditing] = useState<Announcement | "new" | null>(null);
+
+  const order = orderedSlots(library);
+  const hidden = new Set(cfg.hidden ?? []);
+  const annById = new Map(anns.map((a) => [a.id, a]));
+  const autoById = new Map(AUTO_SLOTS.map((x) => [x.id, x]));
+
+  const patch = (fn: (c: NonNullable<typeof library.carousel>) => void) =>
+    updateLibrary((l) => { const c = (l.carousel ??= {}); fn(c); });
+
+  function move(id: string, dir: -1 | 1) {
+    const i = order.indexOf(id);
+    const j = i + dir;
+    if (i < 0 || j < 0 || j >= order.length) return;
+    const next = [...order];
+    [next[i], next[j]] = [next[j], next[i]];
+    patch((c) => { c.order = next; });
+  }
+  function toggle(id: string) {
+    patch((c) => {
+      const h = new Set(c.hidden ?? []);
+      if (h.has(id)) h.delete(id); else h.add(id);
+      c.hidden = [...h];
+    });
+  }
 
   function save(a: Announcement) {
     updateLibrary((l) => {
       const arr = (l.announcements ??= []);
       const i = arr.findIndex((x) => x.id === a.id);
-      if (i === -1) arr.unshift(a); else arr[i] = a;
+      if (i === -1) {
+        arr.unshift(a);
+        // Nouvelle page : juste après les anniversaires du jour, sauf si un ordre est déjà fixé ailleurs.
+        const ord = l.carousel?.order;
+        if (ord) { const k = ord.indexOf("birthdays"); ord.splice(k + 1, 0, a.id); }
+      } else arr[i] = a;
     });
     setEditing(null);
   }
   function remove(id: string) {
-    updateLibrary((l) => { l.announcements = (l.announcements ?? []).filter((x) => x.id !== id); });
+    updateLibrary((l) => {
+      l.announcements = (l.announcements ?? []).filter((x) => x.id !== id);
+      if (l.carousel?.order) l.carousel.order = l.carousel.order.filter((x) => x !== id);
+      if (l.carousel?.hidden) l.carousel.hidden = l.carousel.hidden.filter((x) => x !== id);
+    });
     setEditing(null);
   }
+
+  const autoOn = cfg.auto !== false;
+  const sec = cfg.intervalSec ?? DEFAULT_INTERVAL_SEC;
+  const chip = (on: boolean) =>
+    `rounded-full border px-3 py-1.5 text-[12px] font-black transition ${on ? "border-transparent " + GOLD : "border-line bg-surface2 text-dim"}`;
 
   return (
     <section className="rounded-2xl border border-line bg-surface p-4">
       <div className="mb-1 flex items-center gap-2">
-        <h2 className="flex-1 font-black">Annonces de l&apos;accueil</h2>
+        <h2 className="flex-1 font-black">Carrousel de l&apos;accueil</h2>
         <button
           onClick={() => setEditing("new")}
           aria-label="Nouvelle annonce"
-          className={`grid h-10 w-10 place-items-center rounded-full text-2xl font-black leading-none ${GOLD}`}
+          className={`flex h-10 items-center gap-1.5 rounded-full px-3.5 text-[13px] font-black ${GOLD}`}
         >
-          +
+          <Ico d={P.plus} className="text-lg" />Page
         </button>
       </div>
-      <p className="mb-3 text-[12px] text-dim">
-        Cartes qui défilent toutes les 5 s en haut de l&apos;accueil, pour tous les sportifs.
+      <p className="mb-4 text-[12px] text-dim">
+        Les pages défilent en haut de l&apos;accueil de tous les sportifs. Change leur ordre, masque-les ou crée-en de nouvelles.
       </p>
-      {list.length === 0 ? (
-        <p className="rounded-xl border border-line p-3 text-center text-[13px] text-dim">Aucune annonce.</p>
-      ) : (
-        <div className="space-y-2">
-          {list.map((a) => {
-            const expired = !!a.endDate && a.endDate < todayKey();
-            return (
-              <button
-                key={a.id}
-                onClick={() => setEditing(a)}
-                className={`relative flex w-full items-center gap-3 overflow-hidden rounded-xl border border-line bg-surface2 py-2.5 pl-4 pr-3 text-left ${expired ? "opacity-50" : ""}`}
-              >
-                <span aria-hidden className="absolute inset-y-0 left-0 w-1" style={{ background: a.color }} />
-                <span className="min-w-0 flex-1">
-                  <span className="block truncate text-[14px] font-black">{a.title}</span>
-                  <span className="block truncate text-[11.5px] text-dim">
-                    {expired ? "Expirée" : a.endDate ? `Jusqu'au ${a.endDate.split("-").reverse().join("/")}` : "Sans date de fin"}
-                    {a.code ? ` · code ${a.code}` : ""}
-                  </span>
-                </span>
-                <span aria-hidden className="text-dim">›</span>
-              </button>
-            );
-          })}
+
+      {/* Défilement */}
+      <div className="mb-4 rounded-xl border border-line bg-surface2 p-3">
+        <div className="flex items-center gap-3">
+          <span className="flex-1">
+            <span className="block text-[14px] font-black">Défilement automatique</span>
+            <span className="block text-[11.5px] text-dim">Les pages avancent toutes seules</span>
+          </span>
+          <button
+            type="button"
+            role="switch"
+            aria-checked={autoOn}
+            onClick={() => patch((c) => { c.auto = !autoOn; })}
+            className={`relative h-[30px] w-[50px] shrink-0 rounded-full border transition ${autoOn ? "border-transparent bg-gradient-to-br from-[#ffc53d] to-[#ff9f00]" : "border-line bg-line/60"}`}
+          >
+            <span className={`absolute top-[3px] h-[22px] w-[22px] rounded-full bg-white shadow transition-all ${autoOn ? "left-[23px]" : "left-[3px]"}`} />
+          </button>
         </div>
-      )}
+        {autoOn && (
+          <div className="mt-3 flex flex-wrap items-center gap-1.5">
+            <span className="mr-1 text-[11px] font-black uppercase tracking-[0.12em] text-dim">Vitesse</span>
+            {SPEEDS.map((n) => (
+              <button key={n} type="button" onClick={() => patch((c) => { c.intervalSec = n; })} className={chip(sec === n)}>{n} s</button>
+            ))}
+          </div>
+        )}
+      </div>
+
+      {/* Pages */}
+      <span className={LABEL}>Pages · {order.length}</span>
+      <div className="space-y-2">
+        {order.map((id, i) => {
+          const a = annById.get(id);
+          const auto = autoById.get(id);
+          if (!a && !auto) return null;
+          const off = hidden.has(id);
+          const expired = !!a?.endDate && a.endDate < todayKey();
+          const color = a?.color ?? auto!.color;
+          return (
+            <div
+              key={id}
+              className={`relative flex items-center gap-2 overflow-hidden rounded-xl border border-line bg-surface2 py-2 pl-4 pr-2 ${off || expired ? "opacity-55" : ""}`}
+            >
+              <span aria-hidden className="absolute inset-y-0 left-0 w-1" style={{ background: color }} />
+              <span className="min-w-0 flex-1">
+                <span className="block truncate text-[14px] font-black">{a ? a.title : auto!.label}</span>
+                <span className="block truncate text-[11.5px] text-dim">
+                  {a
+                    ? `${a.poll ? "Sondage" : a.code || a.link ? "Promo ou lien" : "Message"} · ${expired ? "expirée" : a.endDate ? `jusqu'au ${a.endDate.split("-").reverse().slice(0, 2).join("/")}` : "sans fin"}${a.targets?.length ? " · ciblée" : ""}`
+                    : `Automatique · ${auto!.desc}`}
+                </span>
+              </span>
+              <span className="flex shrink-0 items-center">
+                <button type="button" onClick={() => move(id, -1)} disabled={i === 0} aria-label="Monter" className="grid h-8 w-8 place-items-center rounded-lg text-dim disabled:opacity-25"><Ico d={P.up} className="text-lg" /></button>
+                <button type="button" onClick={() => move(id, 1)} disabled={i === order.length - 1} aria-label="Descendre" className="grid h-8 w-8 place-items-center rounded-lg text-dim disabled:opacity-25"><Ico d={P.down} className="text-lg" /></button>
+                <button type="button" onClick={() => toggle(id)} aria-label={off ? "Afficher" : "Masquer"} aria-pressed={!off} className={`grid h-8 w-8 place-items-center rounded-lg ${off ? "text-dim" : "text-accent"}`}><Ico d={off ? P.eyeOff : P.eye} className="text-lg" /></button>
+                {a && (
+                  <button type="button" onClick={() => setEditing(a)} aria-label="Modifier" className="grid h-8 w-8 place-items-center rounded-lg text-dim"><Ico d={P.edit} className="text-base" /></button>
+                )}
+              </span>
+            </div>
+          );
+        })}
+      </div>
+      <p className="mt-3 text-[11.5px] text-dim">
+        Une page automatique n&apos;apparaît que s&apos;il y a du contenu. L&apos;œil la masque pour tout le monde.
+      </p>
+
       {editing && (
         <AnnouncementForm
           initial={editing === "new" ? null : editing}
