@@ -4,6 +4,7 @@ import { DataProvider } from "@/components/DataProvider";
 import Header from "@/components/Header";
 import BroadcastPopup from "@/components/BroadcastPopup";
 import CheckinPopup from "@/components/CheckinPopup";
+import SessionDoneBubble from "@/components/SessionDoneBubble";
 import NoCoachGate from "@/components/NoCoachGate";
 import ServiceWorkerRegistrar from "@/components/ServiceWorkerRegistrar";
 import RouteRestore from "@/components/RouteRestore";
@@ -32,6 +33,7 @@ export default async function AppLayout({ children }: { children: React.ReactNod
           <main className="mx-auto max-w-3xl p-4">{children}</main>
           <BroadcastPopup />
           <CheckinPopup />
+          <SessionDoneBubble />
         </PullToRefresh>
       </NoCoachGate>
     </DataProvider>
