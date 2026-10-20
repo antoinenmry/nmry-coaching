@@ -16,6 +16,7 @@ const PlaceSessionModal = dynamic(() => import("@/components/plan/PlaceSessionMo
 import { AUTH_ENABLED } from "@/lib/config";
 import { SESSION_COLORS, newSession, exerciseInstanceFromLibrary, findDuplicateExercise } from "@/lib/data";
 import { countdownLabel } from "@/lib/dates";
+import { lastWeekLoad } from "@/lib/sessionCopy";
 import type { Followup, Goal, SessionInstance, SessionTemplate, WeekTemplateDay } from "@/lib/types";
 import { createClient } from "@/lib/supabase/client";
 
@@ -1039,6 +1040,8 @@ function DuplicateWeekModal({
               clientComment: "",
               failed: undefined,
               setLogs: undefined,
+              // Charge S-1 : poids saisi, ou à défaut le plus lourd du détail des séries (qu'on efface).
+              weightClient: lastWeekLoad(ex) > 0 ? lastWeekLoad(ex) : undefined,
             })),
           };
           d.sessions.push(copy);
