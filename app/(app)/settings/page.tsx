@@ -739,6 +739,24 @@ export default function SettingsPage() {
           </section>
 
           <section className="rounded-2xl border border-line bg-surface p-4">
+            <div className="flex items-center gap-3">
+              <span className="flex-1">
+                <span className="block font-bold">Check-in du jour</span>
+                <span className="block text-[12px] text-dim">Pop-up « Comment tu te sens ? » à la première ouverture de la journée</span>
+              </span>
+              <button
+                type="button"
+                role="switch"
+                aria-checked={state.preferences?.checkinDisabled !== true}
+                onClick={() => update((d) => { d.preferences.checkinDisabled = d.preferences.checkinDisabled ? undefined : true; })}
+                className={`relative h-[30px] w-[50px] shrink-0 rounded-full border transition ${state.preferences?.checkinDisabled !== true ? "border-transparent bg-gradient-to-br from-[#ffc53d] to-[#ff9f00]" : "border-line bg-line/60"}`}
+              >
+                <span className={`absolute top-[3px] h-[22px] w-[22px] rounded-full bg-white shadow transition-all ${state.preferences?.checkinDisabled !== true ? "left-[23px]" : "left-[3px]"}`} />
+              </button>
+            </div>
+          </section>
+
+          <section className="rounded-2xl border border-line bg-surface p-4">
             <h2 className="mb-3 font-bold">Notifications</h2>
             <NotifPrefsPanel />
           </section>

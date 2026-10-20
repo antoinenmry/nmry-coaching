@@ -3,6 +3,8 @@
 import { useState, useEffect, useRef } from "react";
 import { useData } from "@/components/DataProvider";
 import type { Metric, MetricEntry } from "@/lib/types";
+import CheckinSheet from "@/components/CheckinSheet";
+import { hasCheckin, localDateKey } from "@/lib/checkin";
 
 // ─── Utils ────────────────────────────────────────────────────────────────────
 const uid = () => Math.random().toString(36).slice(2, 9);
@@ -213,7 +215,9 @@ function MetricChart({ allMetrics, visibleIds, days }: {
 
 // ─── Composant principal ──────────────────────────────────────────────────────
 export default function MetricsTab({ view }: { view: "donnees" | "tendances" }) {
-  const { state, update } = useData();
+  const { state, update, me, activeUserId } = useData();
+  const [checkinOpen, setCheckinOpen] = useState(false);
+  const canCheckin = !!me && activeUserId === me.id;
   const subTab = view; // le sélecteur Données / Tendances vit maintenant dans l'en-tête de « Santé »
   const initializedRef = useRef(false);
 
@@ -254,11 +258,14 @@ export default function MetricsTab({ view }: { view: "donnees" | "tendances" }) 
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  // Sélectionner toutes les métriques par défaut pour le graphique
+  // Sélectionner par défaut toutes les métriques pour le graphique, y compris celles créées plus tard
+  // (ex. indicateurs du check-in) ; un indicateur masqué à la main le reste.
+  const seenRef = useRef<Set<string>>(new Set());
   useEffect(() => {
-    if (visibleChartIds.length === 0 && (state.metrics?.length ?? 0) > 0) {
-      setVisibleChartIds((state.metrics ?? []).map(m => m.id));
-    }
+    const fresh = (state.metrics ?? []).map(m => m.id).filter(id => !seenRef.current.has(id));
+    if (fresh.length === 0) return;
+    fresh.forEach(id => seenRef.current.add(id));
+    setVisibleChartIds(v => [...v, ...fresh]);
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [state.metrics?.length]);
 
@@ -358,9 +365,23 @@ export default function MetricsTab({ view }: { view: "donnees" | "tendances" }) 
 
   return (
     <div className="space-y-4">
+      {checkinOpen && <CheckinSheet onClose={() => setCheckinOpen(false)} />}
       {/* ── Sous-onglet Données ─────────────────────────────────────────────── */}
       {subTab === "donnees" && (
         <div className="space-y-3">
+          {/* Check-in du jour : proposé ici si le pop-up d'ouverture n'a pas été rempli */}
+          {canCheckin && !hasCheckin(state, localDateKey()) && (
+            <button
+              onClick={() => setCheckinOpen(true)}
+              className="flex w-full items-center gap-3 rounded-2xl border border-accent/40 bg-[linear-gradient(105deg,rgba(255,179,0,0.16),var(--color-surface)_75%)] p-3.5 text-left"
+            >
+              <span className="min-w-0 flex-1">
+                <span className="block text-[15px] font-black">Check-in du jour</span>
+                <span className="block text-[12px] text-dim">Note ton sommeil, ton énergie et tes douleurs de 1 à 5. Ça alimente ta courbe « Forme ».</span>
+              </span>
+              <span className="shrink-0 rounded-full bg-gradient-to-br from-[#ffc53d] to-[#ff9f00] px-4 py-2 text-[13px] font-black text-[#1a1500]">Noter</span>
+            </button>
+          )}
           {metrics.length === 0 && !addingMetric && (
             <p className="py-8 text-center text-sm text-dim">Aucune métrique pour l&apos;instant.</p>
           )}
@@ -683,9 +704,23 @@ export default function MetricsTab({ view }: { view: "donnees" | "tendances" }) 
               </div>
 
               {/* Graphique */}
-              <div className="rounded-2xl border border-line bg-surface p-4">
-                <MetricChart allMetrics={metrics} visibleIds={visibleChartIds} days={chartDays} />
-              </div>
+              {/* Un graphique par unité : les notes /5 du check-in ne sont pas écrasées par le poids en kg */}
+              {(() => {
+                const units = Array.from(new Set(metrics.filter(m => visibleChartIds.includes(m.id)).map(m => m.unit)));
+                if (units.length === 0) {
+                  return <div className="rounded-2xl border border-line bg-surface p-4"><MetricChart allMetrics={metrics} visibleIds={[]} days={chartDays} /></div>;
+                }
+                return units.map(u => (
+                  <div key={u} className="rounded-2xl border border-line bg-surface p-4">
+                    {units.length > 1 && (
+                      <p className="mb-2 text-[11px] font-black uppercase tracking-[0.12em] text-dim">
+                        {u === "/5" ? "Forme (notes /5)" : `En ${u}`}
+                      </p>
+                    )}
+                    <MetricChart allMetrics={metrics} visibleIds={visibleChartIds.filter(id => metrics.find(m => m.id === id)?.unit === u)} days={chartDays} />
+                  </div>
+                ));
+              })()}
 
               {/* Légende avec dernière valeur */}
               {visibleChartIds.length > 0 && (

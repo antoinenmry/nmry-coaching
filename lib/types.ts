@@ -442,6 +442,7 @@ export interface UserPreferences {
   chosenRecordExerciseId?: string;                 // exercice choisi pour "chosenRecord"
   favoriteExerciseId?: string;                     // exercice favori ⭐ bibliothèque
   notifPrefs?: NotifPrefs;                         // préférences notifications
+  checkinDisabled?: boolean;                       // true = pas de pop-up « Comment tu te sens ? » à la 1re ouverture du jour
   planNotifSentAt?: Record<string, string>;        // coach : dernière notif programme par clientId (ISO timestamp)
 }
 
