@@ -1029,11 +1029,16 @@ function DuplicateWeekModal({
             done: false,
             emoji: 0,
             coachComment: session.coachComment,
+            // Comme une séance jamais réalisée : commentaire de fin, RPE, raté, détail des séries remis à zéro.
+            // Seule la charge utilisée à S-1 (weightClient) est conservée.
+            clientComment: "",
             exercises: session.exercises.map((ex) => ({
               ...structuredClone(ex),
               uid: crypto.randomUUID(),
               rpeClient: 0,
               clientComment: "",
+              failed: undefined,
+              setLogs: undefined,
             })),
           };
           d.sessions.push(copy);

@@ -51,13 +51,19 @@ export async function POST(req: NextRequest) {
     done: false,
     emoji: 0,
     coachComment: s.coachComment,
+    clientComment: "",
     date: withDates ? s.date : null,
+    // Séance neuve pour un AUTRE sportif : tout le suivi est remis à zéro, y compris la charge S-1
+    // (elle appartient au sportif source).
     exercises: s.exercises.map((ex) => ({
       ...structuredClone(ex),
       uid: crypto.randomUUID(),
       rpeClient: 0,
       clientComment: "",
       failed: false,
+      weightClient: undefined,
+      setLogs: undefined,
+      prDismissedWeight: undefined,
     })),
   }));
 
