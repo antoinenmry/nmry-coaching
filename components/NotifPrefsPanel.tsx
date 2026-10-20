@@ -187,24 +187,28 @@ export default function NotifPrefsPanel() {
           <p className="text-[11px] font-semibold uppercase tracking-wider text-dim">Je veux être notifié pour…</p>
           <div className="space-y-2.5">
             {prefRows.map((row) => (
-              <label key={row.key} className="flex cursor-pointer items-center justify-between gap-3">
+              <div key={row.key} className="flex items-center justify-between gap-3">
                 <div className="min-w-0">
                   <p className="text-sm font-medium">{row.label}</p>
                   <p className="text-[12px] text-dim">{row.desc}</p>
                 </div>
                 <button
+                  type="button"
                   role="switch"
                   aria-checked={prefs[row.key]}
+                  aria-label={row.label}
                   onClick={() => setPref(row.key, !prefs[row.key])}
-                  className={`relative h-6 w-11 shrink-0 rounded-full transition-colors ${
-                    prefs[row.key] ? "bg-accent" : "bg-surface2 border border-line"
+                  className={`relative h-[30px] w-[50px] shrink-0 rounded-full border transition-colors ${
+                    prefs[row.key]
+                      ? "border-transparent bg-gradient-to-br from-[#ffc53d] to-[#ff9f00]"
+                      : "border-line bg-line/60"
                   }`}
                 >
-                  <span className={`absolute top-0.5 h-5 w-5 rounded-full bg-white shadow transition-transform ${
-                    prefs[row.key] ? "translate-x-5" : "translate-x-0.5"
+                  <span className={`absolute top-[3px] h-[22px] w-[22px] rounded-full bg-white shadow transition-all ${
+                    prefs[row.key] ? "left-[23px]" : "left-[3px]"
                   }`} />
                 </button>
-              </label>
+              </div>
             ))}
           </div>
         </>
