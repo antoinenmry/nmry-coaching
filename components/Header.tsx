@@ -2,14 +2,12 @@
 
 import Link from "next/link";
 import Image from "next/image";
-import { useEffect, useState } from "react";
 import { usePathname, useRouter } from "next/navigation";
 import { useData } from "./DataProvider";
 import { useTheme } from "./ThemeProvider";
 import ClientSelector from "./ClientSelector";
 
 export const SHARE_WEEK_EVENT = "nmry:share-week";
-const SHARE_SEEN_KEY = "nmry_seen_share_week";
 
 const TITLES: Record<string, string> = {
   "/": "NMRY-coaching",
@@ -40,17 +38,9 @@ export default function Header() {
     ((library.merchandiseItems?.length ?? 0) > 0 && library.shopTabsVisible?.shop) ||
     ((library.shopItems?.length ?? 0) > 0 && library.shopTabsVisible?.shop);
   const showPartners = isElevated || hasShopContent;
-  // Partager ma semaine (Programmation) : liseré aurora tant que le bouton n'a jamais été utilisé.
+  // Partager ma semaine (Programmation) : liseré aurora permanent autour du bouton.
   const isPlan = pathname === "/plan";
-  const [shareIsNew, setShareIsNew] = useState(false);
-  useEffect(() => {
-    try { setShareIsNew(!localStorage.getItem(SHARE_SEEN_KEY)); } catch {}
-  }, []);
-  const openShare = () => {
-    try { localStorage.setItem(SHARE_SEEN_KEY, "1"); } catch {}
-    setShareIsNew(false);
-    window.dispatchEvent(new Event(SHARE_WEEK_EVENT));
-  };
+  const openShare = () => window.dispatchEvent(new Event(SHARE_WEEK_EVENT));
 
   return (
     <header className="sticky top-0 z-10 border-b border-line bg-bg/90 backdrop-blur">
@@ -107,7 +97,7 @@ export default function Header() {
               onClick={openShare}
               aria-label="Partager ma semaine"
               title="Partager ma semaine"
-              className={`grid h-10 w-10 shrink-0 place-items-center rounded-lg bg-surface2 text-ink ${shareIsNew ? "nmry-new-ring" : ""}`}
+              className="nmry-new-ring grid h-10 w-10 shrink-0 place-items-center rounded-lg bg-surface2 text-ink"
             >
               <svg width="18" height="18" viewBox="0 0 20 20" fill="none" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round" aria-hidden>
                 <path d="M10 12.5V3M6.5 6.5 10 3l3.5 3.5" />

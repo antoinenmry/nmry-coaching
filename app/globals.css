@@ -132,7 +132,7 @@ input[type="number"]::-webkit-inner-spin-button { -webkit-appearance: none; marg
   filter: invert(1) hue-rotate(180deg) brightness(0.92) contrast(0.88) saturate(0.7);
 }
 
-/* Liseré « nouveau » : anneau aurora (couleurs du thème Aurora) qui tourne autour d'un bouton. */
+/* Liseré aurora (bouton Partager ma semaine) : anneau (couleurs du thème Aurora) qui tourne autour d'un bouton. */
 @property --nmry-ring-angle { syntax: "<angle>"; inherits: false; initial-value: 0deg; }
 .nmry-new-ring { position: relative; isolation: isolate; }
 .nmry-new-ring::before {
