@@ -3,6 +3,7 @@
 import { Suspense, useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { createClient } from "@/lib/supabase/client";
+import { capitalizeName } from "@/lib/names";
 
 const SITE_URL = "https://nmry-coaching.vercel.app";
 
@@ -15,7 +16,8 @@ function LoginForm() {
   const urlError = params.get("error");
 
   const [screen, setScreen] = useState<Screen>("signin");
-  const [name, setName] = useState("");
+  const [firstName, setFirstName] = useState("");
+  const [lastName, setLastName] = useState("");
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [msg, setMsg] = useState<{ text: string; ok?: boolean } | null>(
@@ -38,16 +40,19 @@ function LoginForm() {
     setBusy(true);
 
     if (screen === "signup") {
-      if (!name.trim()) {
-        setMsg({ text: "Choisis un nom d'utilisateur." });
+      const first = capitalizeName(firstName);
+      const last = capitalizeName(lastName);
+      if (!first || !last) {
+        setMsg({ text: "Prénom et nom requis." });
         setBusy(false);
         return;
       }
+      const name = `${first} ${last}`;
       const { data, error } = await supabase.auth.signUp({
         email,
         password,
         options: {
-          data: { name: name.trim() },
+          data: { name, first_name: first, last_name: last },
           emailRedirectTo: `${SITE_URL}/auth/callback`,
         },
       });
@@ -61,7 +66,7 @@ function LoginForm() {
         fetch("/api/auth/on-signup", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ userName: name.trim(), userEmail: email }),
+          body: JSON.stringify({ userName: name, userEmail: email }),
         }).catch(() => {});
         router.replace("/");
         router.refresh();
@@ -207,15 +212,28 @@ function LoginForm() {
         </h2>
 
         {screen === "signup" && (
-          <label className="mb-3 block">
-            <span className="mb-1.5 block text-xs text-dim">Nom d&apos;utilisateur</span>
-            <input
-              value={name}
-              onChange={(e) => setName(e.target.value)}
-              placeholder="Prénom Nom"
-              autoComplete="name"
-            />
-          </label>
+          <div className="mb-3 grid grid-cols-2 gap-3">
+            <label className="block">
+              <span className="mb-1.5 block text-xs text-dim">Prénom</span>
+              <input
+                value={firstName}
+                onChange={(e) => setFirstName(e.target.value)}
+                onBlur={() => setFirstName((v) => capitalizeName(v))}
+                autoComplete="given-name"
+                autoCapitalize="words"
+              />
+            </label>
+            <label className="block">
+              <span className="mb-1.5 block text-xs text-dim">Nom</span>
+              <input
+                value={lastName}
+                onChange={(e) => setLastName(e.target.value)}
+                onBlur={() => setLastName((v) => capitalizeName(v))}
+                autoComplete="family-name"
+                autoCapitalize="words"
+              />
+            </label>
+          </div>
         )}
 
         <label className="mb-3 block">

@@ -2,7 +2,6 @@ import { NextRequest, NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { sendPushToUser } from "@/lib/push";
-import { ensureDefaultCoach } from "@/lib/defaultCoach";
 
 /**
  * POST /api/auth/on-signup
@@ -33,8 +32,7 @@ export async function POST(req: NextRequest) {
 
   const admin = createAdminClient();
 
-  // Affectation automatique au coach par défaut (l'admin peut réaffecter ensuite).
-  await ensureDefaultCoach(admin, user.id).catch(() => null);
+  // Pas d'affectation automatique : le compte reste sans accès jusqu'à validation par un coach.
 
   // Récupérer tous les coaches et admins
   const { data: elevated } = await admin
@@ -48,9 +46,9 @@ export async function POST(req: NextRequest) {
   await Promise.allSettled(
     elevated.map(({ id }) =>
       sendPushToUser(id, {
-        title: "👤 Nouvelle inscription",
-        body: `${displayName} vient de rejoindre NMRY Coaching`,
-        url: "/settings",
+        title: "👤 Demande d'inscription",
+        body: `${displayName} demande à rejoindre NMRY Coaching — à valider`,
+        url: "/settings?tab=sportifs",
       })
     )
   );

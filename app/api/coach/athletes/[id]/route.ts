@@ -33,7 +33,13 @@ export async function DELETE(
       .eq("coach_id", caller.user.id)
       .eq("client_id", id)
       .maybeSingle();
-    if (!link) return NextResponse.json({ error: "Ce sportif ne vous est pas affecté" }, { status: 403 });
+    if (!link) {
+      // Exception : une demande d'inscription en attente (aucun coach) peut être refusée par n'importe quel coach.
+      const { data: anyLink } = await admin.from("coach_client").select("id").eq("client_id", id).limit(1);
+      if (anyLink && anyLink.length > 0) {
+        return NextResponse.json({ error: "Ce sportif ne vous est pas affecté" }, { status: 403 });
+      }
+    }
   }
 
   const { error } = await admin.auth.admin.deleteUser(id);

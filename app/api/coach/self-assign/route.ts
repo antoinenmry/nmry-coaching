@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { requireRole } from "@/lib/apiAuth";
+import { sendPushToUser } from "@/lib/push";
 
 /**
  * POST /api/coach/self-assign
@@ -43,5 +44,12 @@ export async function POST(req: NextRequest) {
     .upsert({ coach_id: user.id, client_id: clientId });
 
   if (error) return NextResponse.json({ error: error.message }, { status: 500 });
+  if (!existing) {
+    await sendPushToUser(clientId, {
+      title: "✅ Compte validé",
+      body: "Ton coach a accepté ton inscription. Bienvenue !",
+      url: "/",
+    }).catch(() => null);
+  }
   return NextResponse.json({ success: true });
 }

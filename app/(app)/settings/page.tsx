@@ -66,6 +66,14 @@ function AthletesManager() {
     setPendingAction(null);
   }
 
+  async function refuseRequest(clientId: string, label: string) {
+    if (!window.confirm(`Refuser l'inscription de ${label} ? Son compte sera supprimé.`)) return;
+    setPendingAction(clientId + "-refuse");
+    await fetch(`/api/coach/athletes/${clientId}`, { method: "DELETE" });
+    await fetchAthletes();
+    setPendingAction(null);
+  }
+
   useEffect(() => { fetchAthletes(); }, [fetchAthletes]);
 
   async function toggleStatus(id: string, current: AthleteStatus) {
@@ -169,11 +177,14 @@ function AthletesManager() {
         })}
       </div>
 
-      {/* Sportifs sans coach (coach uniquement) */}
+      {/* Demandes d'inscription à valider (coach uniquement) */}
       {role === "coach" && unassigned.length > 0 && (
-        <div className="mt-4 rounded-2xl border border-line p-4">
-          <p className="mb-3 text-sm font-semibold text-dim">
-            Sportifs sans coach ({unassigned.length})
+        <div className="mt-4 rounded-2xl border border-accent/40 bg-accent/5 p-4">
+          <p className="mb-1 text-sm font-semibold">
+            Demandes d&apos;inscription ({unassigned.length})
+          </p>
+          <p className="mb-3 text-[12px] text-dim">
+            Ces personnes n&apos;ont accès à rien tant que tu ne les as pas acceptées.
           </p>
           <div className="space-y-2">
             {unassigned.map((c) => (
@@ -182,13 +193,22 @@ function AthletesManager() {
                   <p className="truncate text-sm font-medium">{c.name || "—"}</p>
                   <p className="truncate text-[12px] text-dim">{c.email}</p>
                 </div>
-                <button
-                  onClick={() => selfAssign(c.id)}
-                  disabled={!!pendingAction}
-                  className="shrink-0 rounded-lg bg-accent/15 px-3 py-1.5 text-[12px] font-semibold text-accent hover:bg-accent/25 disabled:opacity-50"
-                >
-                  {pendingAction === c.id + "-assign" ? "…" : "M'affecter"}
-                </button>
+                <div className="flex shrink-0 gap-1.5">
+                  <button
+                    onClick={() => refuseRequest(c.id, c.name || c.email)}
+                    disabled={!!pendingAction}
+                    className="rounded-lg bg-danger/10 px-3 py-1.5 text-[12px] font-semibold text-danger hover:bg-danger/20 disabled:opacity-50"
+                  >
+                    {pendingAction === c.id + "-refuse" ? "…" : "Refuser"}
+                  </button>
+                  <button
+                    onClick={() => selfAssign(c.id)}
+                    disabled={!!pendingAction}
+                    className="rounded-lg bg-accent px-3 py-1.5 text-[12px] font-bold text-[#1a1500] disabled:opacity-50"
+                  >
+                    {pendingAction === c.id + "-assign" ? "…" : "Accepter"}
+                  </button>
+                </div>
               </div>
             ))}
           </div>
@@ -272,6 +292,14 @@ function AdminManager() {
     setPending(null);
   }
 
+  async function refuse(clientId: string, label: string) {
+    if (!window.confirm(`Refuser l'inscription de ${label} ? Son compte sera supprimé.`)) return;
+    setPending(clientId + "-refuse");
+    await fetch(`/api/coach/athletes/${clientId}`, { method: "DELETE" });
+    await load();
+    setPending(null);
+  }
+
   async function assign(clientId: string, coachId: string) {
     setPending(clientId + "-assign");
     await fetch("/api/admin/assignments", {
@@ -347,8 +375,9 @@ function AdminManager() {
       {overview.unassigned.length > 0 && (
         <div className="rounded-2xl border border-line p-4">
           <p className="mb-3 text-sm font-semibold text-dim">
-            Clients sans coach ({overview.unassigned.length})
+            Demandes d&apos;inscription ({overview.unassigned.length})
           </p>
+          <p className="mb-3 text-[12px] text-dim">Aucun accès tant qu&apos;un coach n&apos;est pas affecté.</p>
           <div className="space-y-2">
             {overview.unassigned.map((client) => (
               <div key={client.id} className="flex items-center justify-between gap-2 rounded-xl bg-surface px-3 py-2">
@@ -363,7 +392,7 @@ function AdminManager() {
                     disabled={!!pending}
                     className="rounded-lg border border-line bg-surface2 px-2 py-1 text-[12px]"
                   >
-                    <option value="" disabled>Affecter à…</option>
+                    <option value="" disabled>Accepter et affecter à…</option>
                     {allCoaches.map((c) => (
                       <option key={c.id} value={c.id}>{c.name || c.email}</option>
                     ))}
@@ -374,6 +403,13 @@ function AdminManager() {
                     className="rounded-lg bg-surface2 px-2.5 py-1 text-[12px] font-semibold text-dim hover:bg-accent/10 hover:text-accent"
                   >
                     {pending === client.id + "-role" ? "…" : "→ Coach"}
+                  </button>
+                  <button
+                    onClick={() => refuse(client.id, client.name || client.email)}
+                    disabled={!!pending}
+                    className="rounded-lg bg-danger/10 px-2.5 py-1 text-[12px] font-semibold text-danger hover:bg-danger/20"
+                  >
+                    {pending === client.id + "-refuse" ? "…" : "Refuser"}
                   </button>
                 </div>
               </div>

@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { requireRole } from "@/lib/apiAuth";
+import { sendPushToUser } from "@/lib/push";
 
 /**
  * POST /api/admin/assignments
@@ -30,6 +31,8 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: "clientId invalide" }, { status: 400 });
   }
 
+  const { data: previous } = await adminClient.from("coach_client").select("id").eq("client_id", clientId).limit(1);
+
   // Supprimer l'affectation précédente du client (un client = un coach)
   await adminClient.from("coach_client").delete().eq("client_id", clientId);
 
@@ -38,5 +41,13 @@ export async function POST(req: NextRequest) {
     .insert({ coach_id: coachId, client_id: clientId });
 
   if (error) return NextResponse.json({ error: "Erreur lors de l'affectation" }, { status: 500 });
+  // Première affectation = validation de l'inscription → prévenir le sportif.
+  if (!previous || previous.length === 0) {
+    await sendPushToUser(clientId, {
+      title: "✅ Compte validé",
+      body: "Ton coach a accepté ton inscription. Bienvenue !",
+      url: "/",
+    }).catch(() => null);
+  }
   return NextResponse.json({ success: true });
 }

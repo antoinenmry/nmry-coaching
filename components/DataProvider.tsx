@@ -286,17 +286,13 @@ export function DataProvider({ children }: { children: React.ReactNode }) {
           loadCoachPlanNotif(),
         ]);
       } else {
-        // Client : vérifier qu'il a un coach affecté via l'API (bypass RLS coach_client)
-        // En cas d'erreur réseau on laisse passer (fail-open) pour ne pas bloquer les clients existants
+        // Client : inscription validée = coach affecté (API, bypass RLS coach_client).
+        // Fail-closed : en cas d'erreur on affiche l'écran d'attente, qui revérifie toutes les 15 s.
         try {
-          const res = await fetch("/api/me/has-coach");
-          if (res.ok) {
-            const { hasCoach } = await res.json();
-            setHasCoach(hasCoach);
-          }
-          // Si res not ok : hasCoach reste true par défaut (fail-open)
+          const res = await fetch("/api/me/has-coach", { cache: "no-store" });
+          setHasCoach(res.ok ? !!(await res.json()).hasCoach : false);
         } catch {
-          // Erreur réseau : hasCoach reste true (fail-open)
+          setHasCoach(false);
         }
         await loadStateFor(user.id);
       }

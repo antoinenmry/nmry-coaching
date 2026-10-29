@@ -117,6 +117,8 @@ alter table public.library_state enable row level security;
 
 drop policy if exists library_read_all    on public.library_state;
 drop policy if exists library_coach_write on public.library_state;
+-- Lecture réservée aux comptes validés (coach/admin ou sportif affecté) : voir supabase/signup-validation.sql
+-- (is_approved() est créée dans ce fichier-là ; sur une base neuve, l'exécuter après schema.sql)
 create policy library_read_all    on public.library_state for select using (auth.role() = 'authenticated');
 create policy library_coach_write on public.library_state for all   using (public.is_coach()) with check (public.is_coach());
 
