@@ -31,7 +31,7 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: "clientId invalide" }, { status: 400 });
   }
 
-  const { data: previous } = await adminClient.from("coach_client").select("id").eq("client_id", clientId).limit(1);
+  const { data: previous } = await adminClient.from("coach_client").select("client_id").eq("client_id", clientId).limit(1);
 
   // Supprimer l'affectation précédente du client (un client = un coach)
   await adminClient.from("coach_client").delete().eq("client_id", clientId);

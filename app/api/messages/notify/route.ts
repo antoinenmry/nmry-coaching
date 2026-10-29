@@ -103,10 +103,10 @@ export async function POST(req: NextRequest) {
     //  se comporter selon la version PostgREST du projet Supabase)
     const [{ data: linkAsCoach }, { data: linkAsClient }] = await Promise.all([
       // Cas 1 : user = coach, target = client
-      admin.from("coach_client").select("id")
+      admin.from("coach_client").select("client_id")
         .eq("coach_id", user.id).eq("client_id", targetId).maybeSingle(),
       // Cas 2 : user = client, target = coach
-      admin.from("coach_client").select("id")
+      admin.from("coach_client").select("client_id")
         .eq("coach_id", targetId).eq("client_id", user.id).maybeSingle(),
     ]);
 

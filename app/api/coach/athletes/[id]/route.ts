@@ -29,14 +29,15 @@ export async function DELETE(
   if (caller.role === "coach") {
     const { data: link } = await admin
       .from("coach_client")
-      .select("id")
+      .select("client_id")
       .eq("coach_id", caller.user.id)
       .eq("client_id", id)
       .maybeSingle();
     if (!link) {
       // Exception : une demande d'inscription en attente (aucun coach) peut être refusée par n'importe quel coach.
-      const { data: anyLink } = await admin.from("coach_client").select("id").eq("client_id", id).limit(1);
-      if (anyLink && anyLink.length > 0) {
+      // Fail-closed : en cas d'erreur de lecture, on refuse.
+      const { data: anyLink, error: anyErr } = await admin.from("coach_client").select("client_id").eq("client_id", id).limit(1);
+      if (anyErr || !anyLink || anyLink.length > 0) {
         return NextResponse.json({ error: "Ce sportif ne vous est pas affecté" }, { status: 403 });
       }
     }
@@ -84,7 +85,7 @@ export async function PATCH(
   if (caller.role === "coach") {
     const { data: link } = await admin
       .from("coach_client")
-      .select("id")
+      .select("client_id")
       .eq("coach_id", caller.user.id)
       .eq("client_id", id)
       .maybeSingle();

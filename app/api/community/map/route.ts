@@ -35,6 +35,9 @@ export async function GET() {
   const { data: me } = await admin.from("profiles").select("role").eq("id", user.id).maybeSingle();
   const isStaff = (me as { role?: string } | null)?.role === "coach" || (me as { role?: string } | null)?.role === "admin";
   if (!isStaff) {
+    // Inscription non validée (aucun coach affecté) : aucun accès aux données des autres membres.
+    const { data: link } = await admin.from("coach_client").select("client_id").eq("client_id", user.id).limit(1);
+    if (!link || link.length === 0) return NextResponse.json({ error: "Forbidden" }, { status: 403 });
     const { data: mine } = await admin.from("app_state").select("consent:data->profile->mapConsent").eq("user_id", user.id).maybeSingle();
     if ((mine as { consent?: boolean | null } | null)?.consent !== true) {
       return NextResponse.json({ error: "Forbidden" }, { status: 403 });
