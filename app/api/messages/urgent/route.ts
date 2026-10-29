@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
 import { createAdminClient } from "@/lib/supabase/admin";
-import nodemailer from "nodemailer";
+import { sendMail, mailLayout, esc, SITE_URL } from "@/lib/mail";
 import { sendPushToUser } from "@/lib/push";
 import { getUserNotifPrefs } from "@/lib/notifPrefs";
 import { rateLimit } from "@/lib/rateLimit";
@@ -78,84 +78,36 @@ export async function POST(req: NextRequest) {
     coachEmail = admins[0].email;
   }
 
-  // 4. Vérifier que Gmail est configuré
-  if (!process.env.GMAIL_USER || !process.env.GMAIL_APP_PASSWORD) {
-    console.warn("[NMRY] GMAIL_USER ou GMAIL_APP_PASSWORD manquant — email non envoyé");
-    return NextResponse.json({ sent: false, reason: "gmail_not_configured" });
-  }
-
-  // 5. Envoyer via Gmail SMTP
-  const transporter = nodemailer.createTransport({
-    service: "gmail",
-    auth: {
-      user: process.env.GMAIL_USER,
-      pass: process.env.GMAIL_APP_PASSWORD,
-    },
-  });
-
   const senderLabel = clientName || "Un sportif";
   const preview = messageText ? messageText.slice(0, 200) : null;
 
-  // Échappement HTML pour l'insertion dans le corps de l'email (anti-injection :
-  // un sportif ne peut pas injecter de balises/liens via son nom ou son message).
-  const esc = (s: string) =>
-    s.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;")
-     .replace(/"/g, "&quot;").replace(/'/g, "&#39;");
-  const senderLabelHtml = esc(senderLabel);
-  const previewHtml = preview ? esc(preview) : null;
+  // Échappement HTML (anti-injection : un sportif ne peut pas injecter de balises/liens via son nom ou son message).
+  const quote = (inner: string, color: string) =>
+    `<div style="background:#fef2f2;border-left:4px solid #ef4444;border-radius:8px;padding:16px 18px;margin-bottom:28px;"><p style="margin:0;color:${color};font-size:15px;line-height:1.6;">${inner}</p></div>`;
 
   try {
-    await transporter.sendMail({
-      from: `NMRY Coaching <${process.env.GMAIL_USER}>`,
+    const sent = await sendMail({
       to: coachEmail,
-      subject: `🚨 Message urgent de ${senderLabel} — NMRY Coaching`,
-      html: `
-<!DOCTYPE html>
-<html lang="fr">
-<head><meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1"></head>
-<body style="margin:0;padding:0;background:#f5f5f5;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;">
-  <div style="max-width:520px;margin:40px auto;background:#ffffff;border-radius:16px;overflow:hidden;border:1px solid #e5e5e5;">
-
-    <!-- Header rouge -->
-    <div style="background:#ef4444;padding:24px 28px;">
-      <p style="margin:0;color:#fff;font-size:12px;font-weight:600;letter-spacing:.08em;text-transform:uppercase;opacity:.85;">NMRY Coaching</p>
-      <h1 style="margin:6px 0 0;color:#fff;font-size:22px;font-weight:800;">🚨 Message urgent</h1>
-    </div>
-
-    <!-- Corps -->
-    <div style="padding:28px;">
-      <p style="margin:0 0 4px;color:#888;font-size:13px;">De la part de</p>
-      <p style="margin:0 0 24px;color:#111;font-size:20px;font-weight:700;">${senderLabelHtml}</p>
-
-      ${previewHtml ? `
-      <div style="background:#fef2f2;border-left:4px solid #ef4444;border-radius:8px;padding:16px 18px;margin-bottom:28px;">
-        <p style="margin:0;color:#333;font-size:15px;line-height:1.6;">${previewHtml}</p>
-      </div>
-      ` : `
-      <div style="background:#fef2f2;border-left:4px solid #ef4444;border-radius:8px;padding:16px 18px;margin-bottom:28px;">
-        <p style="margin:0;color:#888;font-size:14px;">🎤 Message vocal — écouter dans l'application</p>
-      </div>
-      `}
-
-      <a href="https://nmry-coaching.vercel.app/followup"
-         style="display:inline-block;background:#f59e0b;color:#1a1500;padding:14px 32px;border-radius:12px;font-weight:700;font-size:15px;text-decoration:none;">
-        Ouvrir les messages →
-      </a>
-    </div>
-
-    <!-- Footer -->
-    <div style="padding:16px 28px;border-top:1px solid #f0f0f0;background:#fafafa;">
-      <p style="margin:0;color:#aaa;font-size:12px;">
-        Email automatique — NMRY Coaching · message marqué comme urgent
-      </p>
-    </div>
-
-  </div>
-</body>
-</html>`,
+      subject: `🚨 Message urgent de ${senderLabel}`,
+      html: mailLayout({
+        eyebrow: "NMRY Coaching",
+        title: "🚨 Message urgent",
+        accent: "#ef4444",
+        bodyHtml:
+          `<p style="margin:0 0 4px;color:#888;font-size:13px;">De la part de</p>` +
+          `<p style="margin:0 0 24px;color:#111;font-size:20px;font-weight:700;">${esc(senderLabel)}</p>` +
+          (preview ? quote(esc(preview), "#333") : quote("🎤 Message vocal — écouter dans l&apos;application", "#888")),
+        ctaLabel: "Ouvrir les messages →",
+        ctaUrl: `${SITE_URL}/followup`,
+        footer: "Email automatique — NMRY Coaching · message marqué comme urgent",
+      }),
     });
+    if (!sent) {
+      console.warn("[NMRY] Aucun SMTP configuré (SMTP_* ou GMAIL_*) — email non envoyé");
+      return NextResponse.json({ sent: false, reason: "mail_not_configured" });
+    }
   } catch (err) {
-    console.error("[NMRY] Gmail SMTP error:", err);
+    console.error("[NMRY] SMTP error:", err);
     return NextResponse.json({ sent: false, reason: "email_error" }, { status: 500 });
   }
 

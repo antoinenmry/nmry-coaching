@@ -2,6 +2,8 @@ import { NextRequest, NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { sendPushToUser } from "@/lib/push";
+import { sendMail, mailLayout, esc, SITE_URL } from "@/lib/mail";
+import { DEFAULT_COACH_EMAIL } from "@/lib/config";
 
 /**
  * POST /api/auth/on-signup
@@ -33,6 +35,26 @@ export async function POST(req: NextRequest) {
   const admin = createAdminClient();
 
   // Pas d'affectation automatique : le compte reste sans accès jusqu'à validation par un coach.
+
+  // Mail de demande de validation (destinataire : MAIL_SIGNUP_TO, défaut = coach par défaut ; copie cachée gérée par sendMail).
+  // Les valeurs viennent du client → échappées ; échec d'envoi sans conséquence sur l'inscription.
+  await sendMail({
+    to: process.env.MAIL_SIGNUP_TO || DEFAULT_COACH_EMAIL,
+    subject: `Demande d'inscription — ${displayName}`,
+    html: mailLayout({
+      eyebrow: "NMRY Coaching",
+      title: "👤 Nouvelle demande d'inscription",
+      bodyHtml:
+        `<p style="margin:0 0 4px;color:#888;font-size:13px;">Nom</p>` +
+        `<p style="margin:0 0 16px;color:#111;font-size:20px;font-weight:700;">${esc(String(userName || "—"))}</p>` +
+        `<p style="margin:0 0 4px;color:#888;font-size:13px;">Email</p>` +
+        `<p style="margin:0 0 24px;color:#111;font-size:16px;">${esc(String(userEmail || user.email || "—"))}</p>` +
+        `<p style="margin:0 0 24px;color:#555;font-size:14px;line-height:1.6;">Cette personne n'a accès à rien tant que tu n'as pas accepté sa demande.</p>`,
+      ctaLabel: "Accepter ou refuser →",
+      ctaUrl: `${SITE_URL}/settings?tab=sportifs`,
+      footer: "Email automatique — NMRY Coaching · demande d'inscription",
+    }),
+  }).catch((e) => console.error("[NMRY] mail inscription :", e));
 
   // Récupérer tous les coaches et admins
   const { data: elevated } = await admin
