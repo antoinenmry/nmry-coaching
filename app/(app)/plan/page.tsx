@@ -17,6 +17,7 @@ import { AUTH_ENABLED } from "@/lib/config";
 import { SESSION_COLORS, newSession, exerciseInstanceFromLibrary, findDuplicateExercise } from "@/lib/data";
 import { countdownLabel } from "@/lib/dates";
 import { lastWeekLoad } from "@/lib/sessionCopy";
+import { PrepWeekBadge, PrepWeekField } from "@/components/PrepWeek";
 import type { Followup, Goal, SessionInstance, SessionTemplate, WeekTemplateDay } from "@/lib/types";
 import { createClient } from "@/lib/supabase/client";
 
@@ -355,6 +356,7 @@ export default function PlanPage() {
                 <span aria-hidden className="absolute inset-y-0 left-0 w-1" style={{ background: s.color }} />
                 <div className="flex items-center gap-2">
                   <span className="text-sm font-black">{s.name}</span>
+                  <PrepWeekBadge n={s.prepWeek} />
                   {isCoach && (
                     <>
                       <button
@@ -643,6 +645,8 @@ function ComposeModal({ onClose, onCreated }: { onClose: () => void; onCreated: 
   // --- état principal ---
   const [name, setName] = useState("");
   const [color, setColor] = useState(SESSION_COLORS[0]);
+  // Semaine de prépa : une séance créée de zéro démarre la prépa (S1) ; modifiable ou retirable.
+  const [prepWeek, setPrepWeek] = useState<number | null>(1);
   // Couleur sport sélectionnée (filtre exercices + couleur séance si sport couleur)
   const [activeColor, setActiveColor] = useState<string | null>(null);
 
@@ -736,6 +740,7 @@ function ComposeModal({ onClose, onCreated }: { onClose: () => void; onCreated: 
 
     // 2. Construire la séance AVANT update() pour que l'ID soit garanti synchrone
     const s = newSession(name.trim() || "Séance", color);
+    if (prepWeek) s.prepWeek = prepWeek;
     exercises.forEach(({ id, name: exName }) => {
       // La bibliothèque peut déjà inclure l'exercice custom (ajouté ci-dessus)
       // Utiliser le nom inline en fallback si l'exercice n'est pas encore dans library
@@ -770,6 +775,14 @@ function ComposeModal({ onClose, onCreated }: { onClose: () => void; onCreated: 
           <span className="mb-1 block text-[13px] text-dim">Nom de la séance</span>
           <input value={name} onChange={(e) => setName(e.target.value)} placeholder="Ex : Haut du corps A" autoFocus />
         </label>
+
+        {/* Semaine de la préparation : S1 par défaut (début de prépa), modifiable */}
+        <div className="mb-3">
+          <PrepWeekField value={prepWeek} onChange={setPrepWeek} />
+          <p className="mt-1 text-right text-[11px] text-dim">
+            {prepWeek === 1 ? "Début de préparation : le compteur repart de S1" : "Pour ajouter à une semaine en cours, mets son numéro"}
+          </p>
+        </div>
 
         {/* Couleur — sport colors si dispo, sinon palette session classique */}
         <div className="mb-3">
@@ -982,6 +995,8 @@ function DuplicateWeekModal({
   const [sourceMonday, setSourceMonday] = useState(() => getMonday(cursor));
   const [destMonday, setDestMonday] = useState(() => getMonday(cursor)); // destination (défaut = semaine affichée)
   const [numWeeks, setNumWeeks] = useState(1);
+  // N° de semaine de prépa de la 1re semaine collée : S+1 de la source par défaut, modifiable à la main.
+  const [startOverride, setStartOverride] = useState<number | null | undefined>(undefined);
 
   // Séances placées dans la semaine source
   const sourceSessions = useMemo(() => {
@@ -1011,6 +1026,9 @@ function DuplicateWeekModal({
   }
 
   const srcMonKey = ymd(sourceMonday);
+  const sourcePrepWeek = sourceSessions.reduce<number | null>(
+    (m, x) => (x.prepWeek ? Math.max(m ?? 0, x.prepWeek) : m), null);
+  const startWeek = startOverride !== undefined ? startOverride : sourcePrepWeek ? sourcePrepWeek + 1 : null;
 
   function duplicate() {
     update((d) => {
@@ -1027,6 +1045,7 @@ function DuplicateWeekModal({
             ...structuredClone(session),
             id: crypto.randomUUID(),
             date: ymd(targetDate),
+            prepWeek: startWeek ? startWeek + week : undefined,
             done: false,
             emoji: 0,
             coachComment: session.coachComment,
@@ -1084,6 +1103,15 @@ function DuplicateWeekModal({
         <p className="mb-4 text-center text-[12px] text-dim">
           {sameWeek ? "Attention : duplique sur la même semaine (crée des doublons)" : "Les jours de la semaine sont conservés"}
         </p>
+
+        {/* Compteur de la prépa */}
+        <div className="mb-4">
+          <PrepWeekField label="1re semaine collée" value={startWeek} onChange={setStartOverride} />
+          <p className="mt-1 text-right text-[11px] text-dim">
+            {sourcePrepWeek ? `Source : S${sourcePrepWeek} → suite automatique (S+1)` : "La source n'a pas de n° de semaine"}
+            {numWeeks > 1 && startWeek ? ` · jusqu'à S${startWeek + numWeeks - 1}` : ""}
+          </p>
+        </div>
 
         {/* Nombre de semaines */}
         <p className="mb-2 text-[13px] text-dim">Sur combien de semaines consécutives ?</p>
@@ -1481,7 +1509,7 @@ function SessionPill({ s, onOpen, todayKey }: { s: SessionInstance; onOpen: (id:
             }
       }
     >
-      <span className="line-clamp-2 break-words [hyphens:auto]">{shortName(s.name)}</span>
+      <span className="line-clamp-2 break-words [hyphens:auto]">{s.prepWeek ? <span className="opacity-60">S{s.prepWeek} </span> : null}{shortName(s.name)}</span>
     </button>
   );
 }
@@ -1638,7 +1666,7 @@ function SynthesisView({ cursor, todayKey, sessionsByDate, goalsByDate, injuries
                         style={{ borderLeft: `5px solid ${s.color}` }}
                       >
                         <div className="flex items-center justify-between gap-2">
-                          <span className="font-semibold text-sm">{s.name}</span>
+                          <span className="flex min-w-0 items-center gap-1.5"><span className="font-semibold text-sm">{s.name}</span><PrepWeekBadge n={s.prepWeek} className="text-[11px]" /></span>
                           <span className="flex items-center gap-1.5 text-[12px] shrink-0">
                             {s.done ? (
                               <span className="text-ok font-semibold">✓{avgRpe > 0 ? ` RPE ${avgRpe}` : ""}</span>
@@ -1822,7 +1850,7 @@ function WeekSessionCard({ s, onOpen, todayKey }: { s: SessionInstance; onOpen: 
     >
       <span aria-hidden className="absolute inset-y-0 left-0 w-1" style={{ background: s.color }} />
       <span className="flex items-center justify-between gap-2">
-        <span className="min-w-0 truncate text-base font-black">{s.name}</span>
+        <span className="flex min-w-0 items-center gap-1.5"><span className="truncate text-base font-black">{s.name}</span><PrepWeekBadge n={s.prepWeek} className="text-[12px]" /></span>
         {s.done ? (
           <span className="shrink-0 rounded-full bg-ok/15 px-2 py-0.5 text-[11px] font-black text-ok">
             ✓{avgRpe > 0 ? ` RPE ${avgRpe}` : ""}{s.emoji > 0 ? ` · ressenti ${s.emoji}/5` : ""}

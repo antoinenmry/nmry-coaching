@@ -91,6 +91,7 @@ export interface SessionInstance {
   coachComment: string; // commentaire global du coach pour la séance
   clientComment?: string; // commentaire global du sportif sur la séance
   date: string | null; // "YYYY-MM-DD" si placée, null si dans la banque
+  prepWeek?: number; // numéro de semaine de la préparation (S1, S2…) ; absent = pas de compteur
   exercises: ExerciseInstance[];
 }
 

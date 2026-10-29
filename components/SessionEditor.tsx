@@ -6,6 +6,7 @@ import ExercisePicker, { type InlineExercise } from "./ExercisePicker";
 import MiniCalendar from "./plan/MiniCalendar";
 import { exerciseInstanceFromLibrary, SESSION_COLORS } from "@/lib/data";
 import type { ExerciseInstance, Role } from "@/lib/types";
+import { PrepWeekBadge, PrepWeekField } from "@/components/PrepWeek";
 import { getMaxRecord, saveStrengthRecord } from "@/lib/prDetection";
 import { beforeRemove, cutAt, groupExercises, linkAt, moveWithLinks, toggleGroupType } from "@/lib/exerciseLinks";
 
@@ -426,9 +427,10 @@ export default function SessionEditor({
             ) : (
               <h2 className="text-[21px] font-black leading-tight">{session.name}</h2>
             )}
-            <p className="mt-0.5 text-[12.5px] text-dim">
-              {session.date ? frenchDate(session.date) : "Non placée · touche la date"}
-              {session.done && !isCoach && " · date figée"}
+            <p className="mt-0.5 flex items-center gap-1.5 text-[12.5px] text-dim">
+              <PrepWeekBadge n={session.prepWeek} className="text-[12px]" />
+              <span>{session.date ? frenchDate(session.date) : "Non placée · touche la date"}
+              {session.done && !isCoach && " · date figée"}</span>
             </p>
           </div>
         </div>
@@ -436,6 +438,9 @@ export default function SessionEditor({
         {/* Réglages coach : couleur + duplication (calendrier seulement au tap) */}
         {isCoach && (
           <div className="mt-3.5">
+            <div className="mb-3">
+              <PrepWeekField value={session.prepWeek ?? null} onChange={(v) => patchSession({ prepWeek: v ?? undefined })} />
+            </div>
             <div className="flex items-center gap-2">
               <div className="flex flex-1 gap-1.5">
                 {SESSION_COLORS.map((c) => (
