@@ -33,8 +33,20 @@ export async function GET(request: NextRequest) {
       },
     );
 
-    const { error } = await supabase.auth.verifyOtp({ type, token_hash });
-    if (!error) return response;
+    const { data, error } = await supabase.auth.verifyOtp({ type, token_hash });
+    if (!error) {
+      // Confirmation d'inscription : prévenir les coachs (la session vient d'être posée dans `response`).
+      if ((type === "signup" || type === "email") && next === "/" && data?.user) {
+        const u = data.user;
+        const cookie = response.cookies.getAll().map((c) => `${c.name}=${c.value}`).join("; ");
+        await fetch(new URL("/api/auth/on-signup", request.url).toString(), {
+          method: "POST",
+          headers: { "Content-Type": "application/json", Cookie: cookie },
+          body: JSON.stringify({ userName: u.user_metadata?.name || u.email, userEmail: u.email }),
+        }).catch(() => {});
+      }
+      return response;
+    }
   }
 
   return NextResponse.redirect(
