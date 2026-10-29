@@ -18,6 +18,8 @@ import { SESSION_COLORS, newSession, exerciseInstanceFromLibrary, findDuplicateE
 import { countdownLabel } from "@/lib/dates";
 import { lastWeekLoad } from "@/lib/sessionCopy";
 import { PrepWeekBadge, PrepWeekField } from "@/components/PrepWeek";
+import WeekShareSheet from "@/components/WeekShareSheet";
+import { SHARE_WEEK_EVENT } from "@/components/Header";
 import type { Followup, Goal, SessionInstance, SessionTemplate, WeekTemplateDay } from "@/lib/types";
 import { createClient } from "@/lib/supabase/client";
 
@@ -89,6 +91,16 @@ export default function PlanPage() {
   const [otherGoals, setOtherGoals] = useState<Goal[]>([]);
 
   const todayKey = ymd(new Date());
+
+  // « Partager ma semaine » : ouvert par le bouton de l'en-tête, sur la semaine affichée
+  // (en vue mois : la semaine en cours).
+  const [sharing, setSharing] = useState(false);
+  useEffect(() => {
+    const open = () => setSharing(true);
+    window.addEventListener(SHARE_WEEK_EVENT, open);
+    return () => window.removeEventListener(SHARE_WEEK_EVENT, open);
+  }, []);
+  const shareMonday = useMemo(() => getMonday(mode === "month" ? new Date() : cursor), [mode, cursor]);
 
   // Charger les objectifs de tous les sportifs — uniquement quand le coach consulte SON propre profil
   useEffect(() => {
@@ -453,6 +465,7 @@ export default function PlanPage() {
         )}
       </div>
 
+      {sharing && <WeekShareSheet monday={shareMonday} onClose={() => setSharing(false)} />}
       {editing && <SessionEditor sessionId={editing} role={role} fresh={editing === freshId} onClose={() => setEditing(null)} />}
 
       {vacationOpen && (

@@ -1,5 +1,5 @@
 import type { Metadata, Viewport } from "next";
-import { Lato } from "next/font/google";
+import { Barlow, Barlow_Condensed, Lato } from "next/font/google";
 import "./globals.css";
 import { ThemeProvider } from "@/components/ThemeProvider";
 
@@ -11,6 +11,9 @@ const lato = Lato({
   display: "swap",
   variable: "--font-lato",
 });
+// Polices de l'image « Partager ma semaine » (chiffres en condensé, texte en Barlow).
+const barlow = Barlow({ subsets: ["latin"], weight: ["500", "600"], display: "swap", variable: "--font-barlow" });
+const barlowCondensed = Barlow_Condensed({ subsets: ["latin"], weight: ["600", "700"], display: "swap", variable: "--font-barlow-condensed" });
 
 export const metadata: Metadata = {
   title: "NMRY Coaching",
@@ -34,7 +37,7 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
   // suppressHydrationWarning : le script anti-flash ci-dessous pose data-theme sur <html>
   // AVANT l'hydratation — écart attendu, que React signalerait à tort.
   return (
-    <html lang="fr" className={lato.variable} suppressHydrationWarning>
+    <html lang="fr" className={`${lato.variable} ${barlow.variable} ${barlowCondensed.variable}`} suppressHydrationWarning>
       <head>
         {/* Applique le thème avant hydratation pour éviter le flash */}
         <script dangerouslySetInnerHTML={{ __html: `try{var t=localStorage.getItem('nmry-theme');if(t)document.documentElement.setAttribute('data-theme',t);}catch(e){}` }} />

@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { useData } from "./DataProvider";
 import ExercisePicker, { type InlineExercise } from "./ExercisePicker";
 import MiniCalendar from "./plan/MiniCalendar";
@@ -309,10 +309,30 @@ export default function SessionEditor({
       if (s) Object.assign(s, patch);
     });
 
+  const canTrack = (!isCoach || isSelf) && !!session?.date;
   const patchEx = (exUid: string, patch: Partial<ExerciseInstance>) =>
     update((d) => {
-      const ex = d.sessions.find((x) => x.id === sessionId)?.exercises.find((e) => e.uid === exUid);
-      if (ex) Object.assign(ex, patch);
+      const s = d.sessions.find((x) => x.id === sessionId);
+      const ex = s?.exercises.find((e) => e.uid === exUid);
+      if (!s || !ex) return;
+      Object.assign(ex, patch);
+      // Chrono oublié : il démarre à la première série saisie d'une séance du jour.
+      if (canTrack && patch.setLogs && !s.done && !s.startedAt && !s.durationMin && s.date === todayYmd()) {
+        s.startedAt = new Date().toISOString();
+      }
+    });
+
+  // Validation : arrête le chrono et enregistre la durée. Annuler garde la durée.
+  const toggleDone = () =>
+    update((d) => {
+      const s = d.sessions.find((x) => x.id === sessionId);
+      if (!s) return;
+      if (s.done) { s.done = false; return; }
+      s.done = true;
+      if (s.startedAt) {
+        s.durationMin = Math.max(1, Math.round((Date.now() - new Date(s.startedAt).getTime()) / 60000));
+        delete s.startedAt;
+      }
     });
 
   const addExercises = (libIds: string[], inline: InlineExercise[] = []) =>
@@ -524,9 +544,17 @@ export default function SessionEditor({
         )}
 
         {/* Valider la séance (client, ou coach/admin sur sa propre séance) */}
+        {canTrack && (
+          <SessionTimer
+            session={session}
+            onStart={() => patchSession({ startedAt: new Date().toISOString() })}
+            onReset={() => update((d) => { const s = d.sessions.find((x) => x.id === sessionId); if (s) delete s.startedAt; })}
+            onDuration={(min) => patchSession({ durationMin: min })}
+          />
+        )}
         {(!isCoach || isSelf) && session.date && (
           <button
-            onClick={() => patchSession({ done: !session.done })}
+            onClick={toggleDone}
             className={`mt-3 w-full rounded-full py-3 font-black transition active:scale-[0.98] ${
               session.done
                 ? "bg-surface2 text-ok shadow-[inset_0_0_0_1.5px_var(--color-ok)]"
@@ -1262,6 +1290,119 @@ function ExerciseBlock({
       )}
       </div>
       )}
+    </div>
+  );
+}
+
+// ─── Chrono de séance ─────────────────────────────────────────────────────────
+// On stocke l'heure de départ (startedAt), pas un compteur : fermer l'app ou changer
+// d'appareil ne fait rien perdre. La durée est figée à la validation (durationMin).
+const LONG_SESSION_MIN = 180;
+
+function todayYmd() {
+  const d = new Date();
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
+}
+
+function fmtMin(min: number) {
+  const h = Math.floor(min / 60), m = min % 60;
+  return h ? `${h} h ${String(m).padStart(2, "0")}` : `${m} min`;
+}
+
+function SessionTimer({
+  session,
+  onStart,
+  onReset,
+  onDuration,
+}: {
+  session: { done: boolean; startedAt?: string; durationMin?: number; date: string | null };
+  onStart: () => void;
+  onReset: () => void;
+  onDuration: (min: number) => void;
+}) {
+  const [now, setNow] = useState(() => Date.now());
+  const [editing, setEditing] = useState(false);
+  const [draft, setDraft] = useState("");
+  const [kept, setKept] = useState(false);
+  const running = !session.done && !!session.startedAt;
+
+  useEffect(() => {
+    if (!running) return;
+    const id = setInterval(() => setNow(Date.now()), 1000);
+    return () => clearInterval(id);
+  }, [running]);
+
+  const tooLong = session.done && !kept && (session.durationMin ?? 0) > LONG_SESSION_MIN;
+  const openEdit = () => { setDraft(session.durationMin ? String(session.durationMin) : ""); setEditing(true); };
+  const save = () => { const v = parseInt(draft); if (v > 0) { onDuration(v); setKept(true); } setEditing(false); };
+
+  if (running) {
+    const sec = Math.max(0, Math.floor((now - new Date(session.startedAt!).getTime()) / 1000));
+    const h = Math.floor(sec / 3600), m = Math.floor((sec % 3600) / 60), x = sec % 60;
+    const clock = `${h ? `${h}:${String(m).padStart(2, "0")}` : m}:${String(x).padStart(2, "0")}`;
+    return (
+      <div className="mt-3 flex items-center gap-3 rounded-xl bg-surface2 px-3.5 py-2.5">
+        <span className="h-2 w-2 shrink-0 animate-pulse rounded-full bg-danger" />
+        <span className="flex-1 text-[13px] text-dim">Séance en cours</span>
+        <span className="text-[17px] font-bold tabular-nums">{clock}</span>
+        <button onClick={onReset} className="text-[12px] text-dim underline underline-offset-2">Réinitialiser</button>
+      </div>
+    );
+  }
+
+  if (!session.done) {
+    if (session.durationMin) return null;
+    return (
+      <button onClick={onStart} className="mt-3 flex w-full items-center justify-center gap-2 rounded-xl py-2.5 text-[13px] font-bold text-ink ring-1 ring-line transition hover:bg-surface2">
+        <svg width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" aria-hidden>
+          <circle cx="8" cy="9" r="5.5" /><path d="M8 6v3l2 1.5M6.5 1.5h3" />
+        </svg>
+        Démarrer le chrono
+      </button>
+    );
+  }
+
+  // Séance validée : durée affichée, modifiable ; demande de confirmation si anormale ou absente.
+  if (editing || tooLong || !session.durationMin) {
+    return (
+      <div className="mt-3 rounded-xl bg-surface2 px-3.5 py-3">
+        <p className="text-[13px] leading-5">
+          {tooLong ? (
+            <><span className="font-bold">{fmtMin(session.durationMin!)}, c&apos;est long.</span> <span className="text-dim">Le chrono a sans doute tourné après la séance. Indique la vraie durée.</span></>
+          ) : session.durationMin ? (
+            <span className="font-bold">Durée de la séance</span>
+          ) : (
+            <><span className="font-bold">Combien de temps a duré la séance ?</span> <span className="text-dim">Elle compte dans le temps total de ta semaine.</span></>
+          )}
+        </p>
+        <div className="mt-2 flex items-center gap-2">
+          <input
+            type="number"
+            inputMode="numeric"
+            min={1}
+            value={draft}
+            onFocus={() => !editing && openEdit()}
+            onChange={(e) => { setEditing(true); setDraft(e.target.value); }}
+            onKeyDown={(e) => e.key === "Enter" && save()}
+            placeholder="Minutes"
+            className="!py-2"
+          />
+          <button onClick={save} disabled={!(parseInt(draft) > 0)} className="h-10 shrink-0 rounded-lg bg-accent px-4 text-[13px] font-bold text-[#1a1500] disabled:opacity-40">Enregistrer</button>
+          {tooLong && !editing && (
+            <button onClick={() => setKept(true)} className="h-10 shrink-0 rounded-lg px-2 text-[12px] text-dim">Garder</button>
+          )}
+        </div>
+      </div>
+    );
+  }
+
+  return (
+    <div className="mt-3 flex items-center justify-between rounded-xl bg-surface2 px-3.5 py-2.5">
+      <span className="text-[13px] text-dim">Durée</span>
+      <span className="flex items-center gap-3">
+        <span className="text-[15px] font-bold tabular-nums">{fmtMin(session.durationMin)}</span>
+        <button onClick={openEdit} className="text-[12px] text-dim underline underline-offset-2">Modifier</button>
+      </span>
     </div>
   );
 }

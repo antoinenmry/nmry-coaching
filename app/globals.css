@@ -131,3 +131,22 @@ input[type="number"]::-webkit-inner-spin-button { -webkit-appearance: none; marg
 .nmry-dark-tiles {
   filter: invert(1) hue-rotate(180deg) brightness(0.92) contrast(0.88) saturate(0.7);
 }
+
+/* Liseré « nouveau » : anneau aurora (couleurs du thème Aurora) qui tourne autour d'un bouton. */
+@property --nmry-ring-angle { syntax: "<angle>"; inherits: false; initial-value: 0deg; }
+.nmry-new-ring { position: relative; isolation: isolate; }
+.nmry-new-ring::before {
+  content: "";
+  position: absolute;
+  inset: -2px;
+  border-radius: calc(var(--radius-lg, 0.5rem) + 2px);
+  padding: 2px;
+  background: conic-gradient(from var(--nmry-ring-angle), #2dd4bf, #38bdf8, #8b5cf6, #ec4899, #2dd4bf);
+  -webkit-mask: linear-gradient(#000 0 0) content-box, linear-gradient(#000 0 0);
+  -webkit-mask-composite: xor;
+  mask-composite: exclude;
+  animation: nmry-ring-spin 3.2s linear infinite;
+  pointer-events: none;
+}
+@keyframes nmry-ring-spin { to { --nmry-ring-angle: 360deg; } }
+@media (prefers-reduced-motion: reduce) { .nmry-new-ring::before { animation: none; } }
