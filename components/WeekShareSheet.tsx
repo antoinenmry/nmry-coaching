@@ -9,6 +9,7 @@ import { toBlob } from "html-to-image";
 import { useData } from "./DataProvider";
 import WeekShareCard, { SHARE_LAYOUTS, shareSize, type ShareFormat, type ShareInk, type ShareLayout } from "./WeekShareCard";
 import { formatDuration, summarizeWeek } from "@/lib/weekShare";
+import { useValueTypes } from "@/components/useValueTypes";
 
 type Prefs = { layout: ShareLayout; fmt: ShareFormat; ink: ShareInk; shadow: boolean };
 const PREFS_KEY = "nmry_share_week_prefs";
@@ -52,14 +53,8 @@ export default function WeekShareSheet({ monday, onClose }: { monday: Date; onCl
     });
   useEffect(() => () => { if (photo) URL.revokeObjectURL(photo); }, [photo]);
 
-  // Exercices au format allure (min/km) : options de filtre marquées isPace
-  const paceExIds = useMemo(() => {
-    const opts = new Set<string>();
-    library.categories.forEach((c) => c.options.forEach((o) => o.isPace && opts.add(o.id)));
-    return new Set(library.exercises.filter((ex) => Object.values(ex.tags).flat().some((t) => opts.has(t))).map((ex) => ex.id));
-  }, [library]);
-
-  const summary = useMemo(() => summarizeWeek(state.sessions, monday, paceExIds), [state.sessions, monday, paceExIds]);
+  const valueTypeOf = useValueTypes();
+  const summary = useMemo(() => summarizeWeek(state.sessions, monday, valueTypeOf), [state.sessions, monday, valueTypeOf]);
   // Par défaut : les 3 exercices aux charges les plus lourdes de la semaine.
   const selected = picked ?? summary.exercises.slice(0, 3).map((e) => e.key);
   const exercises = selected.map((k) => summary.exercises.find((e) => e.key === k)).filter((e): e is NonNullable<typeof e> => !!e);

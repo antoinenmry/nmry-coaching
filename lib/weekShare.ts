@@ -1,5 +1,6 @@
 // Synthèse hebdomadaire pour l'image « Partager ma semaine » (bouton de l'en-tête de /plan).
-import type { ExerciseInstance, SessionInstance } from "./types";
+import type { ExerciseInstance, ExerciseValueType, SessionInstance } from "./types";
+import { fmtSpeed } from "./exerciseUnit";
 
 export type ShareExercise = { key: string; name: string; sr: string; load: string; loadValue: number };
 export type WeekSummary = {
@@ -41,7 +42,8 @@ function setCount(ex: ExerciseInstance): number {
 }
 
 // Séries × reps + charge : ce qui a été réellement fait (séries saisies, poids réalisé) prime sur la prescription.
-function describe(ex: ExerciseInstance, isPace: boolean): ShareExercise {
+function describe(ex: ExerciseInstance, type: ExerciseValueType): ShareExercise {
+  const isPace = type === "pace";
   const logs = workLogs(ex);
   let sets = ex.setsLabel || (ex.sets ? String(ex.sets) : "");
   let reps = ex.repsLabel || (ex.reps ? String(ex.reps) : "");
@@ -57,13 +59,14 @@ function describe(ex: ExerciseInstance, isPace: boolean): ShareExercise {
   }
   if (!loadValue) loadValue = ex.weightClient || ex.weight || 0;
   if (isPace) load = ex.weightClient ? `${pace(ex.weightClient)} /km` : ex.weightLabel ?? "";
+  else if (type === "speed") load = ex.weightClient ? fmtSpeed(ex.weightClient) : ex.weightLabel ?? "";
   else if (loadValue > 0) load = `${num(loadValue)} kg`;
   else if (ex.weightLabel && !/%|rpe/i.test(ex.weightLabel)) load = ex.weightLabel;
   const sr = sets && reps ? `${sets} × ${reps}` : sets ? `${sets} séries` : "";
-  return { key: ex.exId || ex.uid, name: ex.name, sr, load, loadValue: isPace ? 0 : loadValue };
+  return { key: ex.exId || ex.uid, name: ex.name, sr, load, loadValue: type === "load" ? loadValue : 0 };
 }
 
-export function summarizeWeek(sessions: SessionInstance[], monday: Date, paceExIds: Set<string>): WeekSummary {
+export function summarizeWeek(sessions: SessionInstance[], monday: Date, typeOf: (exId: string, name: string) => ExerciseValueType): WeekSummary {
   const from = ymd(monday);
   const end = new Date(monday);
   end.setDate(monday.getDate() + 6);
@@ -85,7 +88,7 @@ export function summarizeWeek(sessions: SessionInstance[], monday: Date, paceExI
   done.forEach((s) =>
     s.exercises.forEach((ex) => {
       if (ex.failed) return;
-      const d = describe(ex, paceExIds.has(ex.exId));
+      const d = describe(ex, typeOf(ex.exId, ex.name));
       if (!d.sr && !d.load) return;
       const prev = byKey.get(d.key);
       if (!prev || d.loadValue > prev.loadValue) byKey.set(d.key, d);

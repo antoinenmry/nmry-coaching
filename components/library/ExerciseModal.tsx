@@ -3,7 +3,8 @@
 import { useState } from "react";
 import { useData } from "@/components/DataProvider";
 import { findDuplicateExercise } from "@/lib/data";
-import type { FilterCategory, LibraryExercise } from "@/lib/types";
+import { VALUE_TYPE_LABEL, legacyValueType } from "@/lib/exerciseUnit";
+import type { ExerciseValueType, FilterCategory, LibraryExercise } from "@/lib/types";
 
 const uid = () => Math.random().toString(36).slice(2, 9);
 
@@ -13,6 +14,7 @@ const blank = (): LibraryExercise => ({
   tags: {},
   video: "",
   comment: "",
+  valueType: "load",
 });
 
 export default function ExerciseModal({
@@ -27,7 +29,13 @@ export default function ExerciseModal({
   onClose: () => void;
 }) {
   const { updateLibrary, library } = useData();
-  const [draft, setDraft] = useState<LibraryExercise>(exercise ? structuredClone(exercise) : blank());
+  // Ancien exercice sans type : on affiche celui qui s'appliquait jusque-là (allure si étiquette « allure » / nom cardio).
+  const [draft, setDraft] = useState<LibraryExercise>(() => {
+    if (!exercise) return blank();
+    const paceOpts = new Set<string>();
+    categories.forEach((c) => c.options.forEach((o) => { if (o.isPace) paceOpts.add(o.id); }));
+    return { ...structuredClone(exercise), valueType: exercise.valueType ?? legacyValueType(exercise, exercise.name, paceOpts) };
+  });
   // Un nom déjà porté par un AUTRE exercice bloque l'enregistrement (pas de doublons).
   const duplicate = findDuplicateExercise(library.exercises, draft.name, draft.id);
   const set = <K extends keyof LibraryExercise>(key: K, value: LibraryExercise[K]) =>
@@ -88,6 +96,32 @@ export default function ExerciseModal({
                 « {duplicate.name} » existe déjà dans la bibliothèque.
               </span>
             )}
+          </Label>
+        )}
+
+        {/* Type de valeur attendu : conditionne l'unité et le format du champ dans les séances */}
+        {readOnly ? (
+          draft.valueType && draft.valueType !== "load" ? (
+            <p className="mb-3 text-[12px] text-dim">Valeur attendue : <span className="font-semibold text-ink">{VALUE_TYPE_LABEL[draft.valueType]}</span></p>
+          ) : null
+        ) : (
+          <Label text="Valeur attendue">
+            <select
+              value={draft.valueType ?? "load"}
+              onChange={(e) => set("valueType", e.target.value as ExerciseValueType)}
+              className="w-full"
+            >
+              {(Object.keys(VALUE_TYPE_LABEL) as ExerciseValueType[]).map((t) => (
+                <option key={t} value={t}>{VALUE_TYPE_LABEL[t]}</option>
+              ))}
+            </select>
+            <span className="mt-1 block text-[12px] text-dim">
+              {draft.valueType === "pace"
+                ? "Allure de course : saisie en min:sec par km (ex : 5:30)."
+                : draft.valueType === "speed"
+                  ? "Vitesse en km/h (ex : 12,5)."
+                  : "Charge en kg, ou RPE / pourcentage en texte libre."}
+            </span>
           </Label>
         )}
 

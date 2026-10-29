@@ -5,8 +5,10 @@ import { useData } from "./DataProvider";
 import ExercisePicker, { type InlineExercise } from "./ExercisePicker";
 import MiniCalendar from "./plan/MiniCalendar";
 import { exerciseInstanceFromLibrary, SESSION_COLORS } from "@/lib/data";
-import type { ExerciseInstance, Role } from "@/lib/types";
+import type { ExerciseInstance, ExerciseValueType, Role } from "@/lib/types";
 import { PrepWeekBadge, PrepWeekField } from "@/components/PrepWeek";
+import { useValueTypes } from "@/components/useValueTypes";
+import { fmtPace as fmtPaceDisplay, fmtValue } from "@/lib/exerciseUnit";
 import { getMaxRecord, saveStrengthRecord } from "@/lib/prDetection";
 import { beforeRemove, cutAt, groupExercises, linkAt, moveWithLinks, toggleGroupType } from "@/lib/exerciseLinks";
 
@@ -108,13 +110,6 @@ function parsePaceToMinutes(raw: string): number | null {
   }
   const n = parseFloat(s);
   return !isNaN(n) && n > 0 ? n : null;
-}
-
-function fmtPaceDisplay(minutes: number): string {
-  if (!minutes || minutes <= 0) return "";
-  const m = Math.floor(minutes);
-  const s = Math.round((minutes - m) * 60);
-  return `${m} min ${s.toString().padStart(2, "0")} s/km`;
 }
 
 function minutesToPaceInput(minutes: number): string {
@@ -242,9 +237,6 @@ function frenchDate(key: string) {
   return `${d} ${months[m - 1]} ${y}`;
 }
 
-// Repli : un exercice dont le nom évoque la course/le cardio s'exprime en allure (min/km) même sans étiquette « allure ».
-const CARDIO_NAME = /cardio|course|running|footing|jogging|trail|allure|endurance/i;
-
 export default function SessionEditor({
   sessionId,
   role,
@@ -279,22 +271,7 @@ export default function SessionEditor({
     return map;
   }, [state.records.strength]);
 
-  // IDs des options marquées "allure" (isPace) dans les catégories de filtre
-  const paceOptionIds = useMemo(() => {
-    const ids = new Set<string>();
-    library.categories.forEach((c) => c.options.forEach((o) => { if (o.isPace) ids.add(o.id); }));
-    return ids;
-  }, [library]);
-
-  // IDs des exercices qui utilisent l'allure (min/km) plutôt que le poids (kg)
-  const paceExIds = useMemo(() => {
-    const ids = new Set<string>();
-    library.exercises.forEach((ex) => {
-      const hasPace = Object.values(ex.tags).flat().some((t) => paceOptionIds.has(t));
-      if (hasPace) ids.add(ex.id);
-    });
-    return ids;
-  }, [library, paceOptionIds]);
+  const valueTypeOf = useValueTypes();
   const isCoach = role === "coach" || role === "admin";
   // Auto-suivi : coach/admin éditant SA PROPRE séance (pas celle d'un sportif sélectionné)
   // → en plus de la prescription, on lui montre aussi le ressenti/validation/RPE sportif.
@@ -594,7 +571,7 @@ export default function SessionEditor({
                   video={videoById[ex.exId]}
                   isCoach={isCoach}
                   isSelf={isSelf}
-                  isPace={paceExIds.has(ex.exId) || CARDIO_NAME.test(ex.name)}
+                  valueType={valueTypeOf(ex.exId, ex.name)}
                   onPatch={(patch) => patchEx(ex.uid, patch)}
                   onRemove={() => removeExercise(ex.uid)}
                   onMove={(dir) => moveExercise(ex.uid, dir)}
@@ -961,7 +938,7 @@ function ExerciseBlock({
   video,
   isCoach,
   isSelf,
-  isPace,
+  valueType = "load",
   onPatch,
   onRemove,
   onMove,
@@ -977,7 +954,7 @@ function ExerciseBlock({
   index: number;
   total: number;
   video?: string;
-  isPace?: boolean;
+  valueType?: ExerciseValueType;
   isCoach: boolean;
   isSelf: boolean;
   onPatch: (patch: Partial<ExerciseInstance>) => void;
@@ -987,6 +964,7 @@ function ExerciseBlock({
   onSaveRecord: (weight: number, reps: number) => void;
 }) {
   const [savedWeight, setSavedWeight] = useState<number | null>(null);
+  const isLoad = valueType === "load";
 
   const hasRealized = (ex.weightClient ?? 0) > 0;
 
@@ -995,7 +973,7 @@ function ExerciseBlock({
   const effectiveWeight = Math.max(ex.weightClient ?? 0, maxLogWeight);
 
   const isPr =
-    !isPace &&
+    isLoad &&
     (!isCoach || isSelf) &&
     effectiveWeight > 0 &&
     (recordMax === undefined || effectiveWeight > recordMax);
@@ -1019,7 +997,7 @@ function ExerciseBlock({
   // Colonne de droite = TOUJOURS la prescription du coach (kg / RPE / %).
   // Le réalisé « S-1 » reste dans la ligne ouverte : l'afficher ici prêtait à
   // confusion avec ce qui est demandé pour aujourd'hui.
-  const prescribed = ex.weightLabel || (ex.weight > 0 ? (isPace ? fmtPaceDisplay(ex.weight) : `${ex.weight} kg`) : "");
+  const prescribed = ex.weightLabel || (ex.weight > 0 ? fmtValue(valueType, ex.weight) : "");
 
   return (
     <div
@@ -1099,7 +1077,7 @@ function ExerciseBlock({
               />
             </label>
             <label className="block">
-              <span className="mb-1 block text-[13px] font-semibold text-ink">{isPace ? "Allure" : "kg/RPE/%"}</span>
+              <span className="mb-1 block text-[13px] font-semibold text-ink">{valueType === "pace" ? "Allure" : valueType === "speed" ? "Vitesse" : "kg/RPE/%"}</span>
               {/* Champ libre : le coach peut prescrire "80", "70%", "RPE 8", "au ressenti"…
                   On garde `weight` (numerique) synchronise quand le texte est un nombre simple,
                   pour les affichages et exports qui s'appuient encore dessus. */}
@@ -1114,7 +1092,7 @@ function ExerciseBlock({
                     weight: /^\s*\d+([.,]\d+)?\s*$/.test(raw) && !isNaN(num) ? num : 0,
                   });
                 }}
-                placeholder=""
+                placeholder={valueType === "pace" ? "ex : 5:30 ou Zone 2" : valueType === "speed" ? "ex : 12" : ""}
               />
             </label>
           </div>
@@ -1155,7 +1133,7 @@ function ExerciseBlock({
         <div className="mb-2.5 flex items-center gap-2 rounded-lg bg-ok/10 px-3 py-1.5">
           <span className="text-[12px] text-dim">Réalisé par le sportif S-1 :</span>
           <span className="text-sm font-bold text-ok">
-            {isPace ? fmtPaceDisplay(ex.weightClient ?? 0) : `${ex.weightClient} kg`}
+            {fmtValue(valueType, ex.weightClient ?? 0)}
           </span>
         </div>
       )}
@@ -1165,9 +1143,11 @@ function ExerciseBlock({
         <>
           <div>
             <span className="mb-1 block text-[14px] font-semibold text-ink">
-              {(ex.weightLabel || ex.weight > 0) ? (isPace ? "Mon allure réalisée" : "Mon poids réalisé") : (isPace ? "Allure réalisée" : "Poids utilisé")}
+              {(ex.weightLabel || ex.weight > 0)
+                ? (valueType === "pace" ? "Mon allure réalisée" : valueType === "speed" ? "Ma vitesse réalisée" : "Mon poids réalisé")
+                : (valueType === "pace" ? "Allure réalisée" : valueType === "speed" ? "Vitesse réalisée" : "Poids utilisé")}
             </span>
-            {isPace ? (
+            {valueType === "pace" ? (
               <PaceInput value={ex.weightClient ?? 0} onChange={(v) => onPatch({ weightClient: v > 0 ? v : undefined })} placeholder="" />
             ) : (
               <div className="flex items-center gap-2">
@@ -1178,7 +1158,7 @@ function ExerciseBlock({
                   className="flex-1"
                 />
                 {showBanner && <span className="shrink-0 text-lg" title="Nouveau record !">🏆</span>}
-                <span className="shrink-0 rounded-lg bg-surface px-2.5 py-1.5 text-[13px] font-semibold text-dim">kg</span>
+                <span className="shrink-0 rounded-lg bg-surface px-2.5 py-1.5 text-[13px] font-semibold text-dim">{valueType === "speed" ? "km/h" : "kg"}</span>
               </div>
             )}
           </div>

@@ -15,6 +15,8 @@ const WeekTemplateModal = dynamic(() => import("@/components/library/WeekTemplat
 const ProgramModal = dynamic(() => import("@/components/library/ProgramModal"));
 import type { LibraryExercise, SessionTemplate, WeekTemplate, Program, Challenge, ChallengeConditionType } from "@/lib/types";
 import { computeChallengeProgress, challengesToUnlock } from "@/lib/challenges";
+import { useValueTypes } from "@/components/useValueTypes";
+import { fmtValue } from "@/lib/exerciseUnit";
 
 // « challenges » n'a plus d'onglet : le coach y accède depuis Réglages › Sportifs (?tab=challenges).
 type Tab = "exercises" | "sessions" | "weeks" | "programs" | "challenges" | "faq";
@@ -1444,6 +1446,7 @@ function SessionTemplateCard({ template, expanded, onToggleExpand, onEdit, onDel
   onEdit: () => void;
   onDelete: () => void;
 }) {
+  const valueTypeOf = useValueTypes();
   const totalSets = template.exercises.reduce((n, ex) => n + (ex.sets || 0), 0);
   return (
     <div className="overflow-hidden rounded-2xl border border-line bg-surface shadow-sm transition hover:border-accent/30">
@@ -1504,7 +1507,7 @@ function SessionTemplateCard({ template, expanded, onToggleExpand, onEdit, onDel
                 <span className="min-w-0 flex-1 truncate text-[13px] font-semibold text-ink">{ex.name}</span>
                 <span className="shrink-0 text-[11px] text-dim">
                   {ex.setsLabel ?? ex.sets}×{ex.repsLabel ?? ex.reps}
-                  {ex.weight > 0 && ` · ${ex.weight} kg`}
+                  {ex.weight > 0 && ` · ${fmtValue(valueTypeOf(ex.exId, ex.name), ex.weight)}`}
                   {ex.rpeCoach ? ` · RPE ${ex.rpeCoach}` : ""}
                 </span>
               </div>

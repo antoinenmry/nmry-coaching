@@ -18,9 +18,12 @@ import { SESSION_COLORS, newSession, exerciseInstanceFromLibrary, findDuplicateE
 import { countdownLabel } from "@/lib/dates";
 import { lastWeekLoad } from "@/lib/sessionCopy";
 import { PrepWeekBadge, PrepWeekField } from "@/components/PrepWeek";
+import { useValueTypes } from "@/components/useValueTypes";
+import ValueTypeSelect from "@/components/ValueTypeSelect";
+import { fmtValue } from "@/lib/exerciseUnit";
 import WeekShareSheet from "@/components/WeekShareSheet";
 import { SHARE_WEEK_EVENT } from "@/components/Header";
-import type { Followup, Goal, SessionInstance, SessionTemplate, WeekTemplateDay } from "@/lib/types";
+import type { ExerciseValueType, Followup, Goal, SessionInstance, SessionTemplate, WeekTemplateDay } from "@/lib/types";
 import { createClient } from "@/lib/supabase/client";
 
 const MONTHS = ["Janvier","Février","Mars","Avril","Mai","Juin","Juillet","Août","Septembre","Octobre","Novembre","Décembre"];
@@ -642,6 +645,7 @@ interface SelectedEx {
   isInline: boolean;
   tags: Record<string, string[]>;
   video: string;
+  valueType: ExerciseValueType;
 }
 
 function ComposeModal({ onClose, onCreated }: { onClose: () => void; onCreated: (id: string) => void }) {
@@ -681,6 +685,7 @@ function ComposeModal({ onClose, onCreated }: { onClose: () => void; onCreated: 
   const [newName, setNewName] = useState("");
   const [newTags, setNewTags] = useState<Record<string, string[]>>({});
   const [newVideo, setNewVideo] = useState("");
+  const [newValueType, setNewValueType] = useState<ExerciseValueType>("load");
   const [showTagsForm, setShowTagsForm] = useState(false);
   // Backdrop — évite la fermeture lors de la sélection de texte
   const backdropDown = useRef(false);
@@ -688,7 +693,7 @@ function ComposeModal({ onClose, onCreated }: { onClose: () => void; onCreated: 
   // Ajoute UNE occurrence d'un exercice bibliothèque (le même peut être ajouté plusieurs fois)
   function addLibEx(id: string) {
     const libEx = library.exercises.find((e) => e.id === id);
-    setExercises((prev) => [...prev, { uid: crypto.randomUUID(), id, name: libEx?.name ?? id, isInline: false, tags: {}, video: "" }]);
+    setExercises((prev) => [...prev, { uid: crypto.randomUUID(), id, name: libEx?.name ?? id, isInline: false, tags: {}, video: "", valueType: "load" }]);
   }
 
   // Retire UNE occurrence (la dernière) d'un exercice bibliothèque
@@ -720,10 +725,11 @@ function ComposeModal({ onClose, onCreated }: { onClose: () => void; onCreated: 
   function addInline() {
     const trimmed = newName.trim();
     if (!trimmed || duplicateEx) return;
-    setExercises((prev) => [...prev, { uid: crypto.randomUUID(), id: crypto.randomUUID(), name: trimmed, isInline: true, tags: newTags, video: newVideo }]);
+    setExercises((prev) => [...prev, { uid: crypto.randomUUID(), id: crypto.randomUUID(), name: trimmed, isInline: true, tags: newTags, video: newVideo, valueType: newValueType }]);
     setNewName("");
     setNewTags({});
     setNewVideo("");
+    setNewValueType("load");
     setShowTagsForm(false);
   }
 
@@ -743,9 +749,9 @@ function ComposeModal({ onClose, onCreated }: { onClose: () => void; onCreated: 
     const customs = exercises.filter((e) => e.isInline);
     if (saveToLib && customs.length > 0) {
       updateLibrary((lib) => {
-        customs.forEach(({ id, name: exName, tags, video }) => {
+        customs.forEach(({ id, name: exName, tags, video, valueType }) => {
           if (!lib.exercises.find((e) => e.id === id)) {
-            lib.exercises.push({ id, name: exName, tags, video, comment: "" });
+            lib.exercises.push({ id, name: exName, tags, video, comment: "", valueType });
           }
         });
       });
@@ -904,6 +910,7 @@ function ComposeModal({ onClose, onCreated }: { onClose: () => void; onCreated: 
                   </div>
                 </div>
               ))}
+              <ValueTypeSelect value={newValueType} onChange={setNewValueType} />
               <div>
                 <p className="mb-1 text-[11px] uppercase tracking-wide text-dim">Lien vidéo (optionnel)</p>
                 <input value={newVideo} onChange={(e) => setNewVideo(e.target.value)} placeholder="https://…" className="text-sm" />
@@ -1599,6 +1606,7 @@ interface SynthesisViewProps {
 }
 
 function SynthesisView({ cursor, todayKey, sessionsByDate, goalsByDate, injuries, vacationStart, vacationEnd, onOpen, onOpenGoal }: SynthesisViewProps) {
+  const valueTypeOf = useValueTypes();
   const monday = new Date(cursor);
   monday.setDate(cursor.getDate() - ((cursor.getDay() + 6) % 7));
 
@@ -1700,7 +1708,7 @@ function SynthesisView({ cursor, todayKey, sessionsByDate, goalsByDate, injuries
                           {s.exercises.map((ex) => {
                             const prescription = [
                               ex.sets ? `${ex.setsLabel ?? ex.sets} × ${(ex.repsLabel ?? ex.reps) || "?"}` : null,
-                              ex.weightLabel ?? (ex.weight ? `${ex.weight} kg` : null),
+                              ex.weightLabel ?? (ex.weight ? fmtValue(valueTypeOf(ex.exId, ex.name), ex.weight) : null),
                             ].filter(Boolean).join(" · ");
 
                             return (
@@ -1720,7 +1728,7 @@ function SynthesisView({ cursor, todayKey, sessionsByDate, goalsByDate, injuries
                                     <p className="text-[12px] text-dim">{prescription}</p>
                                     {(ex.weightClient ?? 0) > 0 && (
                                       <span className="shrink-0 rounded-md bg-ok/15 px-2 py-0.5 text-[11px] font-bold text-ok">
-                                        {ex.weightClient} kg
+                                        {fmtValue(valueTypeOf(ex.exId, ex.name), ex.weightClient ?? 0)}
                                       </span>
                                     )}
                                   </div>

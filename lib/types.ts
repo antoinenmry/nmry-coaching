@@ -187,12 +187,16 @@ export interface FilterCategory {
 }
 
 /** Un exercice de la bibliothèque : son identité (la prescription vit dans le plan). */
+/** Type de valeur attendu pour un exercice : charge (kg/RPE/%), allure (min/km) ou vitesse (km/h). */
+export type ExerciseValueType = "load" | "pace" | "speed";
+
 export interface LibraryExercise {
   id: string;
   name: string;
   tags: Record<string, string[]>; // categoryId -> optionId[] (multi-sélection)
   video: string; // URL
   comment?: string; // notes/description libres (visibles par tous)
+  valueType?: ExerciseValueType; // absent = déduit (ancienne étiquette « allure » / nom cardio), sinon charge
 }
 
 /** Un lien partenaire avec code promo — visible par tous, éditable coach/admin. */

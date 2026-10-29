@@ -4,13 +4,15 @@ import { useState } from "react";
 import ExerciseMultiSelect from "./ExerciseMultiSelect";
 import { useData } from "./DataProvider";
 import { findDuplicateExercise } from "@/lib/data";
-import type { LibraryExercise } from "@/lib/types";
+import ValueTypeSelect from "./ValueTypeSelect";
+import type { ExerciseValueType, LibraryExercise } from "@/lib/types";
 
 export interface InlineExercise {
   id: string;
   name: string;
   tags: Record<string, string[]>;
   video: string;
+  valueType: ExerciseValueType;
 }
 
 /** Modale de sélection multiple d'exercices depuis la bibliothèque + création inline. */
@@ -31,6 +33,7 @@ export default function ExercisePicker({
   const [newName, setNewName] = useState("");
   const [newTags, setNewTags] = useState<Record<string, string[]>>({});
   const [newVideo, setNewVideo] = useState("");
+  const [newValueType, setNewValueType] = useState<ExerciseValueType>("load");
   const [showTagsForm, setShowTagsForm] = useState(false);
 
   // Liste des exercices inline créés
@@ -64,10 +67,11 @@ export default function ExercisePicker({
     const name = newName.trim();
     if (!name || duplicate) return;
     const id = crypto.randomUUID();
-    setInlineExercises((prev) => [...prev, { id, name, tags: newTags, video: newVideo }]);
+    setInlineExercises((prev) => [...prev, { id, name, tags: newTags, video: newVideo, valueType: newValueType }]);
     setNewName("");
     setNewTags({});
     setNewVideo("");
+    setNewValueType("load");
     setShowTagsForm(false);
   }
 
@@ -78,9 +82,9 @@ export default function ExercisePicker({
   function confirm() {
     if (saveToLib && inlineExercises.length > 0) {
       updateLibrary((lib) => {
-        inlineExercises.forEach(({ id, name, tags, video }) => {
+        inlineExercises.forEach(({ id, name, tags, video, valueType }) => {
           if (!lib.exercises.find((e) => e.id === id)) {
-            lib.exercises.push({ id, name, tags, video, comment: "" } satisfies LibraryExercise);
+            lib.exercises.push({ id, name, tags, video, comment: "", valueType } satisfies LibraryExercise);
           }
         });
       });
@@ -175,6 +179,8 @@ export default function ExercisePicker({
                   </div>
                 </div>
               ))}
+
+              <ValueTypeSelect value={newValueType} onChange={setNewValueType} />
 
               {/* Vidéo */}
               <div>
