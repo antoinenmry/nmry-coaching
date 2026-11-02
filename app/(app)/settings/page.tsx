@@ -7,6 +7,7 @@ import { clampBgForTheme } from "@/lib/themeColor";
 import NotifPrefsPanel from "@/components/NotifPrefsPanel";
 import AnnouncementsManager from "@/components/AnnouncementsManager";
 import SportsManager from "@/components/SportsManager";
+import { SIGNUP_REQUESTS_CHANGED, SignupRequestList, useSignupRequests } from "@/components/SignupRequests";
 import { sportsOf } from "@/lib/sports";
 import { canEditAnnouncements } from "@/lib/config";
 import type { AthleteAdminData, AthleteStatus, AdminOverview, CoachWithClients, Profile } from "@/lib/types";
@@ -30,9 +31,8 @@ function fmtDate(iso: string | null): string {
 
 // ─── Vue Gestion des Profils ─────────────────────────────────────────────────
 function AthletesManager() {
-  const { role } = useData();
+  const signupRequests = useSignupRequests();
   const [athletes, setAthletes] = useState<AthleteAdminData[]>([]);
-  const [unassigned, setUnassigned] = useState<Profile[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [deletingId, setDeletingId] = useState<string | null>(null);
@@ -41,40 +41,28 @@ function AthletesManager() {
   const fetchAthletes = useCallback(async () => {
     setLoading(true); setError(null);
     try {
-      const [res, resU] = await Promise.all([
-        fetch("/api/coach/athletes"),
-        role === "coach" ? fetch("/api/coach/unassigned") : Promise.resolve(null),
-      ]);
+      const res = await fetch("/api/coach/athletes");
       if (!res.ok) throw new Error(await res.text());
       setAthletes(await res.json());
-      if (resU && resU.ok) setUnassigned(await resU.json());
     } catch (e) {
       setError((e as Error).message);
     } finally {
       setLoading(false);
     }
-  }, [role]);
+  }, []);
 
-  async function selfAssign(clientId: string) {
-    setPendingAction(clientId + "-assign");
-    await fetch("/api/coach/self-assign", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ clientId }),
-    });
-    await fetchAthletes();
-    setPendingAction(null);
-  }
-
-  async function refuseRequest(clientId: string, label: string) {
-    if (!window.confirm(`Refuser l'inscription de ${label} ? Son compte sera supprimé.`)) return;
-    setPendingAction(clientId + "-refuse");
-    await fetch(`/api/coach/athletes/${clientId}`, { method: "DELETE" });
-    await fetchAthletes();
-    setPendingAction(null);
-  }
-
-  useEffect(() => { fetchAthletes(); }, [fetchAthletes]);
+  useEffect(() => {
+    fetchAthletes();
+    // Un sportif accepté rejoint la liste, sans écran de chargement.
+    const refresh = () => {
+      fetch("/api/coach/athletes")
+        .then((r) => (r.ok ? r.json() : null))
+        .then((list: AthleteAdminData[] | null) => { if (list) setAthletes(list); })
+        .catch(() => {});
+    };
+    window.addEventListener(SIGNUP_REQUESTS_CHANGED, refresh);
+    return () => window.removeEventListener(SIGNUP_REQUESTS_CHANGED, refresh);
+  }, [fetchAthletes]);
 
   async function toggleStatus(id: string, current: AthleteStatus) {
     setPendingAction(id + "-status");
@@ -106,7 +94,7 @@ function AthletesManager() {
 
   return (
     <>
-      {athletes.length === 0 && unassigned.length === 0 && (
+      {athletes.length === 0 && signupRequests.requests.length === 0 && (
         <p className="py-6 text-center text-sm text-dim">Aucun sportif enregistré.</p>
       )}
       <div className="space-y-3">
@@ -177,41 +165,16 @@ function AthletesManager() {
         })}
       </div>
 
-      {/* Demandes d'inscription à valider (coach uniquement) */}
-      {role === "coach" && unassigned.length > 0 && (
+      {/* Demandes d'inscription à valider */}
+      {signupRequests.requests.length > 0 && (
         <div className="mt-4 rounded-2xl border border-accent/40 bg-accent/5 p-4">
           <p className="mb-1 text-sm font-semibold">
-            Demandes d&apos;inscription ({unassigned.length})
+            Demandes d&apos;inscription ({signupRequests.requests.length})
           </p>
           <p className="mb-3 text-[12px] text-dim">
             Ces personnes n&apos;ont accès à rien tant que tu ne les as pas acceptées.
           </p>
-          <div className="space-y-2">
-            {unassigned.map((c) => (
-              <div key={c.id} className="flex items-center justify-between gap-2 rounded-xl bg-surface px-3 py-2.5">
-                <div className="min-w-0">
-                  <p className="truncate text-sm font-medium">{c.name || "—"}</p>
-                  <p className="truncate text-[12px] text-dim">{c.email}</p>
-                </div>
-                <div className="flex shrink-0 gap-1.5">
-                  <button
-                    onClick={() => refuseRequest(c.id, c.name || c.email)}
-                    disabled={!!pendingAction}
-                    className="rounded-lg bg-danger/10 px-3 py-1.5 text-[12px] font-semibold text-danger hover:bg-danger/20 disabled:opacity-50"
-                  >
-                    {pendingAction === c.id + "-refuse" ? "…" : "Refuser"}
-                  </button>
-                  <button
-                    onClick={() => selfAssign(c.id)}
-                    disabled={!!pendingAction}
-                    className="rounded-lg bg-accent px-3 py-1.5 text-[12px] font-bold text-[#1a1500] disabled:opacity-50"
-                  >
-                    {pendingAction === c.id + "-assign" ? "…" : "Accepter"}
-                  </button>
-                </div>
-              </div>
-            ))}
-          </div>
+          <SignupRequestList sr={signupRequests} />
         </div>
       )}
 

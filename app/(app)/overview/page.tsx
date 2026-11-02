@@ -3,6 +3,7 @@
 import { useEffect, useState } from "react";
 import Link from "next/link";
 import { useData } from "@/components/DataProvider";
+import { SignupRequestsCard } from "@/components/SignupRequests";
 import { createClient } from "@/lib/supabase/client";
 import { daysUntil, countdownLabel, frenchDate } from "@/lib/dates";
 import type { AppState, Goal, Followup, Profile } from "@/lib/types";
@@ -114,6 +115,9 @@ export default function OverviewPage() {
   return (
     <div>
       <p className="mb-4 text-sm text-dim">{data.length} sportif{data.length > 1 ? "s" : ""}</p>
+
+      {/* Demandes d'inscription : surbrillance tant qu'il en reste une à traiter */}
+      <SignupRequestsCard />
 
       {/* Messages urgents — un tap ouvre la conversation sur le message */}
       {urgents.length > 0 && (

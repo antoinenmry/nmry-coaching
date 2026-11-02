@@ -5,6 +5,7 @@ import Image from "next/image";
 import Link from "next/link";
 import { useData } from "@/components/DataProvider";
 import { AnnouncementForm } from "@/components/AnnouncementsManager";
+import { useSignupRequests } from "@/components/SignupRequests";
 import type { Announcement } from "@/lib/types";
 import { canEditAnnouncements } from "@/lib/config";
 
@@ -12,13 +13,15 @@ const todayKey = () => new Date().toISOString().slice(0, 10);
 
 /**
  * Bandeau du coach en haut de l'accueil : 2 pages qui se glissent.
- *  1. Vue d'ensemble (photo) → /overview, avec la pastille rouge s'il y a des urgences.
+ *  1. Vue d'ensemble (photo) → /overview, avec la pastille rouge s'il y a des urgences
+ *     et la pastille dorée s'il y a des demandes d'inscription.
  *  2. Annonces : ajouter / modifier / supprimer les cartes du carrousel des sportifs.
  */
 export default function CoachBanner({ urgent }: { urgent: number }) {
   const { library, updateLibrary, me } = useData();
   const canEdit = canEditAnnouncements(me?.email); // gestion des annonces : Simon et Antoine seulement
   const list = library.announcements ?? [];
+  const signupCount = useSignupRequests().requests.length;
   const [page, setPage] = useState(0);
   const [editing, setEditing] = useState<Announcement | "new" | null>(null);
 
@@ -45,7 +48,11 @@ export default function CoachBanner({ urgent }: { urgent: number }) {
           setPage(Math.round(el.scrollLeft / el.clientWidth));
         }}
         className={`flex snap-x snap-mandatory overflow-x-auto rounded-[20px] [scrollbar-width:none] [&::-webkit-scrollbar]:hidden ${
-          urgent > 0 ? "ring-2 ring-danger shadow-[0_8px_26px_-10px_rgba(239,83,80,0.8)]" : ""
+          urgent > 0
+            ? "ring-2 ring-danger shadow-[0_8px_26px_-10px_rgba(239,83,80,0.8)]"
+            : signupCount > 0
+            ? "ring-2 ring-accent shadow-[0_8px_26px_-10px_rgba(255,179,0,0.8)]"
+            : ""
         }`}
       >
         {/* Page 1 — Vue d'ensemble */}
@@ -74,12 +81,17 @@ export default function CoachBanner({ urgent }: { urgent: number }) {
             <span className="text-[22px] font-black uppercase leading-[.95] tracking-[-0.02em] [text-shadow:0_2px_12px_rgba(0,0,0,.45)] sm:text-[28px]">
               Vue d&apos;ensemble
             </span>
+            {signupCount > 0 && (
+              <span className="rounded-full bg-gradient-to-br from-[#ffc53d] to-[#ff9f00] px-2.5 py-0.5 text-[11.5px] font-black text-[#1a1500]">
+                {signupCount} demande{signupCount > 1 ? "s" : ""} d&apos;inscription
+              </span>
+            )}
             {urgent > 0 ? (
               <span className="flex items-center gap-1.5 rounded-full bg-danger px-2.5 py-0.5 text-[11.5px] font-black">
                 <span className="h-1.5 w-1.5 animate-pulse rounded-full bg-white" />
                 {urgent} message{urgent > 1 ? "s" : ""} urgent{urgent > 1 ? "s" : ""}
               </span>
-            ) : (
+            ) : signupCount > 0 ? null : (
               <span className="text-[11.5px] font-bold text-white/90">Blessures &amp; objectifs de tous les sportifs ›</span>
             )}
           </span>

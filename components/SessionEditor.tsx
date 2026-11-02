@@ -249,8 +249,10 @@ export default function SessionEditor({
   fresh?: boolean;
   onClose: () => void;
 }) {
-  const { update, state, library, activeUserId, me } = useData();
+  const { update, state, library, templates, activeUserId, me } = useData();
   const session = state.sessions.find((s) => s.id === sessionId);
+  // Séance posée avant que sa séance type ait une description : le coach peut la reprendre.
+  const tplDescription = templates.sessionTemplates?.find((t) => t.id === session?.tplId)?.description?.trim();
   const [picking, setPicking] = useState(false);
   // Dates supplémentaires cochées dans le calendrier → une copie de la séance par date.
   const [copyDates, setCopyDates] = useState<string[]>([]);
@@ -506,6 +508,14 @@ export default function SessionEditor({
               />
             ) : (
               <p className="mt-0.5 whitespace-pre-wrap text-[14px] leading-snug">{session.coachComment}</p>
+            )}
+            {isCoach && tplDescription && !(session.coachComment ?? "").trim() && (
+              <button
+                onClick={() => patchSession({ coachComment: tplDescription })}
+                className="mt-1 text-left text-[12.5px] font-bold text-accent"
+              >
+                Reprendre la description de la séance type
+              </button>
             )}
           </div>
         )}

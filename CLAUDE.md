@@ -174,7 +174,10 @@ Exposés par `useData()` : `role`, `me`, `clients`, `activeUserId`, `switchClien
   (séances types + semaines types), peut dupliquer des semaines.
   Voit un `ClientSelector` dans le header (dropdown via portal, évite le clipping backdrop-blur).
   Le sportif sélectionné est persisté dans `localStorage` (`nmry-coach-selected-client`).
-  Voit les objectifs de **tous** les sportifs sur son calendrier (chargés en parallèle).
+  Son calendrier n'affiche que les objectifs du profil sélectionné ; ceux de tous ses sportifs sont dans `/overview`.
+  **Demandes d'inscription** (`components/SignupRequests.tsx`) : pop-up unique par demande (`localStorage`
+  `nmry_seen_signup_requests:<id>`), puis bloc à bordure dorée dans `/overview` et pastille sur le bandeau d'accueil,
+  jusqu'à acceptation ou refus. Accepter affecte le sportif à la personne qui accepte.
   Accès à `/overview` (blessures actives + objectifs agrégés) et à la Vue Gestion des Profils.
   Reçoit un **email + push** quand un sportif envoie un message urgent.
   Peut envoyer un **broadcast popup** à tous ses sportifs (Settings → Sportifs).
@@ -219,8 +222,7 @@ Document unique par sportif (JSON dans `app_state.data` Supabase) :
     drag bloqué dans `/plan`, garde dans `place()`). Indicateur 🔒.
 
 - `goals: Goal[]` : `competition`, `date`, `place`, `expected` (commentaires libres),
-  `events?: GoalEvent[]` (épreuves structurées `{ id, name, planned, achieved }`),
-  `clientName?` (enrichi côté coach, non persisté).
+  `events?: GoalEvent[]` (épreuves structurées `{ id, name, planned, achieved }`).
 
 - `followups: Followup[]` : `date` (début), `dateEnd?` (fin, blessures uniquement),
   `type` (`"note"|"injury"|"pain"`), `text`.
@@ -317,7 +319,7 @@ TemplateLibrary {
   sessionTemplates: SessionTemplate[]  // séances types réutilisables
   weekTemplates: WeekTemplate[]        // semaines types (grille 7 jours)
 }
-SessionTemplate { id, name, color, description, exercises: TemplateExercise[] }
+SessionTemplate { id, name, color, description, exercises: TemplateExercise[] } // description copiée dans SessionInstance.coachComment au placement
 TemplateExercise { uid, exId, name, sets, setsLabel?, reps, repsLabel?, weight, rpeCoach, coachComment }
 WeekTemplate { id, name, description, days: WeekTemplateDay[] }
 WeekTemplateDay { dayIndex: 0-6, sessions: { tplId }[] }
@@ -573,7 +575,7 @@ pas le blob `app_state` entier de tout le monde.
 | `components/ClientSelector.tsx` | Dropdown coach (portal `document.body` — évite clipping backdrop-blur) |
 | `components/SessionEditor.tsx` | Édition séance : coach = tout (incl. édition des logs de séries) ; sportif = feedback + validation + ❌ raté. **Auto-suivi** : si coach/admin édite SA PROPRE séance (`activeUserId === me.id`, pas un sportif via ClientSelector) → `isSelf=true` débloque aussi le ressenti/validation/poids réalisé/RPE/raté/commentaire (prescription + tracking). Labels blancs+gras (`text-ink font-semibold`), pas de placeholders. `addExercises` résout le nom via le hook `library` (= `library_state`), **pas** `d.library` (vide en mode auth → sinon nom "Exercice"). |
 | `components/PullToRefresh.tsx` | Pull-to-refresh custom (monté dans `(app)/layout.tsx`). Anti-déclenchement accidentel : seuil **120px** PUIS **maintien 800ms** au-delà du seuil (rond se remplit → vert « armé ») avant que le relâchement ne fasse `window.location.reload()`. Ajuster `THRESHOLD`/`HOLD_MS`. |
-| `components/GoalInfoModal.tsx` | Fiche objectif lecture seule (planning) — affiche épreuves + clientName |
+| `components/GoalInfoModal.tsx` | Fiche objectif lecture seule (planning) — affiche les épreuves |
 | `components/EventsDisplay.tsx` | Tableau épreuves prévu/réalisé (partagé goals + modal) |
 | `components/ExerciseMultiSelect.tsx` | Filtres + recherche + liste d'exercices avec **compteur (− n +)** : `picked: string[]` peut contenir plusieurs fois le même id (= même exercice ajouté N fois) ; callbacks `onAdd(id)`/`onRemove(id)`. Utilisé par ComposeModal (`/plan`) et ExercisePicker |
 | `components/ExercisePicker.tsx` | Modale picker + création inline (avec tags + video). `picked` autorise les doublons → une instance d'exercice poussée par occurrence |

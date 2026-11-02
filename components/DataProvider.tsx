@@ -68,6 +68,8 @@ interface DataContextValue {
   syncError: boolean;
   activeUserId: string | null;
   clients: Profile[];
+  /** Ajoute à la liste un sportif qui vient d'être accepté (visible sans recharger l'app). */
+  addClient: (client: Profile) => void;
   switchClient: (userId: string) => Promise<void>;
   signOut: () => Promise<void>;
   role: Role;
@@ -478,6 +480,10 @@ export function DataProvider({ children }: { children: React.ReactNode }) {
     setPlanNotifSentAt((prev) => ({ ...prev, [clientId]: new Date().toISOString() }));
   }, []);
 
+  function addClient(client: Profile) {
+    setClients((prev) => (prev.some((c) => c.id === client.id) ? prev : [...prev, client]));
+  }
+
   return (
     <DataContext.Provider
       value={{
@@ -485,7 +491,7 @@ export function DataProvider({ children }: { children: React.ReactNode }) {
         library, updateLibrary, flushLibrary: pushLibraryNow,
         templates, updateTemplates,
         loading, saving, syncError,
-        activeUserId, clients, switchClient, signOut,
+        activeUserId, clients, addClient, switchClient, signOut,
         role: previewAsClient ? "client" : role,
         setRole, previewAsClient, setPreviewAsClient,
         hasCoach,

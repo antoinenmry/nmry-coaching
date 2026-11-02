@@ -24,7 +24,6 @@ import { fmtValue } from "@/lib/exerciseUnit";
 import WeekShareSheet from "@/components/WeekShareSheet";
 import { SHARE_WEEK_EVENT } from "@/components/Header";
 import type { ExerciseValueType, Followup, Goal, SessionInstance, SessionTemplate, WeekTemplateDay } from "@/lib/types";
-import { createClient } from "@/lib/supabase/client";
 
 const MONTHS = ["Janvier","Février","Mars","Avril","Mai","Juin","Juillet","Août","Septembre","Octobre","Novembre","Décembre"];
 const DOW = ["Lun","Mar","Mer","Jeu","Ven","Sam","Dim"];
@@ -90,8 +89,6 @@ export default function PlanPage() {
   const [injecting, setInjecting] = useState(false);
   const [placing, setPlacing] = useState(false);
   const [viewingGoals, setViewingGoals] = useState<Goal[] | null>(null);
-  // Objectifs des autres sportifs (coach uniquement)
-  const [otherGoals, setOtherGoals] = useState<Goal[]>([]);
 
   const todayKey = ymd(new Date());
 
@@ -105,27 +102,6 @@ export default function PlanPage() {
   }, []);
   const shareMonday = useMemo(() => getMonday(mode === "month" ? new Date() : cursor), [mode, cursor]);
 
-  // Charger les objectifs de tous les sportifs — uniquement quand le coach consulte SON propre profil
-  useEffect(() => {
-    if (!isCoach || loading || activeUserId !== me?.id) { setOtherGoals([]); return; }
-    const supabase = createClient();
-    const otherClients = clients.filter((c) => c.role === "client" && c.id !== activeUserId);
-    if (otherClients.length === 0) { setOtherGoals([]); return; }
-    (async () => {
-      // Extraction ciblée du sous-champ `goals` au lieu du blob `data` entier.
-      const { data: rows } = await supabase
-        .from("app_state")
-        .select("user_id, goals:data->goals")
-        .in("user_id", otherClients.map((c) => c.id));
-      const goals: Goal[] = ((rows ?? []) as { user_id: string; goals: Goal[] | null }[]).flatMap((row) => {
-        const profile = otherClients.find((c) => c.id === row.user_id);
-        const name = profile?.name || profile?.email || "Sportif";
-        return (row.goals ?? []).map((g) => ({ ...g, clientName: name }));
-      });
-      setOtherGoals(goals);
-    })();
-  }, [isCoach, loading, clients, activeUserId]);
-
   const bank = useMemo(() => state.sessions.filter((s) => !s.date), [state.sessions]);
   const sessionsByDate = useMemo(() => {
     const m: Record<string, SessionInstance[]> = {};
@@ -137,16 +113,12 @@ export default function PlanPage() {
 
   const goalsByDate = useMemo(() => {
     const m: Record<string, Goal[]> = {};
-    // Objectifs du sportif actif
+    // Uniquement les objectifs du profil affiché : ceux des sportifs restent dans la vue d'ensemble.
     state.goals.forEach((g) => {
       if (g.date) (m[g.date] ??= []).push(g);
     });
-    // Objectifs des autres sportifs (coach uniquement)
-    otherGoals.forEach((g) => {
-      if (g.date) (m[g.date] ??= []).push(g);
-    });
     return m;
-  }, [state.goals, otherGoals]);
+  }, [state.goals]);
 
   // Blessures : plus de repères dans le calendrier (le coach les voit dans sa vue d'ensemble,
   // le sportif sait qu'il est blessé). Elles restent dans « Mon suivi ».
@@ -1257,7 +1229,7 @@ function TransferWeekModal({
           id: crypto.randomUUID(),
           name: s.name,
           color: s.color,
-          description: "",
+          description: s.coachComment ?? "",
           exercises: s.exercises.map((ex) => ({
             uid: crypto.randomUUID(),
             exId: ex.exId,
@@ -1580,9 +1552,9 @@ function MonthView({ cursor, todayKey, sessionsByDate, goalsByDate, injuries, va
             key={g.id}
             onClick={(e) => { e.stopPropagation(); onOpenGoal([g]); }}
             className="line-clamp-2 break-words rounded-md bg-ok/25 px-1 py-0.5 text-left text-[10px] font-black leading-[1.15] text-ok"
-            title={g.clientName ? `${g.clientName} · ${g.competition}` : g.competition}
+            title={g.competition}
           >
-            {g.clientName ? `${g.clientName.split(" ")[0]} · ${g.competition}` : g.competition}
+            {g.competition}
           </button>
         ))}
         {sessions.map((s) => <SessionPill key={s.id} s={s} onOpen={onOpen} todayKey={todayKey} />)}
@@ -1656,8 +1628,7 @@ function SynthesisView({ cursor, todayKey, sessionsByDate, goalsByDate, injuries
                 onClick={() => onOpenGoal([g])}
                 className="mb-1.5 flex w-full items-center gap-1.5 rounded-md bg-ok/20 px-2 py-1 text-left text-[13px] font-semibold text-ok"
               >
-                {g.clientName && <span className="font-bold text-accent">{g.clientName.split(" ")[0]}</span>}
-                <span className={g.clientName ? "font-normal" : ""}>{g.competition}</span>
+                <span>{g.competition}</span>
                 {g.place && <span className="font-normal opacity-80">· {g.place}</span>}
                 <span className="ml-auto text-[11px] opacity-80">{countdownLabel(g.date)}</span>
               </button>
@@ -1813,7 +1784,7 @@ function WeekView({ cursor, todayKey, sessionsByDate, goalsByDate, injuries, vac
                   <span aria-hidden className="absolute inset-y-0 left-0 w-1 bg-ok" />
                   <span className="flex items-center justify-between gap-2">
                     <span className="min-w-0 truncate text-[15px] font-black">
-                      {g.clientName && <span className="text-accent">{g.clientName.split(" ")[0]} · </span>}{g.competition}
+                      {g.competition}
                     </span>
                     <span className="shrink-0 rounded-full bg-ok/15 px-2 py-0.5 text-[11px] font-black text-ok">{countdownLabel(g.date)}</span>
                   </span>

@@ -28,7 +28,7 @@ function sessionFromTemplate(tpl: SessionTemplate, dateISO: string): SessionInst
     color: tpl.color,
     emoji: 0,
     done: false,
-    coachComment: "",
+    coachComment: tpl.description ?? "",
     date: dateISO,
     exercises: tpl.exercises.map((ex): ExerciseInstance => ({
       uid: uid(),

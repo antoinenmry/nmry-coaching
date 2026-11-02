@@ -48,7 +48,7 @@ export default function PlaceSessionModal({
       color: tpl.color,
       emoji: 0,
       done: false,
-      coachComment: "",
+      coachComment: tpl.description ?? "",
       date,
       exercises: tpl.exercises.map((ex): ExerciseInstance => ({
         uid: uid(),

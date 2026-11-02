@@ -9,7 +9,7 @@ import { sendPushToUser } from "@/lib/push";
  * Affecte le coach connecté à ce client (si non déjà affecté).
  */
 export async function POST(req: NextRequest) {
-  const auth = await requireRole(["coach"]);
+  const auth = await requireRole(["coach", "admin"]);
   if (!auth) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   const user = auth.user;
 
