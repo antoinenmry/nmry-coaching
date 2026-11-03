@@ -9,6 +9,7 @@ import type { ExerciseInstance, ExerciseValueType, Role } from "@/lib/types";
 import { PrepWeekBadge, PrepWeekField } from "@/components/PrepWeek";
 import { useValueTypes } from "@/components/useValueTypes";
 import { fmtPace as fmtPaceDisplay, fmtValue } from "@/lib/exerciseUnit";
+import { fmtDuration } from "@/lib/dates";
 import { getMaxRecord, saveStrengthRecord } from "@/lib/prDetection";
 import { beforeRemove, cutAt, groupExercises, linkAt, moveWithLinks, toggleGroupType } from "@/lib/exerciseLinks";
 
@@ -528,6 +529,14 @@ export default function SessionEditor({
             readOnly={isCoach && !isSelf}
             onChange={(v) => patchSession({ emoji: v })}
           />
+        )}
+
+        {/* Durée de la séance validée, côté coach (le sportif la voit et la modifie dans le chrono) */}
+        {!canTrack && session.done && !!session.durationMin && (
+          <div className="mt-3 flex items-center justify-between rounded-xl bg-surface2 px-3.5 py-2.5">
+            <span className="text-[13px] text-dim">Durée</span>
+            <span className="text-[15px] font-bold tabular-nums">{fmtDuration(session.durationMin)}</span>
+          </div>
         )}
 
         {/* Valider la séance (client, ou coach/admin sur sa propre séance) */}
@@ -1294,11 +1303,6 @@ function todayYmd() {
   return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
 }
 
-function fmtMin(min: number) {
-  const h = Math.floor(min / 60), m = min % 60;
-  return h ? `${h} h ${String(m).padStart(2, "0")}` : `${m} min`;
-}
-
 function SessionTimer({
   session,
   onStart,
@@ -1358,7 +1362,7 @@ function SessionTimer({
       <div className="mt-3 rounded-xl bg-surface2 px-3.5 py-3">
         <p className="text-[13px] leading-5">
           {tooLong ? (
-            <><span className="font-bold">{fmtMin(session.durationMin!)}, c&apos;est long.</span> <span className="text-dim">Le chrono a sans doute tourné après la séance. Indique la vraie durée.</span></>
+            <><span className="font-bold">{fmtDuration(session.durationMin!)}, c&apos;est long.</span> <span className="text-dim">Le chrono a sans doute tourné après la séance. Indique la vraie durée.</span></>
           ) : session.durationMin ? (
             <span className="font-bold">Durée de la séance</span>
           ) : (
@@ -1390,7 +1394,7 @@ function SessionTimer({
     <div className="mt-3 flex items-center justify-between rounded-xl bg-surface2 px-3.5 py-2.5">
       <span className="text-[13px] text-dim">Durée</span>
       <span className="flex items-center gap-3">
-        <span className="text-[15px] font-bold tabular-nums">{fmtMin(session.durationMin)}</span>
+        <span className="text-[15px] font-bold tabular-nums">{fmtDuration(session.durationMin)}</span>
         <button onClick={openEdit} className="text-[12px] text-dim underline underline-offset-2">Modifier</button>
       </span>
     </div>

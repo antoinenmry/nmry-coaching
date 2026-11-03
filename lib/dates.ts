@@ -29,3 +29,9 @@ export function frenchDate(dateStr: string): string {
   const [y, m, d] = dateStr.split("-").map(Number);
   return `${d} ${MONTHS[m - 1]} ${y}`;
 }
+
+/** Durée lisible : « 45 min », « 1 h 05 ». */
+export function fmtDuration(min: number) {
+  const h = Math.floor(min / 60), m = min % 60;
+  return h ? `${h} h ${String(m).padStart(2, "0")}` : `${m} min`;
+}

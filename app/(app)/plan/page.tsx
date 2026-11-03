@@ -15,7 +15,7 @@ const InjectProgramModal = dynamic(() => import("@/components/plan/InjectProgram
 const PlaceSessionModal = dynamic(() => import("@/components/plan/PlaceSessionModal"));
 import { AUTH_ENABLED } from "@/lib/config";
 import { SESSION_COLORS, newSession, exerciseInstanceFromLibrary, findDuplicateExercise } from "@/lib/data";
-import { countdownLabel } from "@/lib/dates";
+import { countdownLabel, fmtDuration } from "@/lib/dates";
 import { lastWeekLoad } from "@/lib/sessionCopy";
 import { PrepWeekBadge, PrepWeekField } from "@/components/PrepWeek";
 import { useValueTypes } from "@/components/useValueTypes";
@@ -1668,6 +1668,9 @@ function SynthesisView({ cursor, todayKey, sessionsByDate, goalsByDate, injuries
                             <span className="text-dim text-[11px] underline underline-offset-2">éditer</span>
                           </span>
                         </div>
+                        {s.done && !!s.durationMin && (
+                          <p className="mt-0.5 text-right text-[11px] font-bold text-ink/70 tabular-nums">Durée {fmtDuration(s.durationMin)}</p>
+                        )}
                         {s.coachComment && (
                           <p className="mt-1 text-[12px] text-dim leading-snug">{s.coachComment}</p>
                         )}
@@ -1853,8 +1856,11 @@ function WeekSessionCard({ s, onOpen, todayKey }: { s: SessionInstance; onOpen: 
           <span className="shrink-0 rounded-full bg-accent px-2 py-0.5 text-[11px] font-black text-[#1a1500]">Aujourd&apos;hui</span>
         ) : null}
       </span>
-      <span className="mt-0.5 block text-xs text-ink/70">
-        {n} exercice{n > 1 ? "s" : ""}
+      <span className="mt-0.5 flex items-center justify-between gap-2 text-xs text-ink/70">
+        <span>{n} exercice{n > 1 ? "s" : ""}</span>
+        {s.done && !!s.durationMin && (
+          <span className="shrink-0 px-2 font-bold tabular-nums">Durée {fmtDuration(s.durationMin)}</span>
+        )}
       </span>
     </button>
   );
