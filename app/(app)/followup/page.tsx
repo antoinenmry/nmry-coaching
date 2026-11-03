@@ -1,10 +1,12 @@
 "use client";
 
-import { useState, useRef, useEffect, useLayoutEffect, useCallback, memo } from "react";
+import { Fragment, useState, useRef, useEffect, useLayoutEffect, useCallback, type ReactNode } from "react";
 import { useData } from "@/components/DataProvider";
 import { createClient } from "@/lib/supabase/client";
 import { type BlockNote, type ChatMessage, type Followup } from "@/lib/types";
+import ChatAvatar from "@/components/ChatAvatar";
 import MetricsTab from "./MetricsTab";
+import ConversationList, { type ConversationRow, type ConversationSummary } from "./ConversationList";
 
 // Cache mémoire des conversations (par sportif) : réafficher instantanément au
 // retour sur l'onglet, puis revalider en arrière-plan. Vit le temps de la session.
@@ -59,15 +61,22 @@ function frDate(key: string) {
 function fmtSec(s: number) {
   return `${Math.floor(s / 60)}:${String(Math.floor(s) % 60).padStart(2, "0")}`;
 }
-function fmtHour(iso: string) {
+function fmtTime(iso: string) {
+  return new Date(iso).toLocaleTimeString("fr-FR", { hour: "2-digit", minute: "2-digit" });
+}
+function fmtDay(iso: string) {
   const d = new Date(iso);
   const now = new Date();
-  const time = d.toLocaleTimeString("fr-FR", { hour: "2-digit", minute: "2-digit" });
-  if (d.toDateString() === now.toDateString()) return time;
+  if (d.toDateString() === now.toDateString()) return "Aujourd'hui";
   const yest = new Date(now); yest.setDate(now.getDate() - 1);
-  if (d.toDateString() === yest.toDateString()) return `Hier, ${time}`;
-  return `${d.toLocaleDateString("fr-FR", { day: "numeric", month: "short" })}, ${time}`;
+  if (d.toDateString() === yest.toDateString()) return "Hier";
+  return d.toLocaleDateString("fr-FR", {
+    day: "numeric",
+    month: "long",
+    ...(d.getFullYear() === now.getFullYear() ? {} : { year: "numeric" }),
+  });
 }
+
 function isActive(f: Followup): boolean {
   const today = todayKey();
   if (f.type !== "injury") return false;
@@ -112,34 +121,6 @@ async function compressImage(file: File): Promise<File> {
     return file;
   }
 }
-
-// ─── Avatar ───────────────────────────────────────────────────────────────────
-const AVATAR_PALETTE = ["#ef4444","#f97316","#eab308","#22c55e","#06b6d4","#3b82f6","#a855f7","#ec4899"];
-function avatarBg(name: string) {
-  let h = 0;
-  for (const c of name) h = (h * 31 + c.charCodeAt(0)) & 0x7fffffff;
-  return AVATAR_PALETTE[h % AVATAR_PALETTE.length];
-}
-function initials(name: string) {
-  return name.split(/\s+/).slice(0, 2).map(w => w[0]?.toUpperCase() ?? "").join("");
-}
-const Avatar = memo(function Avatar({ name, photo, size = 26 }: { name?: string; photo?: string; size?: number }) {
-  const n = name ?? "?";
-  if (photo) {
-    return (
-      <img src={photo} alt={n} className="shrink-0 rounded-full object-cover"
-        style={{ width: size, height: size }} />
-    );
-  }
-  return (
-    <div
-      className="shrink-0 grid place-items-center rounded-full font-bold text-white"
-      style={{ width: size, height: size, background: avatarBg(n), fontSize: Math.round(size * 0.38) }}
-    >
-      {initials(n)}
-    </div>
-  );
-});
 
 // ─── VoicePlayer ──────────────────────────────────────────────────────────────
 const SPEEDS = [0.5, 1, 1.5, 2] as const;
@@ -291,14 +272,71 @@ function VoicePlayer({ audioUrl, messageId, isMe }: { audioUrl?: string; message
 }
 
 // ─── Tab Messages ─────────────────────────────────────────────────────────────
-function MessagesTab({ initialClientId, focusMsgId }: { initialClientId?: string; focusMsgId?: string }) {
+/** Zone réellement visible de l'écran (clavier déduit) : garde la saisie au-dessus du clavier. */
+function useVisibleViewport() {
+  const [box, setBox] = useState<{ top: number; height: number } | null>(null);
+  useLayoutEffect(() => {
+    const vv = window.visualViewport;
+    const measure = () => setBox(vv ? { top: vv.offsetTop, height: vv.height } : { top: 0, height: window.innerHeight });
+    measure();
+    vv?.addEventListener("resize", measure);
+    vv?.addEventListener("scroll", measure);
+    window.addEventListener("resize", measure);
+    return () => {
+      vv?.removeEventListener("resize", measure);
+      vv?.removeEventListener("scroll", measure);
+      window.removeEventListener("resize", measure);
+    };
+  }, []);
+  return box;
+}
+
+function useIsPhone() {
+  const [phone, setPhone] = useState(false);
+  useLayoutEffect(() => {
+    const mq = window.matchMedia("(max-width: 767px)");
+    const apply = () => setPhone(mq.matches);
+    apply();
+    mq.addEventListener("change", apply);
+    return () => mq.removeEventListener("change", apply);
+  }, []);
+  return phone;
+}
+
+function IconButton({ label, onClick, disabled, pressed, tone, children }: {
+  label: string;
+  onClick: () => void;
+  disabled?: boolean;
+  pressed?: boolean;
+  tone: string;
+  children: ReactNode;
+}) {
+  return (
+    <button
+      onClick={onClick}
+      disabled={disabled}
+      aria-label={label}
+      aria-pressed={pressed}
+      title={label}
+      className={`grid h-11 w-11 shrink-0 place-items-center rounded-full transition active:scale-95 disabled:opacity-40 ${tone}`}
+    >
+      {children}
+    </button>
+  );
+}
+
+function MessagesTab({ initialClientId, focusMsgId, onConversationClosed }: {
+  initialClientId?: string;
+  focusMsgId?: string;
+  onConversationClosed: () => void;
+}) {
   const { me, role, clients } = useData();
   const isElevated = role === "coach" || role === "admin";
 
   // ── Conversation courante (isolée par sportif, stockée en base) ──
   const clientList = clients.filter(c => c.role === "client");
   const [chatClientId, setChatClientId] = useState<string | null>(null);
-  // Le coach choisit un sportif ; le sportif est toujours sur sa propre conversation.
+  // Le coach ouvre une conversation depuis sa liste ; le sportif est toujours sur la sienne.
   const convClientId = isElevated ? chatClientId : (me?.id ?? null);
 
   type Participant = { id: string; name: string; photo?: string };
@@ -308,22 +346,104 @@ function MessagesTab({ initialClientId, focusMsgId }: { initialClientId?: string
   const [avatarPhotos, setAvatarPhotos] = useState<Record<string, string>>({});
   const [chatLoading, setChatLoading] = useState(false);
   const [hasMore, setHasMore] = useState(false);
-  // Non-lus par sportif (coach/admin) — badge sur chaque bouton "Conversation avec :".
-  const [unreadByClient, setUnreadByClient] = useState<Record<string, number>>({});
+  const [conversations, setConversations] = useState<ConversationSummary[]>([]);
   const [loadingMore, setLoadingMore] = useState(false);
   const scrollRef = useRef<HTMLDivElement>(null);
   const isPrependingRef = useRef(false);
 
-  // Sélectionne le sportif : celui passé en paramètre (lien depuis la vue
-  // d'ensemble sur un message urgent), sinon le premier de la liste.
+  // Lien direct (message urgent de la vue d'ensemble) : ouvre la conversation concernée.
   useEffect(() => {
-    if (!isElevated || chatClientId) return;
-    if (initialClientId && clientList.some((c) => c.id === initialClientId)) {
-      setChatClientId(initialClientId);
-    } else if (clientList.length > 0) {
-      setChatClientId(clientList[0].id);
-    }
+    if (!isElevated || chatClientId || !initialClientId) return;
+    if (clientList.some((c) => c.id === initialClientId)) setChatClientId(initialClientId);
   }, [isElevated, chatClientId, clientList, initialClientId]);
+
+  // Liste des conversations : dernier message et non-lus par sportif.
+  const loadConversations = useCallback(async () => {
+    try {
+      const res = await fetch("/api/chat/conversations");
+      if (res.ok) setConversations((await res.json()).conversations ?? []);
+    } catch { /* silencieux */ }
+  }, []);
+
+  const markConversationRead = useCallback((clientId: string) => {
+    setConversations(prev => prev.map(c => (c.clientId === clientId ? { ...c, unread: 0, urgent: 0 } : c)));
+  }, []);
+
+  useEffect(() => {
+    if (!isElevated) return;
+    loadConversations();
+  }, [isElevated, loadConversations]);
+
+  // En quittant une conversation, les messages reçus pendant sa lecture passent en lus
+  // (GET /api/chat marque la conversation lue), puis la liste se met à jour.
+  useEffect(() => {
+    if (!isElevated || !chatClientId) return;
+    const leftId = chatClientId;
+    return () => {
+      markConversationRead(leftId);
+      fetch(`/api/chat?clientId=${encodeURIComponent(leftId)}`).catch(() => {}).finally(loadConversations);
+    };
+  }, [isElevated, chatClientId, markConversationRead, loadConversations]);
+
+  // Nouveaux messages : la liste se met à jour en direct, ou au retour dans l'app.
+  useEffect(() => {
+    if (!isElevated || !me?.id) return;
+    let timer: ReturnType<typeof setTimeout> | undefined;
+    const refresh = () => {
+      clearTimeout(timer);
+      timer = setTimeout(loadConversations, 400);
+    };
+    const onVisible = () => { if (document.visibilityState === "visible") refresh(); };
+    const supabase = createClient();
+    const channel = supabase
+      .channel(`conversations:${me.id}`)
+      .on(
+        "postgres_changes",
+        { event: "INSERT", schema: "public", table: "chat_messages", filter: `coach_id=eq.${me.id}` },
+        refresh,
+      )
+      .subscribe();
+    document.addEventListener("visibilitychange", onVisible);
+    return () => {
+      clearTimeout(timer);
+      document.removeEventListener("visibilitychange", onVisible);
+      supabase.removeChannel(channel);
+    };
+  }, [isElevated, me?.id, loadConversations]);
+
+  // Ouvrir une conversation ajoute une entrée d'historique : le retour du téléphone revient à la liste.
+  const pushedHistoryRef = useRef(false);
+  function openConversation(id: string) {
+    if (id === chatClientId) return;
+    const url = `/followup?client=${encodeURIComponent(id)}`;
+    if (chatClientId) {
+      window.history.replaceState(window.history.state, "", url);
+    } else {
+      window.history.pushState(window.history.state, "", url);
+      pushedHistoryRef.current = true;
+    }
+    markConversationRead(id);
+    setChatClientId(id);
+  }
+  function closeConversation() {
+    if (pushedHistoryRef.current) { window.history.back(); return; }
+    window.history.replaceState(window.history.state, "", "/followup");
+    setChatClientId(null);
+    onConversationClosed();
+  }
+  useEffect(() => {
+    if (!isElevated) return;
+    const onPop = () => {
+      const id = new URLSearchParams(window.location.search).get("client");
+      setChatClientId(id);
+      if (!id) {
+        pushedHistoryRef.current = false;
+        onConversationClosed();
+      }
+    };
+    window.addEventListener("popstate", onPop);
+    return () => window.removeEventListener("popstate", onPop);
+  }, [isElevated, onConversationClosed]);
 
   // Message ciblé par le lien : on le met en surbrillance puis on l'oublie.
   const [highlightId, setHighlightId] = useState<string | null>(focusMsgId ?? null);
@@ -333,6 +453,8 @@ function MessagesTab({ initialClientId, focusMsgId }: { initialClientId?: string
   // Première page : les 15 messages les plus récents.
   // ⚡ Cache-first : si la conversation est déjà en mémoire, on l'affiche
   //    instantanément (pas de spinner) puis on revalide en arrière-plan.
+  const activeConvRef = useRef<string | null>(null);
+  activeConvRef.current = convClientId;
   const loadMessages = useCallback(async (clientId: string) => {
     const cached = chatCache.get(clientId);
     if (cached) {
@@ -340,12 +462,17 @@ function MessagesTab({ initialClientId, focusMsgId }: { initialClientId?: string
       setParticipants(cached.participants);
       setHasMore(cached.hasMore);
     } else {
+      // Jamais les messages de la conversation précédente sous le nom d'un autre sportif.
+      setMessages([]);
+      setParticipants({});
+      setHasMore(false);
       setChatLoading(true);
     }
     try {
       const res = await fetch(`/api/chat?clientId=${encodeURIComponent(clientId)}`);
       if (res.ok) {
         const data = await res.json();
+        if (activeConvRef.current !== clientId) return; // réponse d'une conversation déjà quittée
         const next: ConvCache = {
           messages: data.messages ?? [],
           participants: data.participants ?? {},
@@ -357,7 +484,7 @@ function MessagesTab({ initialClientId, focusMsgId }: { initialClientId?: string
         chatCache.set(clientId, next);
       }
     } catch { /* silencieux */ }
-    setChatLoading(false);
+    if (activeConvRef.current === clientId) setChatLoading(false);
   }, []);
 
   // Remonter : charge la page précédente (messages antérieurs au plus ancien affiché),
@@ -405,17 +532,6 @@ function MessagesTab({ initialClientId, focusMsgId }: { initialClientId?: string
     loadMessages(convClientId);   // messages (rapide)
     loadAvatars(convClientId);    // photos (en parallèle, hors chemin critique)
   }, [convClientId, loadMessages, loadAvatars]);
-
-  // Badge non-lus par sportif : au montage + après chaque changement de conversation
-  // (l'ouverture d'une conversation marque ses messages lus côté serveur → son badge
-  // doit retomber à 0 juste après).
-  useEffect(() => {
-    if (!isElevated) return;
-    fetch("/api/chat/unread")
-      .then(r => r.ok ? r.json() : null)
-      .then(d => { if (d?.byClient) setUnreadByClient(d.byClient); })
-      .catch(() => {});
-  }, [isElevated, convClientId, messages.length]);
 
   // Seed instantané des avatars déjà connus (cache module) dès que les
   // participants (ids) sont résolus → pas de clignotement au retour.
@@ -492,7 +608,7 @@ function MessagesTab({ initialClientId, focusMsgId }: { initialClientId?: string
     // ce qui masquait les onglets Messages/Santé/Bloc-notes en haut de page à l'ouverture.
     const scroller = scrollRef.current;
     if (scroller) scroller.scrollTop = scroller.scrollHeight;
-  }, [messages.length]);
+  }, [messages.length, convClientId]);
 
   // Lien « message urgent » depuis la vue d'ensemble : on amène le message ciblé
   // dans la fenêtre du chat (scroll du conteneur seulement) et on le surligne.
@@ -540,6 +656,7 @@ function MessagesTab({ initialClientId, focusMsgId }: { initialClientId?: string
         }).catch(() => {});
       }
       await loadMessages(convClientId);
+      if (isElevated) loadConversations();
       return true;
     } catch (e) {
       setNotifyDebug("Erreur réseau : " + (e as Error).message);
@@ -690,6 +807,8 @@ function MessagesTab({ initialClientId, focusMsgId }: { initialClientId?: string
 
   // ── Réaction (tapback) sur un message ──────────────────────────────────────
   const [reactingId, setReactingId] = useState<string | null>(null);
+  // Bulle touchée : affiche ses actions (au survol sur ordinateur), pour garder le fil lisible.
+  const [actionsId, setActionsId] = useState<string | null>(null);
 
   async function setReaction(id: string, reaction: string | null) {
     setReactingId(null);
@@ -701,49 +820,256 @@ function MessagesTab({ initialClientId, focusMsgId }: { initialClientId?: string
     }).catch(() => {});
   }
 
+  // Coach sur téléphone : la conversation occupe tout l'écran, comme une app de messagerie.
+  const viewport = useVisibleViewport();
+  const isPhone = useIsPhone();
+  const fullScreen = isElevated && isPhone && !!convClientId;
+  useEffect(() => {
+    if (!fullScreen) return;
+    document.body.style.overflow = "hidden";
+    return () => { document.body.style.overflow = ""; };
+  }, [fullScreen]);
+
+  // Sportif : la conversation remplit l'écran sous les onglets, saisie toujours visible.
+  const rootRef = useRef<HTMLDivElement>(null);
+  const [athleteTop, setAthleteTop] = useState<number | null>(null);
+  useLayoutEffect(() => {
+    if (isElevated || !rootRef.current) return;
+    setAthleteTop(rootRef.current.getBoundingClientRect().top + window.scrollY);
+  }, [isElevated]);
+  const athleteHeight = athleteTop !== null && viewport ? Math.max(360, viewport.height - athleteTop - 16) : undefined;
+
+  // Le champ grandit avec le message, jusqu'à sa hauteur max.
+  const inputRef = useRef<HTMLTextAreaElement>(null);
+  useLayoutEffect(() => {
+    const el = inputRef.current;
+    if (!el) return;
+    el.style.height = "auto";
+    el.style.height = `${el.scrollHeight + 2}px`;
+  }, [text]);
+
   // État d'attente coach sans client sélectionné
   if (isElevated && clientList.length === 0) return (
     <p className="rounded-xl bg-surface2 px-4 py-3 text-sm text-dim">Aucun sportif affecté.</p>
   );
 
-  return (
-    <div className="space-y-3">
-      {/* Sélecteur de conversation (coach/admin) — indépendant du profil actif */}
-      {isElevated && (
-        <div className="space-y-1.5">
-          <p className="text-[12px] font-semibold text-dim">Conversation avec :</p>
-          <div className="flex gap-2 overflow-x-auto pb-1">
-            {clientList.map(c => {
-              const unread = unreadByClient[c.id] ?? 0;
-              return (
-                <button
-                  key={c.id}
-                  onClick={() => { setChatClientId(c.id); window.scrollTo({ top: 0 }); }}
-                  className={`relative shrink-0 rounded-xl px-3.5 py-2 text-sm font-semibold transition ${
-                    c.id === chatClientId
-                      ? "bg-accent text-[#1a1500]"
-                      : "border border-line bg-surface2 text-dim"
-                  }`}
-                >
-                  {c.name || c.email}
-                  {unread > 0 && c.id !== chatClientId && (
-                    <span className="absolute -right-1.5 -top-1.5 flex h-4 min-w-4 items-center justify-center rounded-full bg-danger px-1 text-[10px] font-bold text-white">
-                      {unread > 9 ? "9+" : unread}
-                    </span>
-                  )}
-                </button>
-              );
-            })}
+  const renderMessage = (msg: ChatMessage, i: number) => {
+    // ── Messages système ──────────────────────────────────────────
+    if (msg.type === "broadcast") {
+      return (
+        <div key={msg.id} className="rounded-xl border border-violet-500/30 bg-violet-500/5 overflow-hidden">
+          <div className="flex items-center gap-2 border-b border-violet-500/20 px-3 py-2">
+            <span className="flex-1 text-[12px] font-semibold text-violet-400">Annonce de l&apos;équipe</span>
+            <span className="rounded-full border border-violet-500/30 bg-violet-500/15 px-2 py-0.5 text-[10px] font-semibold text-violet-400">Pour tous</span>
           </div>
+          <div className="px-3 py-2 text-[13.5px] text-ink">{msg.text}</div>
+          <div className="px-3 pb-2 text-[11px] text-dim">{msg.senderName} · {fmtTime(msg.createdAt)}</div>
+        </div>
+      );
+    }
+    if (msg.type === "plan_update") {
+      return (
+        <div key={msg.id} className="rounded-xl border border-indigo-500/30 bg-indigo-500/5 overflow-hidden">
+          <div className="flex items-center gap-2 border-b border-indigo-500/20 px-3 py-2">
+            <span className="text-[12px] font-semibold text-indigo-400">Programme mis à jour</span>
+          </div>
+          <div className="px-3 py-2 text-[13.5px] text-ink">{msg.text}</div>
+          <a
+            href="/plan"
+            className="mx-3 mb-3 flex items-center gap-1.5 rounded-lg border border-indigo-500/25 bg-indigo-500/10 px-3 py-2 text-[12px] font-semibold text-indigo-400"
+          >
+            ▶ Voir ma programmation
+          </a>
+          <div className="px-3 pb-2 text-[11px] text-dim">{fmtTime(msg.createdAt)}</div>
+        </div>
+      );
+    }
+
+    // ── Message normal ────────────────────────────────────────────
+    const isMe = msg.senderId === me?.id;
+    const isEditing = editingMsgId === msg.id;
+    const prev = messages[i - 1];
+    const startsGroup =
+      !prev || prev.type === "broadcast" || prev.type === "plan_update" || prev.senderId !== msg.senderId;
+    return (
+      <div
+        key={msg.id}
+        data-msg-id={msg.id}
+        className={`flex items-end gap-2 ${isMe ? "flex-row-reverse" : ""} ${startsGroup ? "mt-2" : ""} ${
+          highlightId === msg.id ? "rounded-2xl ring-2 ring-danger ring-offset-2 ring-offset-surface" : ""
+        }`}
+      >
+        <div
+          className={`group flex max-w-[78%] flex-col ${isMe ? "items-end" : "items-start"}`}
+          onClick={e => {
+            if ((e.target as HTMLElement).closest("button, a, audio, video, img, textarea")) return;
+            setActionsId(id => (id === msg.id ? null : msg.id));
+          }}
+        >
+        <div className={`relative rounded-2xl px-3.5 py-2.5 ${
+          msg.isUrgent
+            ? "border border-danger/60 bg-danger/25"
+            : isMe
+            ? "bg-accent"
+            : "border border-line bg-surface2"
+        }`}>
+          {/* Badge de réaction (tapback), accroché au coin bas de la bulle */}
+          {msg.reaction && (
+            <button
+              onClick={() => setReactingId(id => (id === msg.id ? null : msg.id))}
+              className={`absolute -bottom-2.5 ${isMe ? "-left-2" : "-right-2"} grid h-6 w-6 place-items-center rounded-full border-2 border-surface bg-surface2 text-[13px] shadow-sm`}
+            >{msg.reaction}</button>
+          )}
+          {msg.isUrgent && (
+            <p className="mb-1 text-[11px] font-bold text-danger">URGENCE</p>
+          )}
+          {/* Mode édition inline */}
+          {isEditing && !msg.isVoice ? (
+            <div className="space-y-1.5">
+              <textarea
+                value={editText}
+                onChange={e => setEditText(e.target.value)}
+                autoFocus
+                rows={3}
+                className="w-full resize-none rounded-lg border border-line bg-surface px-2.5 py-1.5 text-sm text-ink outline-none focus:border-accent"
+              />
+              <div className="flex gap-2">
+                <button onClick={() => saveEdit(msg.id)} className="rounded-lg bg-ok px-3 py-1 text-[12px] font-semibold text-[#06210a]">Enregistrer</button>
+                <button onClick={() => setEditingMsgId(null)} className="rounded-lg bg-surface2 px-3 py-1 text-[12px] text-dim">Annuler</button>
+              </div>
+            </div>
+          ) : msg.isVoice ? (
+            <VoicePlayer audioUrl={msg.audioUrl} messageId={msg.id} isMe={isMe} />
+          ) : msg.attachmentUrl ? (
+            <div>
+              {msg.attachmentType === "image" ? (
+                <img
+                  src={msg.attachmentUrl}
+                  alt="photo"
+                  className="max-w-[240px] rounded-xl cursor-pointer"
+                  style={{ maxHeight: 280, objectFit: "cover" }}
+                  onClick={() => setLightboxUrl(msg.attachmentUrl!)}
+                />
+              ) : (
+                <video
+                  src={msg.attachmentUrl}
+                  controls
+                  playsInline
+                  className="max-w-[240px] rounded-xl"
+                  style={{ maxHeight: 280 }}
+                />
+              )}
+              {msg.text && <p className={`mt-1.5 whitespace-pre-wrap text-sm ${isMe ? "text-[#1a1500]" : "text-ink"}`}>{msg.text}</p>}
+            </div>
+          ) : (
+            <p className={`whitespace-pre-wrap text-sm ${msg.isUrgent ? "text-white" : isMe ? "text-[#1a1500]" : "text-ink"}`}>{msg.text}</p>
+          )}
+          <p className={`mt-1 text-right text-[10px] ${msg.isUrgent ? "text-white/60" : isMe ? "text-[#1a1500]/50" : "text-dim"}`}>
+            {fmtTime(msg.createdAt)}
+            {msg.editedAt && <span className="ml-1 italic">modifié</span>}
+            {isMe && <span className="ml-1">{msg.isRead ? "✓✓" : "✓"}</span>}
+          </p>
+        </div>
+
+        {/* Actions (réagir pour tout le monde ; modifier/suppr. sur ses propres messages) */}
+        {!isEditing && (
+          <div className={`${actionsId === msg.id ? "flex" : "hidden md:group-hover:flex"} items-center gap-2 px-1 ${msg.reaction ? "mt-2.5" : "mt-0.5"} ${isMe ? "flex-row-reverse" : ""}`}>
+            {isMe && !msg.isVoice && (
+              <button
+                onClick={() => { setEditingMsgId(msg.id); setEditText(msg.text); }}
+                className="text-[11px] text-dim hover:text-ink"
+              >Modifier</button>
+            )}
+            {isMe && (
+              <button
+                onClick={() => deleteMsg(msg.id)}
+                className="text-[11px] text-dim hover:text-danger"
+              >Supprimer</button>
+            )}
+            <button
+              onClick={() => setReactingId(id => (id === msg.id ? null : msg.id))}
+              className="text-[11px] text-dim hover:text-ink"
+            >Réagir</button>
+          </div>
+        )}
+
+        {/* Picker de réaction inline */}
+        {reactingId === msg.id && (
+          <div className={`mt-1 flex gap-1 px-1 ${isMe ? "flex-row-reverse" : ""}`}>
+            {REACTION_EMOJIS.map(e => (
+              <button
+                key={e}
+                onClick={() => setReaction(msg.id, msg.reaction === e ? null : e)}
+                className={`grid h-8 w-8 place-items-center rounded-full border text-base transition ${
+                  msg.reaction === e ? "border-accent bg-accent/15" : "border-line bg-surface2"
+                }`}
+              >{e}</button>
+            ))}
+          </div>
+        )}
+        </div>
+      </div>
+    );
+  };
+
+  const conversationRows: ConversationRow[] = clientList.map(c => ({
+    clientId: c.id,
+    name: c.name || c.email,
+    unread: 0,
+    urgent: 0,
+    last: null,
+    ...conversations.find(x => x.clientId === c.id),
+  }));
+  const openRow = conversationRows.find(r => r.clientId === convClientId);
+  const headName = isElevated ? openRow?.name : participants.coach?.name || "Ton coach";
+  const headPhoto = isElevated
+    ? (convClientId ? avatarPhotos[convClientId] : undefined) ?? openRow?.photo
+    : (participants.coach ? avatarPhotos[participants.coach.id] ?? participants.coach.photo : undefined);
+
+  return (
+    <div
+      ref={rootRef}
+      className={isElevated
+        ? "md:ml-[calc(50%-min(590px,50vw-16px))] md:flex md:h-[calc(100dvh-230px)] md:min-h-[480px] md:w-[min(1180px,calc(100vw-32px))] md:overflow-hidden md:rounded-2xl md:border md:border-line"
+        : "flex flex-col overflow-hidden rounded-2xl border border-line bg-bg"}
+      style={!isElevated && athleteHeight ? { height: athleteHeight } : undefined}
+    >
+      {isElevated && (
+        <div className="md:w-[340px] md:shrink-0 md:overflow-y-auto md:border-r md:border-line md:p-2">
+          <ConversationList rows={conversationRows} selectedId={chatClientId} onOpen={openConversation} />
         </div>
       )}
 
-      {isElevated && chatLoading && (
-        <p className="py-4 text-center text-sm text-dim">Chargement…</p>
-      )}
+      {!convClientId ? (
+        <p className="hidden flex-1 place-items-center text-sm text-dim md:grid">Choisis une conversation.</p>
+      ) : (
+      <section
+        aria-label={`Conversation avec ${headName ?? "ton coach"}`}
+        className={`flex min-h-0 min-w-0 flex-1 flex-col bg-bg ${isElevated ? "max-md:fixed max-md:inset-x-0 max-md:z-40" : ""}`}
+        style={fullScreen && viewport ? { top: viewport.top, height: viewport.height } : undefined}
+      >
+      <header className="flex shrink-0 items-center gap-2.5 border-b border-line bg-surface px-3 py-2 max-md:pt-[max(env(safe-area-inset-top),0.5rem)]">
+        {isElevated && (
+          <button
+            onClick={closeConversation}
+            aria-label="Retour à la liste des conversations"
+            className="-ml-1 grid h-11 w-11 shrink-0 place-items-center rounded-xl md:hidden"
+          >
+            <svg aria-hidden width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M19 12H5M11 6l-6 6 6 6" /></svg>
+          </button>
+        )}
+        <ChatAvatar name={headName} photo={headPhoto} size={40} />
+        <div className="min-w-0">
+          <p className="truncate text-base font-black">{headName}</p>
+          {!isElevated && participants.coach?.name && <p className="text-xs text-dim">Ton coach</p>}
+        </div>
+      </header>
 
       {/* Bulles */}
-      <div ref={scrollRef} className="min-h-[280px] max-h-[52vh] overflow-y-auto space-y-2 rounded-2xl border border-line bg-surface p-3">
+      <div ref={scrollRef} className="relative min-h-0 flex-1 space-y-2 overflow-y-auto overscroll-contain p-3">
+        {chatLoading && (
+          <p className="py-4 text-center text-sm text-dim">Chargement…</p>
+        )}
         {messages.length === 0 && !chatLoading && (
           <p className="py-10 text-center text-sm text-dim">Aucun message. Dis bonjour</p>
         )}
@@ -756,232 +1082,80 @@ function MessagesTab({ initialClientId, focusMsgId }: { initialClientId?: string
             {loadingMore ? "Chargement…" : "↑ Voir les messages précédents"}
           </button>
         )}
-        {messages.map((msg, i) => {
-          // ── Messages système ──────────────────────────────────────────
-          if (msg.type === "broadcast") {
-            return (
-              <div key={msg.id} className="rounded-xl border border-violet-500/30 bg-violet-500/5 overflow-hidden">
-                <div className="flex items-center gap-2 border-b border-violet-500/20 px-3 py-2">
-                  <span className="flex-1 text-[12px] font-semibold text-violet-400">Annonce de l&apos;équipe</span>
-                  <span className="rounded-full border border-violet-500/30 bg-violet-500/15 px-2 py-0.5 text-[10px] font-semibold text-violet-400">Pour tous</span>
-                </div>
-                <div className="px-3 py-2 text-[13.5px] text-ink">{msg.text}</div>
-                <div className="px-3 pb-2 text-[11px] text-dim">{msg.senderName} · {fmtHour(msg.createdAt)}</div>
-              </div>
-            );
-          }
-          if (msg.type === "plan_update") {
-            return (
-              <div key={msg.id} className="rounded-xl border border-indigo-500/30 bg-indigo-500/5 overflow-hidden">
-                <div className="flex items-center gap-2 border-b border-indigo-500/20 px-3 py-2">
-                  <span className="text-[12px] font-semibold text-indigo-400">Programme mis à jour</span>
-                </div>
-                <div className="px-3 py-2 text-[13.5px] text-ink">{msg.text}</div>
-                <a
-                  href="/plan"
-                  className="mx-3 mb-3 flex items-center gap-1.5 rounded-lg border border-indigo-500/25 bg-indigo-500/10 px-3 py-2 text-[12px] font-semibold text-indigo-400"
-                >
-                  ▶ Voir ma programmation
-                </a>
-                <div className="px-3 pb-2 text-[11px] text-dim">{fmtHour(msg.createdAt)}</div>
-              </div>
-            );
-          }
-
-          // ── Message normal ────────────────────────────────────────────
-          const isMe = msg.senderId === me?.id;
-          const isEditing = editingMsgId === msg.id;
-          // Avatar/nom résolus depuis les participants renvoyés par le serveur
-          const sender = msg.senderId === participants.coach?.id
-            ? participants.coach
-            : msg.senderId === participants.client?.id
-            ? participants.client
-            : undefined;
-          const senderPhoto = (sender ? avatarPhotos[sender.id] : undefined) ?? sender?.photo;
-          const senderName = sender?.name || msg.senderName || (isMe ? (me?.name || "Moi") : "Coach");
-          // Avatar affiché seulement en tête d'une série de messages du même expéditeur
-          const prev = messages[i - 1];
-          const showAvatar =
-            !prev || prev.type === "broadcast" || prev.type === "plan_update" || prev.senderId !== msg.senderId;
-          return (
-            <div
-              key={msg.id}
-              data-msg-id={msg.id}
-              className={`flex items-end gap-2 ${isMe ? "flex-row-reverse" : ""} ${showAvatar ? "mt-2" : ""} ${
-                highlightId === msg.id ? "rounded-2xl ring-2 ring-danger ring-offset-2 ring-offset-surface" : ""
-              }`}
-            >
-              {showAvatar ? (
-                <Avatar name={senderName} photo={senderPhoto} size={26} />
-              ) : (
-                <div className="w-[26px] shrink-0" aria-hidden />
-              )}
-              <div className={`flex max-w-[74%] flex-col ${isMe ? "items-end" : "items-start"}`}>
-              <div className={`relative rounded-2xl px-3.5 py-2.5 ${
-                msg.isUrgent
-                  ? "border border-danger/60 bg-danger/25"
-                  : isMe
-                  ? "bg-accent"
-                  : "border border-line bg-surface2"
-              }`}>
-                {/* Badge de réaction (tapback), accroché au coin bas de la bulle */}
-                {msg.reaction && (
-                  <button
-                    onClick={() => setReactingId(id => (id === msg.id ? null : msg.id))}
-                    className={`absolute -bottom-2.5 ${isMe ? "-left-2" : "-right-2"} grid h-6 w-6 place-items-center rounded-full border-2 border-surface bg-surface2 text-[13px] shadow-sm`}
-                  >{msg.reaction}</button>
-                )}
-                {!isMe && showAvatar && (
-                  <p className="mb-1 text-[11px] font-semibold text-dim">{senderName}</p>
-                )}
-                {msg.isUrgent && (
-                  <p className="mb-1 text-[11px] font-bold text-danger">URGENCE</p>
-                )}
-                {/* Mode édition inline */}
-                {isEditing && !msg.isVoice ? (
-                  <div className="space-y-1.5">
-                    <textarea
-                      value={editText}
-                      onChange={e => setEditText(e.target.value)}
-                      autoFocus
-                      rows={3}
-                      className="w-full resize-none rounded-lg border border-line bg-surface px-2.5 py-1.5 text-sm text-ink outline-none focus:border-accent"
-                    />
-                    <div className="flex gap-2">
-                      <button onClick={() => saveEdit(msg.id)} className="rounded-lg bg-ok px-3 py-1 text-[12px] font-semibold text-[#06210a]">Enregistrer</button>
-                      <button onClick={() => setEditingMsgId(null)} className="rounded-lg bg-surface2 px-3 py-1 text-[12px] text-dim">Annuler</button>
-                    </div>
-                  </div>
-                ) : msg.isVoice ? (
-                  <VoicePlayer audioUrl={msg.audioUrl} messageId={msg.id} isMe={isMe} />
-                ) : msg.attachmentUrl ? (
-                  <div>
-                    {msg.attachmentType === "image" ? (
-                      <img
-                        src={msg.attachmentUrl}
-                        alt="photo"
-                        className="max-w-[240px] rounded-xl cursor-pointer"
-                        style={{ maxHeight: 280, objectFit: "cover" }}
-                        onClick={() => setLightboxUrl(msg.attachmentUrl!)}
-                      />
-                    ) : (
-                      <video
-                        src={msg.attachmentUrl}
-                        controls
-                        playsInline
-                        className="max-w-[240px] rounded-xl"
-                        style={{ maxHeight: 280 }}
-                      />
-                    )}
-                    {msg.text && <p className={`mt-1.5 whitespace-pre-wrap text-sm ${isMe ? "text-[#1a1500]" : "text-ink"}`}>{msg.text}</p>}
-                  </div>
-                ) : (
-                  <p className={`whitespace-pre-wrap text-sm ${msg.isUrgent ? "text-white" : isMe ? "text-[#1a1500]" : "text-ink"}`}>{msg.text}</p>
-                )}
-                <p className={`mt-1 text-right text-[10px] ${msg.isUrgent ? "text-white/60" : isMe ? "text-[#1a1500]/50" : "text-dim"}`}>
-                  {fmtHour(msg.createdAt)}
-                  {msg.editedAt && <span className="ml-1 italic">modifié</span>}
-                  {isMe && <span className="ml-1">{msg.isRead ? "✓✓" : "✓"}</span>}
-                </p>
-              </div>
-
-              {/* Actions (réagir pour tout le monde ; modifier/suppr. sur ses propres messages) */}
-              {!isEditing && (
-                <div className={`flex items-center gap-2 px-1 ${msg.reaction ? "mt-2.5" : "mt-0.5"} ${isMe ? "flex-row-reverse" : ""}`}>
-                  {isMe && !msg.isVoice && (
-                    <button
-                      onClick={() => { setEditingMsgId(msg.id); setEditText(msg.text); }}
-                      className="text-[11px] text-dim hover:text-ink"
-                    >Modifier</button>
-                  )}
-                  {isMe && (
-                    <button
-                      onClick={() => deleteMsg(msg.id)}
-                      className="text-[11px] text-dim hover:text-danger"
-                    >Supprimer</button>
-                  )}
-                  <button
-                    onClick={() => setReactingId(id => (id === msg.id ? null : msg.id))}
-                    className="text-[11px] text-dim hover:text-ink"
-                  >Réagir</button>
-                </div>
-              )}
-
-              {/* Picker de réaction inline */}
-              {reactingId === msg.id && (
-                <div className={`mt-1 flex gap-1 px-1 ${isMe ? "flex-row-reverse" : ""}`}>
-                  {REACTION_EMOJIS.map(e => (
-                    <button
-                      key={e}
-                      onClick={() => setReaction(msg.id, msg.reaction === e ? null : e)}
-                      className={`grid h-8 w-8 place-items-center rounded-full border text-base transition ${
-                        msg.reaction === e ? "border-accent bg-accent/15" : "border-line bg-surface2"
-                      }`}
-                    >{e}</button>
-                  ))}
-                </div>
-              )}
-              </div>
-            </div>
-          );
-        })}
+        {messages.map((msg, i) => (
+          <Fragment key={msg.id}>
+            {(i === 0 || fmtDay(messages[i - 1].createdAt) !== fmtDay(msg.createdAt)) && (
+              <p className="mx-auto my-2 w-fit rounded-full bg-surface2 px-3 py-1 text-xs font-bold text-dim">{fmtDay(msg.createdAt)}</p>
+            )}
+            {renderMessage(msg, i)}
+          </Fragment>
+        ))}
         <div ref={bottomRef} />
       </div>
 
       {/* Zone de saisie */}
-      <div className="rounded-2xl border border-line bg-surface p-3 space-y-2.5">
+      <div className="shrink-0 border-t border-line bg-surface px-2.5 pb-[max(env(safe-area-inset-bottom),0.625rem)] pt-2">
+        {isUrgent && !recording && (
+          <p className="px-2 pb-1.5 text-xs font-bold text-danger">Message urgent : ton coach reçoit une alerte.</p>
+        )}
         {recording ? (
-          <div className="flex items-center gap-3 rounded-xl border border-danger/30 bg-danger/10 px-4 py-3">
+          <div className="flex items-center gap-3 rounded-full border border-danger/30 bg-danger/10 py-1 pl-4 pr-1">
             <span className="h-2.5 w-2.5 shrink-0 animate-pulse rounded-full bg-danger" />
             <span className="flex-1 text-sm font-semibold text-danger">Enregistrement… {fmtSec(recTime)}</span>
-            <button onClick={stopRecording} className="rounded-lg bg-danger px-3 py-1.5 text-sm font-bold text-white">
-              Envoyer ↑
+            <button onClick={stopRecording} className="min-h-11 rounded-full bg-danger px-4 text-sm font-bold text-white">
+              Envoyer
             </button>
           </div>
         ) : (
-          <>
-            <div className="flex gap-2">
-              <textarea
-                value={text}
-                onChange={e => setText(e.target.value)}
-                onKeyDown={e => { if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); send(); } }}
-                placeholder="Écris ton message…"
-                rows={2}
-                className="flex-1 resize-none rounded-xl border border-line bg-surface2 px-3 py-2 text-sm outline-none focus:border-accent"
-              />
-              <div className="flex shrink-0 flex-col gap-1.5">
-                <button onClick={startRecording} title="Message vocal"
-                  className="grid h-10 w-10 place-items-center rounded-xl border border-line bg-surface2 text-dim" aria-label="Message vocal"><svg aria-hidden width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><rect x="9" y="3" width="6" height="11" rx="3" /><path d="M5 11a7 7 0 0 0 14 0M12 18v3" /></svg></button>
-                <button
-                  onClick={() => fileInputRef.current?.click()}
-                  disabled={uploading}
-                  title="Envoyer une photo ou vidéo"
-                  className="grid h-10 w-10 place-items-center rounded-xl border border-line bg-surface2 text-lg disabled:opacity-40"
-                >{uploading ? "…" : <svg aria-hidden width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M20 12l-8 8a5 5 0 0 1-7-7l9-9a3.5 3.5 0 0 1 5 5l-9 9a2 2 0 0 1-3-3l8-8" /></svg>}</button>
-                <button onClick={send} disabled={!text.trim()}
-                  className="grid h-10 w-10 place-items-center rounded-xl bg-accent text-[#1a1500] disabled:opacity-40" aria-label="Envoyer"><svg aria-hidden width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.6" strokeLinecap="round" strokeLinejoin="round"><path d="M12 19V5M5 12l7-7 7 7" /></svg></button>
-              </div>
-            </div>
-            <input
-              ref={fileInputRef}
-              type="file"
-              accept="image/*,video/*"
-              className="hidden"
-              onChange={handleFileChange}
+          <div className="flex items-end gap-1">
+            <IconButton
+              label="Joindre une photo ou une vidéo"
+              onClick={() => fileInputRef.current?.click()}
+              disabled={uploading}
+              tone="text-dim"
+            >
+              {uploading ? "…" : <svg aria-hidden width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M20 12l-8 8a5 5 0 0 1-7-7l9-9a3.5 3.5 0 0 1 5 5l-9 9a2 2 0 0 1-3-3l8-8" /></svg>}
+            </IconButton>
+            {!isElevated && (
+              <IconButton
+                label="Marquer comme urgence"
+                onClick={() => setIsUrgent(u => !u)}
+                pressed={isUrgent}
+                tone={isUrgent ? "bg-danger text-white" : "text-danger"}
+              >
+                <svg aria-hidden width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M12 3L2 20h20zM12 10v4M12 17.5v.01" /></svg>
+              </IconButton>
+            )}
+            <textarea
+              ref={inputRef}
+              value={text}
+              onChange={e => setText(e.target.value)}
+              onKeyDown={e => { if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); send(); } }}
+              placeholder={isElevated ? `Écrire à ${headName?.split(" ")[0] ?? "ton sportif"}` : "Écrire à ton coach"}
+              aria-label="Ton message"
+              rows={1}
+              className={`mx-1 !min-h-11 max-h-[120px] min-w-0 flex-1 !resize-none !rounded-[22px] !px-4 !py-2.5 outline-none ${
+                isUrgent ? "!border-danger" : "focus:!border-accent"
+              }`}
             />
-          </>
+            {text.trim() ? (
+              <IconButton label="Envoyer" onClick={send} tone="bg-gradient-to-br from-[#ffc53d] to-[#ff9f00] text-[#1a1500]">
+                <svg aria-hidden width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.6" strokeLinecap="round" strokeLinejoin="round"><path d="M12 19V5M5 12l7-7 7 7" /></svg>
+              </IconButton>
+            ) : (
+              <IconButton label="Enregistrer un message vocal" onClick={startRecording} tone="bg-gradient-to-br from-[#ffc53d] to-[#ff9f00] text-[#1a1500]">
+                <svg aria-hidden width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round"><rect x="9" y="3" width="6" height="11" rx="3" /><path d="M5 11a7 7 0 0 0 14 0M12 18v3" /></svg>
+              </IconButton>
+            )}
+          </div>
         )}
-        <button
-          onClick={() => setIsUrgent(u => !u)}
-          className={`flex w-full items-center gap-2 rounded-xl px-3 py-2 text-sm font-semibold transition ${
-            isUrgent ? "border border-danger/40 bg-danger/10 text-danger" : "bg-surface2 text-dim"
-          }`}
-        >
-          <span className={`h-3.5 w-3.5 shrink-0 rounded-full border-2 transition ${
-            isUrgent ? "border-danger bg-danger" : "border-dim bg-transparent"
-          }`} />
-          Marquer comme urgence
-        </button>
+        <input
+          ref={fileInputRef}
+          type="file"
+          accept="image/*,video/*"
+          className="hidden"
+          onChange={handleFileChange}
+        />
       </div>
 
       {/* Diagnostic notif (disparaît après 8s) */}
@@ -1006,6 +1180,8 @@ function MessagesTab({ initialClientId, focusMsgId }: { initialClientId?: string
             onClick={e => e.stopPropagation()}
           />
         </div>
+      )}
+      </section>
       )}
     </div>
   );
@@ -1489,6 +1665,11 @@ export default function FollowupPage() {
     if (client || msg) { setDeepLink({ client, msg }); setTab("messages"); }
   }, []);
   const [unreadCount, setUnreadCount] = useState(0);
+  const [unreadRefresh, setUnreadRefresh] = useState(0);
+  const onConversationClosed = useCallback(() => {
+    setDeepLink({});
+    setUnreadRefresh(n => n + 1);
+  }, []);
 
   // Ouvre TOUJOURS la page en haut (onglets Messages/Santé/Bloc-notes visibles),
   // jamais scrollée dans le chat comme avant. Sans le `scrollRestoration = "manual"`,
@@ -1510,7 +1691,7 @@ export default function FollowupPage() {
       .then(d => { if (!cancelled) setUnreadCount(d.count ?? 0); })
       .catch(() => {});
     return () => { cancelled = true; };
-  }, [tab]);
+  }, [tab, unreadRefresh]);
 
   if (loading) return <p className="py-10 text-center text-dim">Chargement…</p>;
 
@@ -1542,7 +1723,7 @@ export default function FollowupPage() {
         ))}
       </div>
 
-      {tab === "messages" && <MessagesTab initialClientId={deepLink.client} focusMsgId={deepLink.msg} />}
+      {tab === "messages" && <MessagesTab initialClientId={deepLink.client} focusMsgId={deepLink.msg} onConversationClosed={onConversationClosed} />}
       {tab === "sante"    && <SanteTab />}
       {tab === "notes"    && <BlocNotesTab />}
     </div>

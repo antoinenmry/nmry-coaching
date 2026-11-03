@@ -461,14 +461,19 @@ sportif → re-upsert du blob entier à chaque envoi → **contamination croisé
     (l'accueil ne lit plus l'ancien `app_state.data.messages`).
 - **Helpers** : `lib/chat.ts` → `insertChatMessage`, `rowToMessage`, `getCoachOf`.
   Utilisés aussi par `/api/broadcasts` (`type:'broadcast'`) et `/api/plan/notify` (`type:'plan_update'`).
+- **Interface façon messagerie** : le coach voit `ConversationList` (bloc « À traiter » : urgences puis
+  non-lus, puis tous les sportifs ; données via `GET /api/chat/conversations`, à jour en Realtime). Toucher une
+  ligne ouvre la conversation en plein écran sur téléphone (`?client=<id>` dans l'historique : le retour système
+  revient à la liste), à droite de la liste sur ordinateur (≥ 768 px). Le sportif arrive directement sur sa
+  conversation. Actions d'une bulle (Réagir, Modifier, Supprimer) : au toucher, au survol sur ordinateur.
 - **Front** (`MessagesTab` dans `/followup`) : fetch via API, **avatars chargés séparément** des
-  messages (photo réelle via `/api/chat/avatars` ou initiales colorées en attendant), groupement
-  des messages consécutifs (avatar/nom en tête de série seulement).
+  messages (photo réelle via `/api/chat/avatars` ou initiales colorées en attendant, dans l'en-tête
+  de la conversation), groupement des messages consécutifs et séparateurs de jour.
   **Pagination** : 15 derniers + bouton « Voir les messages précédents » (conserve la position de
   scroll). **Vocaux chargés à la demande** : `VoicePlayer` récupère l'audio via `/api/chat/audio`
   au 1er play (indicateur ⏳), garde le chemin direct si `audioUrl` déjà présent. Urgent (bandeau
-  rouge + email), édition/suppression : inchangés. **Horodatage** (`fmtHour`) : heure seule
-  aujourd'hui, « Hier, HH:MM » la veille, « 11 juin, HH:MM » au-delà.
+  rouge + email), édition/suppression : inchangés. **Horodatage** : heure dans la bulle (`fmtTime`), jour dans
+  le séparateur (`fmtDay` : Aujourd'hui, Hier, 11 juin).
 - ⚡ **Realtime** : `MessagesTab` s'abonne aux `postgres_changes` de `chat_messages` filtrés
   `client_id=eq.<conversation active>` (INSERT/UPDATE/DELETE) → messages **en direct** sans
   recharger, accusés de lecture ✓✓ live. Isolation : un seul `client_id` par canal + RLS
@@ -526,6 +531,7 @@ pas le blob `app_state` entier de tout le monde.
 | `/api/templates` | GET/PUT | Templates coach/admin | requireCoach |
 | `/api/chat` | GET | Messages d'une conversation + participants (marque lus) | auth + ownership/coach |
 | `/api/chat` | POST | Envoyer message (texte/vocal) + push | auth + ownership/coach |
+| `/api/chat/conversations` | GET | Liste du coach : dernier message, non-lus, urgences, photo par sportif | requireRole coach/admin |
 | `/api/chat/[id]` | PATCH/DELETE | Éditer/supprimer un message | auth + auteur (ou admin) |
 | `/api/chat/audio` | GET | Audio d'un message vocal, à la demande (au play) | auth + sportif/coach/admin de la conv |
 | `/api/chat/avatars` | GET | Photos des participants, hors chemin critique | auth + sportif/coach/admin de la conv |
