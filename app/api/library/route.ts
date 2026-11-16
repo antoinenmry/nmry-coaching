@@ -23,9 +23,9 @@ export async function PUT(req: NextRequest) {
   const cur = (current?.data ?? {}) as Record<string, unknown>;
   const next = body as Record<string, unknown>;
   const norm = (v: unknown) => JSON.stringify(v ?? null) === "{}" ? "null" : JSON.stringify(Array.isArray(v) && v.length === 0 ? null : v ?? null);
-  for (const key of ["announcements", "sports", "carousel"] as const) {
+  for (const key of ["announcements", "sports", "carousel", "apps"] as const) {
     if (norm(cur[key]) !== norm(next[key]) && !canEditAnnouncements(caller.user.email)) {
-      return NextResponse.json({ error: "Annonces, sports et carrousel réservés à Simon et Antoine" }, { status: 403 });
+      return NextResponse.json({ error: "Annonces, sports, carrousel et applis réservés à Simon et Antoine" }, { status: 403 });
     }
   }
 

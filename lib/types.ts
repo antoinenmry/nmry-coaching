@@ -316,6 +316,17 @@ export interface ExerciseLibrary {
   sports?: string[];            // sports proposés dans le profil (éditeurs : Simon et Antoine) ; absent = liste par défaut
   announcements?: Announcement[]; // cartes d'annonce du carrousel de l'accueil (créées par le coach, visibles par tous)
   cardIcons?: Record<string, string>; // href → emoji ou URL Storage (icône personnalisée des cartes d'accueil, admin uniquement)
+  apps?: AppShowcase[];         // page « Nos applis » (éditeurs : Simon et Antoine) ; absent = liste par défaut (lib/apps.ts)
+}
+
+/** Une appli de l'équipe présentée dans « Nos applis ». */
+export interface AppShowcase {
+  id: string;
+  name: string;
+  tagline: string;               // description courte
+  status: "soon" | "available";
+  url?: string;                  // App Store, site… (https uniquement)
+  icon?: string;                 // adresse de l'icône (https uniquement)
 }
 
 // ---- Templates (Séances types & Semaines types) — visibles coach/admin seulement ----
@@ -423,6 +434,7 @@ export interface NotifPrefs {
   newPlan: boolean;         // nouveau programme publié par le coach (sportif uniquement)
   urgentMessage: boolean;   // message urgent d'un sportif (coach uniquement)
   newInjury: boolean;       // blessure déclarée par un sportif (coach uniquement)
+  newVacation?: boolean;    // un sportif annonce des vacances (coach uniquement, activé par défaut)
   goalReminder: boolean;    // rappel J-7 / J-1 avant objectif (sportif uniquement)
   sessionReminder: boolean; // rappel séance du jour à 7h (sportif uniquement)
 }

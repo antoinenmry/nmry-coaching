@@ -85,6 +85,7 @@ html[data-theme="aurora"] { background: #060a14; }
 [data-theme="aurora"] :is(.rounded-3xl, .rounded-t-3xl).bg-surface { background: rgba(10, 14, 28, 0.9); }
 [data-theme="aurora"] .text-danger { color: #ffa198; }
 [data-theme="aurora"] .text-ok { color: #86d58a; }
+[data-theme="light"] .text-orange-400 { color: #c2410c; }
 [data-theme="aurora"] .text-accent2 { color: #7cc3f8; }
 
 html, body {

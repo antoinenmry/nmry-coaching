@@ -6,6 +6,7 @@ const DEFAULTS: NotifPrefs = {
   newPlan: true,
   urgentMessage: true,
   newInjury: true,
+  newVacation: true,
   goalReminder: true,
   sessionReminder: true,
 };

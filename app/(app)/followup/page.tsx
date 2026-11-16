@@ -21,6 +21,14 @@ const chatCache = new Map<string, ConvCache>();
 // Emojis de réaction (tapback) proposés sur un message : pouce en l'air, pouce en bas, cœur, rire.
 const REACTION_EMOJIS = ["👍", "👎", "❤️", "😂"];
 
+// Emojis proposés dans la barre de saisie (les claviers d'ordinateur n'en ont pas).
+const COMPOSER_EMOJIS = [
+  "💪", "🔥", "👍", "👏", "🙏", "✅", "❌", "💯",
+  "😀", "😅", "😂", "😊", "😍", "😎", "🤔", "😢",
+  "😴", "🤕", "🤒", "🥵", "🥶", "😤", "🤯", "❤️",
+  "🏋️", "🏃", "🚴", "🏊", "🧘", "🏆", "🥇", "⏱️",
+];
+
 // Cache des avatars par personne (id → photo base64). Indépendant des messages :
 // les photos (parfois lourdes) sont chargées hors du chemin critique via
 // /api/chat/avatars, et réutilisées d'une conversation à l'autre (instantané).
@@ -589,6 +597,7 @@ function MessagesTab({ initialClientId, focusMsgId, onConversationClosed }: {
 
   const [text, setText] = useState("");
   const [isUrgent, setIsUrgent] = useState(false);
+  const [emojiOpen, setEmojiOpen] = useState(false);
   const [notifyDebug, setNotifyDebug] = useState<string | null>(null);
   const [recording, setRecording] = useState(false);
   const [recTime, setRecTime] = useState(0);
@@ -665,12 +674,24 @@ function MessagesTab({ initialClientId, focusMsgId, onConversationClosed }: {
     }
   }
 
+  function insertEmoji(emoji: string) {
+    const el = inputRef.current;
+    const start = el?.selectionStart ?? text.length;
+    const end = el?.selectionEnd ?? text.length;
+    setText(t => t.slice(0, start) + emoji + t.slice(end));
+    requestAnimationFrame(() => {
+      const pos = start + emoji.length;
+      inputRef.current?.setSelectionRange(pos, pos);
+    });
+  }
+
   async function send() {
     if (!text.trim() || !me) return;
     const msgText = text.trim();
     setText("");
     const urgent = isUrgent;
     setIsUrgent(false);
+    setEmojiOpen(false);
     await postMessage({ text: msgText, isUrgent: urgent });
   }
 
@@ -1096,7 +1117,24 @@ function MessagesTab({ initialClientId, focusMsgId, onConversationClosed }: {
       {/* Zone de saisie */}
       <div className="shrink-0 border-t border-line bg-surface px-2.5 pb-[max(env(safe-area-inset-bottom),0.625rem)] pt-2">
         {isUrgent && !recording && (
-          <p className="px-2 pb-1.5 text-xs font-bold text-danger">Message urgent : ton coach reçoit une alerte.</p>
+          <p className="px-2 pb-1.5 text-xs font-bold text-danger">
+            Message urgent : {isElevated ? "ton sportif reçoit une alerte." : "ton coach reçoit une alerte par mail."}
+          </p>
+        )}
+        {emojiOpen && !recording && (
+          <div role="group" aria-label="Emojis" className="mb-2 grid grid-cols-8 gap-0.5 rounded-2xl bg-surface2 p-1.5">
+            {COMPOSER_EMOJIS.map(e => (
+              <button
+                key={e}
+                type="button"
+                onClick={() => insertEmoji(e)}
+                aria-label={`Ajouter ${e}`}
+                className="grid h-10 place-items-center rounded-xl text-[22px] transition hover:bg-surface active:scale-90"
+              >
+                {e}
+              </button>
+            ))}
+          </div>
         )}
         {recording ? (
           <div className="flex items-center gap-3 rounded-full border border-danger/30 bg-danger/10 py-1 pl-4 pr-1">
@@ -1116,16 +1154,15 @@ function MessagesTab({ initialClientId, focusMsgId, onConversationClosed }: {
             >
               {uploading ? "…" : <svg aria-hidden width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M20 12l-8 8a5 5 0 0 1-7-7l9-9a3.5 3.5 0 0 1 5 5l-9 9a2 2 0 0 1-3-3l8-8" /></svg>}
             </IconButton>
-            {!isElevated && (
-              <IconButton
-                label="Marquer comme urgence"
-                onClick={() => setIsUrgent(u => !u)}
-                pressed={isUrgent}
-                tone={isUrgent ? "bg-danger text-white" : "text-danger"}
-              >
-                <svg aria-hidden width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M12 3L2 20h20zM12 10v4M12 17.5v.01" /></svg>
-              </IconButton>
-            )}
+            <IconButton
+              label="Marquer comme urgence"
+              onClick={() => setIsUrgent(u => !u)}
+              pressed={isUrgent}
+              tone={isUrgent ? "bg-danger text-white" : "text-danger"}
+            >
+              <svg aria-hidden width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M12 3L2 20h20zM12 10v4M12 17.5v.01" /></svg>
+            </IconButton>
+            <div className="relative mx-1 flex min-w-0 flex-1">
             <textarea
               ref={inputRef}
               value={text}
@@ -1134,10 +1171,20 @@ function MessagesTab({ initialClientId, focusMsgId, onConversationClosed }: {
               placeholder={isElevated ? `Écrire à ${headName?.split(" ")[0] ?? "ton sportif"}` : "Écrire à ton coach"}
               aria-label="Ton message"
               rows={1}
-              className={`mx-1 !min-h-11 max-h-[120px] min-w-0 flex-1 !resize-none !rounded-[22px] !px-4 !py-2.5 outline-none ${
+              className={`!min-h-11 max-h-[120px] w-full !resize-none !rounded-[22px] !py-2.5 !pl-11 !pr-4 outline-none ${
                 isUrgent ? "!border-danger" : "focus:!border-accent"
               }`}
             />
+            <button
+              type="button"
+              onClick={() => setEmojiOpen(o => !o)}
+              aria-label={emojiOpen ? "Fermer les emojis" : "Ajouter un emoji"}
+              aria-expanded={emojiOpen}
+              className={`absolute bottom-0 left-0 grid h-11 w-11 place-items-center rounded-full ${emojiOpen ? "text-accent" : "text-dim"}`}
+            >
+              <svg aria-hidden width="21" height="21" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="9" /><path d="M8.5 14.5a4.5 4.5 0 0 0 7 0M9 9.5h.01M15 9.5h.01" /></svg>
+            </button>
+            </div>
             {text.trim() ? (
               <IconButton label="Envoyer" onClick={send} tone="bg-gradient-to-br from-[#ffc53d] to-[#ff9f00] text-[#1a1500]">
                 <svg aria-hidden width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.6" strokeLinecap="round" strokeLinejoin="round"><path d="M12 19V5M5 12l7-7 7 7" /></svg>

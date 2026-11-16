@@ -181,6 +181,16 @@ export default function Dashboard() {
     (activeUserId && activeUserId !== me?.id
       ? activeProfile?.name || activeProfile?.email || "Sportif"
       : me?.name || me?.email || "Moi");
+  // Tuile Programmation : vacances en cours du profil affiché.
+  const viewedProfile = activeUserId && activeUserId !== me?.id ? activeProfile : me;
+  const vacationLabel = (() => {
+    const vs = viewedProfile?.vacation_start;
+    const ve = viewedProfile?.vacation_end;
+    if (!vs || today < vs || (ve && today > ve)) return null;
+    return ve
+      ? `🌴 En vacances jusqu'au ${new Date(ve + "T00:00:00").toLocaleDateString("fr-FR", { day: "numeric", month: "short" })}`
+      : "🌴 En vacances";
+  })();
   // Tirage fait une fois par affichage de l'accueil → un record différent à chaque retour.
   const [recordSeed, setRecordSeed] = useState(0);
   useEffect(() => { setRecordSeed(Math.random()); }, []); // après montage : pas d'écart SSR / client
@@ -382,6 +392,8 @@ export default function Dashboard() {
           const title = isProfile ? displayName : c.title;
           const subtitle = isProfile
             ? "Mon profil"
+            : c.href === "/plan" && vacationLabel
+              ? vacationLabel
             : c.href === "/goals"
               ? (nextGoal ? `${countdownLabel(nextGoal.date)} · ${nextGoal.competition}` : null)
               : cardSubtitle(getCardInfo(c.href, state, library, today, recordSeed));

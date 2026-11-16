@@ -1,6 +1,12 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
 import { createAdminClient } from "@/lib/supabase/admin";
+import { sendPushToUser } from "@/lib/push";
+import { getUserNotifPrefs } from "@/lib/notifPrefs";
+import { getCoachOf } from "@/lib/chat";
+
+const shortDate = (iso: string) =>
+  new Date(iso + "T00:00:00").toLocaleDateString("fr-FR", { day: "numeric", month: "short", timeZone: "Europe/Paris" });
 
 /**
  * PATCH /api/me/vacation
@@ -33,6 +39,12 @@ export async function PATCH(req: NextRequest) {
   }
 
   const admin = createAdminClient();
+  const { data: before } = await admin
+    .from("profiles")
+    .select("name, role, vacation_start, vacation_end")
+    .eq("id", user.id)
+    .maybeSingle();
+
   const { error } = await admin
     .from("profiles")
     .update({
@@ -44,6 +56,23 @@ export async function PATCH(req: NextRequest) {
   if (error) {
     console.error("[me/vacation] error:", error);
     return NextResponse.json({ error: "Erreur interne" }, { status: 500 });
+  }
+
+  // Vacances annoncées ou modifiées par un sportif : son coach est prévenu (une seule fois par changement).
+  const changed =
+    !!vacationStart &&
+    (before?.vacation_start !== vacationStart || (before?.vacation_end ?? null) !== (vacationEnd ?? null));
+  if (changed && before?.role === "client") {
+    const coachId = await getCoachOf(admin, user.id);
+    if (coachId && (await getUserNotifPrefs(coachId)).newVacation !== false) {
+      await sendPushToUser(coachId, {
+        title: `🌴 Vacances — ${before.name || "Un sportif"}`,
+        body: vacationEnd
+          ? `Du ${shortDate(vacationStart)} au ${shortDate(vacationEnd)}`
+          : `À partir du ${shortDate(vacationStart)}`,
+        url: "/overview?tab=vacances",
+      }).catch(() => {});
+    }
   }
 
   return NextResponse.json({ ok: true, vacationStart: vacationStart ?? null, vacationEnd: vacationEnd ?? null });

@@ -262,6 +262,37 @@ export default function PlanPage() {
         })()}
       </div>
 
+      {/* Vacances en cours ou à venir du profil affiché : bandeau bien visible */}
+      {vacationStart && (!vacationEnd || vacationEnd >= todayKey) && (() => {
+        const current = vacationStart <= todayKey;
+        const viewed = activeUserId !== me?.id ? clients.find((c) => c.id === activeUserId) : null;
+        const who = viewed ? (viewed.name || viewed.email).split(" ")[0] : null;
+        const title = current
+          ? (who ? `${who} est en vacances` : "Tu es en vacances")
+          : (who ? `${who} part en vacances` : "Vacances prévues");
+        const detail = current
+          ? (vacationEnd ? `Jusqu'au ${longDate(vacationEnd)}` : "Sans date de retour")
+          : (vacationEnd ? `Du ${longDate(vacationStart)} au ${longDate(vacationEnd)}` : `À partir du ${longDate(vacationStart)}`);
+        const body = (
+          <>
+            <span aria-hidden className="text-2xl leading-none">🌴</span>
+            <span className="min-w-0 flex-1">
+              <span className="block font-black text-orange-400">{title}</span>
+              <span className="block text-[13px] text-ink/80">{detail}</span>
+            </span>
+          </>
+        );
+        const box = "mb-3.5 flex w-full items-center gap-3 rounded-2xl border border-orange-400/70 bg-orange-500/15 px-4 py-3 text-left";
+        return isCoach ? (
+          <div className={box}>{body}</div>
+        ) : (
+          <button onClick={() => setVacationOpen(true)} className={box}>
+            {body}
+            <span className="shrink-0 text-xs font-bold text-orange-400 underline underline-offset-2">Modifier</span>
+          </button>
+        );
+      })()}
+
       {/* Zone "À placer" — masquée quand elle est vide (le coach garde ses actions) */}
       {(isCoach || bank.length > 0) && (
       <div
@@ -435,7 +466,7 @@ export default function PlanPage() {
         )}
         {vacationStart && (
           <p className="flex items-center gap-1.5 text-xs text-dim">
-            <span className="inline-block h-3 w-3 rounded border border-orange-500/40 bg-orange-500/10" /> Vacances
+            <span className="inline-block h-3 w-3 rounded border border-orange-400/70 bg-orange-500/15" /> Vacances
           </p>
         )}
       </div>
@@ -1454,6 +1485,9 @@ function injuriesForDate(key: string, injuries: Followup[]): Followup[] {
 }
 
 /** Retourne true si `key` (YYYY-MM-DD) est dans la période de vacances. */
+const longDate = (iso: string) =>
+  new Date(iso + "T00:00:00").toLocaleDateString("fr-FR", { day: "numeric", month: "long" });
+
 function isVacationDay(key: string, start: string | null, end: string | null): boolean {
   if (!start) return false;
   if (key < start) return false;
@@ -1535,14 +1569,14 @@ function MonthView({ cursor, todayKey, sessionsByDate, goalsByDate, injuries, va
             : isInjury
             ? "border-danger/40 bg-danger/5"
             : isVacation
-            ? "border-orange-500/40 bg-orange-500/5"
+            ? "border-orange-400/70 bg-orange-500/15"
             : `bg-surface ${key === todayKey ? "border-accent" : "border-line"}`
         } ${pending ? "cursor-pointer" : ""}`}
       >
         <span className="flex items-center justify-between text-[11px] text-dim">
           {day}
           <span className="flex items-center gap-0.5">
-            {isVacation && !isInjury && !isGoal && <span title="Vacances" className="h-1.5 w-1.5 rounded-full bg-orange-400" />}
+            {isVacation && <span title="Vacances" aria-label="Vacances" className="text-[10px] leading-none">🌴</span>}
             {isInjury && <span title={dayInjuries.map((f) => f.text).join(", ")} className="h-1.5 w-1.5 rounded-full bg-danger" />}
             {isGoal && <span title={goals.map((g) => g.competition).join(", ")} className="h-1.5 w-1.5 rounded-full bg-ok" />}
           </span>
@@ -1605,7 +1639,7 @@ function SynthesisView({ cursor, todayKey, sessionsByDate, goalsByDate, injuries
                 : isInjury
                 ? "border-danger/40 bg-danger/5"
                 : isVacation
-                ? "border-orange-500/40 bg-orange-500/5"
+                ? "border-orange-400/70 bg-orange-500/15"
                 : `bg-surface ${isToday ? "border-accent" : "border-line"}`
             }`}
           >
@@ -1616,9 +1650,9 @@ function SynthesisView({ cursor, todayKey, sessionsByDate, goalsByDate, injuries
               <span className="font-normal text-dim">{date.getDate()} {MONTHS[date.getMonth()].slice(0, 3)}</span>
             </h3>
 
-            {isVacation && !isInjury && !isGoal && (
-              <div className="mb-2 flex items-center gap-1.5 rounded-md bg-orange-500/15 px-2 py-1 text-[13px] font-semibold text-orange-400">
-                Vacances
+            {isVacation && (
+              <div className="mb-2 flex items-center gap-1.5 rounded-md bg-orange-500/20 px-2 py-1 text-[13px] font-black text-orange-400">
+                🌴 Vacances
               </div>
             )}
 
@@ -1767,16 +1801,21 @@ function WeekView({ cursor, todayKey, sessionsByDate, goalsByDate, injuries, vac
                 className={`mt-0.5 grid h-[34px] w-[34px] place-items-center rounded-full text-base font-black ${
                   isToday
                     ? "bg-accent text-[#1a1500] shadow-[0_0_0_4px_rgba(255,179,0,0.18)]"
+                    : isVacation ? "bg-orange-500/20 text-orange-400"
                     : isPast ? "text-dim" : ""
                 }`}
                 aria-label={isToday ? `Aujourd'hui, ${date.getDate()} ${MONTHS[date.getMonth()]}` : undefined}
               >
                 {date.getDate()}
               </span>
-              {isVacation && <span className="mt-1.5 h-1.5 w-1.5 rounded-full bg-orange-400" title="Vacances" />}
             </div>
 
             <div className="flex min-w-0 flex-col gap-2">
+              {isVacation && (
+                <div className="flex min-h-10 items-center gap-2 rounded-xl border border-orange-400/60 bg-orange-500/15 px-3 text-[13px] font-black text-orange-400">
+                  🌴 Vacances
+                </div>
+              )}
               {goals.map((g) => (
                 <button
                   key={g.id}
@@ -1802,10 +1841,8 @@ function WeekView({ cursor, todayKey, sessionsByDate, goalsByDate, injuries, vac
               {sessions.map((s) => (
                 <WeekSessionCard key={s.id} s={s} onOpen={onOpen} todayKey={todayKey} />
               ))}
-              {isEmpty && (
-                <span className="flex min-h-10 items-center text-[13px] italic text-dim">
-                  {isVacation ? "Vacances" : "Repos"}
-                </span>
+              {isEmpty && !isVacation && (
+                <span className="flex min-h-10 items-center text-[13px] italic text-dim">Repos</span>
               )}
             </div>
           </div>

@@ -18,7 +18,11 @@ export default function OverviewPage() {
   const { clients, role, loading: ctxLoading } = useData();
   const [data, setData] = useState<ClientData[]>([]);
   const [loading, setLoading] = useState(true);
-  const [tab, setTab] = useState<"injuries" | "goals">("injuries");
+  const [tab, setTab] = useState<"injuries" | "goals" | "vacations">("injuries");
+  // Notification « vacances » : ouvre directement l'onglet concerné.
+  useEffect(() => {
+    if (new URLSearchParams(window.location.search).get("tab") === "vacances") setTab("vacations");
+  }, []);
   // Messages urgents non lus, toutes conversations confondues.
   const [urgents, setUrgents] = useState<
     { id: string; clientId: string; clientName: string; text: string; isVoice: boolean; createdAt: string }[]
@@ -112,6 +116,20 @@ export default function OverviewPage() {
   const injuryCount = allInjuries.length;
   const goalCount = allGoals.filter((g) => (daysUntil(g.date) ?? -1) >= 0).length;
 
+  // Vacances en cours puis à venir (les périodes terminées disparaissent).
+  const vacations = data
+    .map((cd) => cd.profile)
+    .filter((p) => p.vacation_start && (!p.vacation_end || p.vacation_end >= today))
+    .map((p) => ({
+      id: p.id,
+      name: p.name || p.email,
+      start: p.vacation_start as string,
+      end: p.vacation_end ?? null,
+      current: (p.vacation_start as string) <= today,
+    }))
+    .sort((a, b) => Number(b.current) - Number(a.current) || a.start.localeCompare(b.start));
+  const onVacationNow = vacations.filter((v) => v.current).length;
+
   return (
     <div>
       <p className="mb-4 text-sm text-dim">{data.length} sportif{data.length > 1 ? "s" : ""}</p>
@@ -165,6 +183,17 @@ export default function OverviewPage() {
         </div>
       )}
 
+      {/* Synthèse vacances */}
+      {onVacationNow > 0 && (
+        <button
+          onClick={() => setTab("vacations")}
+          className="mb-4 flex w-full items-center gap-2 rounded-2xl border border-orange-400/70 bg-orange-500/15 p-4 text-left font-bold text-orange-400"
+        >
+          <span aria-hidden>🌴</span>
+          {onVacationNow} sportif{onVacationNow > 1 ? "s" : ""} en vacances en ce moment
+        </button>
+      )}
+
       {/* Onglets */}
       <div className="mb-4 flex rounded-lg bg-surface2 p-1">
         <button
@@ -179,7 +208,42 @@ export default function OverviewPage() {
         >
           Objectifs{goalCount > 0 ? ` (${goalCount})` : ""}
         </button>
+        <button
+          onClick={() => setTab("vacations")}
+          className={`flex-1 rounded-md px-3 py-2 text-sm font-semibold ${tab === "vacations" ? "bg-orange-500 text-white" : "text-dim"}`}
+        >
+          Vacances{vacations.length > 0 ? ` (${vacations.length})` : ""}
+        </button>
       </div>
+
+      {/* Vacances */}
+      {tab === "vacations" && (
+        <div className="space-y-2.5">
+          {vacations.length === 0 ? (
+            <p className="py-10 text-center text-dim">Aucunes vacances en cours ou prévues.</p>
+          ) : (
+            vacations.map((v) => {
+              const back = v.end ? daysUntil(v.end) : null;
+              const until = daysUntil(v.start);
+              return (
+                <div key={v.id} className={`rounded-xl border p-3.5 ${v.current ? "border-orange-400/70 bg-orange-500/15" : "border-line bg-surface"}`}>
+                  <div className="mb-1 flex flex-wrap items-center justify-between gap-2">
+                    <span className="font-semibold text-orange-400">{v.name}</span>
+                    <span className={`shrink-0 rounded-full px-2.5 py-1 text-[13px] font-bold ${v.current ? "bg-orange-500 text-white" : "bg-surface2 text-dim"}`}>
+                      {v.current
+                        ? (back === null ? "En vacances" : back === 0 ? "Retour demain" : `Retour dans ${back + 1} j`)
+                        : until === 1 ? "Demain" : `Dans ${until} j`}
+                    </span>
+                  </div>
+                  <p className="text-[13px] text-dim">
+                    {v.end ? `Du ${frenchDate(v.start)} au ${frenchDate(v.end)}` : `À partir du ${frenchDate(v.start)}, sans date de retour`}
+                  </p>
+                </div>
+              );
+            })
+          )}
+        </div>
+      )}
 
       {/* Blessures */}
       {tab === "injuries" && (
