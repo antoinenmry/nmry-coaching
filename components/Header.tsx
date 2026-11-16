@@ -106,6 +106,7 @@ export default function Header() {
               </svg>
             </button>
           )}
+          {(isElevated || library.appsVisible) && (
           <Link
             href="/apps"
             aria-label="Nos applis"
@@ -119,6 +120,7 @@ export default function Header() {
               <rect x="11.5" y="11.5" width="5.5" height="5.5" rx="1.6" />
             </svg>
           </Link>
+          )}
           {showPartners && (
             <Link
               href="/shop"

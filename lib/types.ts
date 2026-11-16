@@ -316,6 +316,7 @@ export interface ExerciseLibrary {
   sports?: string[];            // sports proposés dans le profil (éditeurs : Simon et Antoine) ; absent = liste par défaut
   announcements?: Announcement[]; // cartes d'annonce du carrousel de l'accueil (créées par le coach, visibles par tous)
   cardIcons?: Record<string, string>; // href → emoji ou URL Storage (icône personnalisée des cartes d'accueil, admin uniquement)
+  appsVisible?: boolean;        // true = « Nos applis » visible côté sportif (off par défaut → coach/admin seulement)
   apps?: AppShowcase[];         // page « Nos applis » (éditeurs : Simon et Antoine) ; absent = liste par défaut (lib/apps.ts)
 }
 

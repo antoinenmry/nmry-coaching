@@ -101,6 +101,7 @@ function AppForm({ initial, onSave, onDelete, onClose }: {
 export default function AppsPage() {
   const { library, updateLibrary, me } = useData();
   const canEdit = canEditAnnouncements(me?.email);
+  const isElevated = me?.role === "coach" || me?.role === "admin";
   const apps = appsOf(library);
   const [editing, setEditing] = useState<AppShowcase | null>(null);
 
@@ -121,8 +122,35 @@ export default function AppsPage() {
     setEditing(null);
   }
 
+  if (!isElevated && !library.appsVisible) {
+    return <p className="py-10 text-center text-dim">Cette page n&apos;est pas encore disponible.</p>;
+  }
+
   return (
     <div className="space-y-3">
+      {isElevated && (
+        <div className="flex items-center justify-between gap-3 rounded-2xl border border-line bg-surface px-4 py-3">
+          <span className="min-w-0">
+            <span className="block text-sm font-bold">Visible par les sportifs</span>
+            <span className="block text-xs text-dim">
+              {library.appsVisible ? "Les sportifs voient le bouton et la page." : "Masqué : seuls les coachs voient cette page."}
+            </span>
+          </span>
+          {canEdit ? (
+            <button
+              role="switch"
+              aria-checked={!!library.appsVisible}
+              aria-label="Visible par les sportifs"
+              onClick={() => updateLibrary((l) => { l.appsVisible = !l.appsVisible; })}
+              className={`relative h-7 w-12 shrink-0 rounded-full transition ${library.appsVisible ? "bg-ok" : "bg-surface2 ring-1 ring-line"}`}
+            >
+              <span className={`absolute top-1 h-5 w-5 rounded-full bg-white transition-all ${library.appsVisible ? "left-6" : "left-1"}`} />
+            </button>
+          ) : (
+            <span className="shrink-0 text-xs font-bold text-dim">{library.appsVisible ? "Visible" : "Masqué"}</span>
+          )}
+        </div>
+      )}
       <p className="text-sm text-dim">Les applis créées par l&apos;équipe NMRY.</p>
 
       {apps.length === 0 && <p className="py-10 text-center text-dim">Aucune appli pour l&apos;instant.</p>}

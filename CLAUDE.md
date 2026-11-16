@@ -567,7 +567,7 @@ pas le blob `app_state` entier de tout le monde.
 | `app/(app)/profile/` | Profil : photo (**compressée à l'upload via canvas**), nom, naissance, genre, **Instagram**, **localisation** (Nominatim), sports |
 | `app/(app)/followup/` | Suivi : 3 onglets Messages (chat API) / Santé (Suivi + **Métriques**) / Bloc-notes |
 | `app/(app)/followup/MetricsTab.tsx` | Onglet Métriques : Données (cartes + tendance) + Tendances (graphique SVG) |
-| `app/(app)/apps/` | Page « Nos applis » (bouton grille dans l'en-tête) : `library.apps` (défaut `lib/apps.ts` : Alluria, Chrono-HIIT), éditable par Simon et Antoine, liens et icônes en https uniquement |
+| `app/(app)/apps/` | Page « Nos applis » (bouton grille dans l'en-tête) : `library.apps` (défaut `lib/apps.ts` : Alluria, Chrono-HIIT), éditable par Simon et Antoine, liens et icônes en https uniquement. **Masqué aux sportifs** tant que `library.appsVisible` n'est pas activé (interrupteur en haut de la page) |
 | `app/(app)/shop/` | Page Shop & Avantages : onglets Parrainage / Merch / Shop (stockés dans `library_state`, global) |
 | `app/(app)/overview/` | Vue d'ensemble coach : demandes d'inscription, messages urgents, blessures, objectifs, **vacances** (onglet ; `?tab=vacances` depuis la notif) |
 | `app/(app)/library/` | Bibliothèque : 3 onglets Exercices / Séances types / Semaines types |
