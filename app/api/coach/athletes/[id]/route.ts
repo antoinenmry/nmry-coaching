@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { requireRole } from "@/lib/apiAuth";
+import { purgeUserFiles } from "@/lib/userFiles";
 
 /**
  * DELETE /api/coach/athletes/[id]
@@ -43,6 +44,7 @@ export async function DELETE(
     }
   }
 
+  await purgeUserFiles(admin, id);
   const { error } = await admin.auth.admin.deleteUser(id);
   if (error) return NextResponse.json({ error: "Erreur lors de la suppression" }, { status: 500 });
   return NextResponse.json({ success: true });

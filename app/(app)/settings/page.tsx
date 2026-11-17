@@ -7,6 +7,7 @@ import { clampBgForTheme } from "@/lib/themeColor";
 import NotifPrefsPanel from "@/components/NotifPrefsPanel";
 import AnnouncementsManager from "@/components/AnnouncementsManager";
 import SportsManager from "@/components/SportsManager";
+import MyDataSection from "@/components/MyDataSection";
 import { SIGNUP_REQUESTS_CHANGED, SignupRequestList, useSignupRequests } from "@/components/SignupRequests";
 import { sportsOf } from "@/lib/sports";
 import { canEditAnnouncements } from "@/lib/config";
@@ -701,6 +702,7 @@ export default function SettingsPage() {
         >
           Déconnexion
         </button>
+        <MyDataSection />
       </section>
 
       {/* Switch pleine largeur */}

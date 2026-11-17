@@ -7,6 +7,7 @@ import CheckinPopup from "@/components/CheckinPopup";
 import { SignupRequestsPopup } from "@/components/SignupRequests";
 import SessionDoneBubble from "@/components/SessionDoneBubble";
 import NoCoachGate from "@/components/NoCoachGate";
+import ConsentGate from "@/components/ConsentGate";
 import ServiceWorkerRegistrar from "@/components/ServiceWorkerRegistrar";
 import RouteRestore from "@/components/RouteRestore";
 import BgColorSyncer from "@/components/BgColorSyncer";
@@ -28,6 +29,7 @@ export default async function AppLayout({ children }: { children: React.ReactNod
       <ServiceWorkerRegistrar />
       {/* PWA iOS : ramène sur la dernière page vue après un court passage en arrière-plan */}
       <RouteRestore />
+      <ConsentGate>
       <NoCoachGate>
         <PullToRefresh>
           <Header />
@@ -38,6 +40,7 @@ export default async function AppLayout({ children }: { children: React.ReactNod
           <SessionDoneBubble />
         </PullToRefresh>
       </NoCoachGate>
+      </ConsentGate>
     </DataProvider>
   );
 }

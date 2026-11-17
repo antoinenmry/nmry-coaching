@@ -14,6 +14,7 @@ const SUPABASE_ANON_KEY = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
 function isPublicPath(path: string) {
   return (
     path === "/login" ||
+    path === "/confidentialite" ||
     path.startsWith("/auth/") ||
     path.startsWith("/api/dashboard/")
   );

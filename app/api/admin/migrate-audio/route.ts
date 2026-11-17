@@ -7,7 +7,7 @@ import { createAdminClient } from "@/lib/supabase/admin";
 // Idempotent : ignore les messages dont audio_url est déjà une URL https://.
 
 export async function GET() {
-  const auth = await requireRole(["coach", "admin"]);
+  const auth = await requireRole(["admin"]);
   if (!auth) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
 
   const supabase = createAdminClient();

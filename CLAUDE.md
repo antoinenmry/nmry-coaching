@@ -141,6 +141,21 @@ d'un autre sportif). **Trois garde-fous** sont en place — ne pas les retirer :
 > Cause structurelle = blob monolithique. Migration future recommandée : `sessions`/`profile`
 > en colonnes/tables dédiées → écritures ciblées, fin des races de blob.
 
+### Audit sécurité / RGPD (2026-11)
+- **SQL à lancer** (dans l'ordre, après `schema.sql`) : `storage-policies-v2.sql`, `athlete-pause.sql`,
+  `security-hardening.sql` (navigateur en lecture seule sur chat/bibliothèque/modèles/annonces, coach limité
+  à ses sportifs dans `profiles`, email de profil non modifiable par l'utilisateur).
+- **Toutes les écritures passent par l'API** (service role) : ne pas réécrire directement dans
+  `chat_messages`, `library_state`, `template_state`, `broadcasts` depuis le navigateur.
+- **RGPD** : `/confidentialite` (publique, passages `[À COMPLÉTER]`), accord explicite données de santé à
+  l'inscription et via `ConsentGate` (métadonnée `privacy_version`, `lib/privacy.ts`), Réglages → Compte :
+  `GET /api/me/export` (JSON) et `POST /api/me/delete-account` (sportif ; efface fichiers Storage via
+  `lib/userFiles.ts`). La suppression par le coach efface aussi les fichiers.
+- **En-têtes** de sécurité dans `next.config.mjs` (pas de CSP : script anti-flash inline).
+- Migrations `/api/admin/migrate-*` : admin uniquement. `/api/messages/notify` (hérité) supprimé.
+- **Reste à traiter** : buckets `avatars` et `chat-attachments` publics (URL non devinables mais
+  accessibles sans connexion), rate limiting en mémoire (par instance Vercel), suppression des comptes inactifs.
+
 ### Guards applicatifs
 - `update()` dans DataProvider refuse si `role=client` et `activeUserId ≠ me.id`.
 - `PUT /api/library` restreint aux coaches/admins (RLS + route guard).
@@ -542,7 +557,6 @@ pas le blob `app_state` entier de tout le monde.
 | `/api/chat/avatars` | GET | Photos des participants, hors chemin critique | auth + sportif/coach/admin de la conv |
 | `/api/chat/unread` | GET | Compteur `{count, urgent}` non lus de l'appelant | auth |
 | `/api/messages/urgent` | POST | Email + push urgent au coach | auth + clientId===user.id |
-| `/api/messages/notify` | POST | Push nouveau message (legacy, plus utilisé par le chat) | auth + vérif lien coach_client |
 | `/api/followup/notify-injury` | POST | Push blessure → coach | auth + clientId===user.id |
 | `/api/plan/notify` | POST | Push nouveau programme → sportifs | requireCoach |
 | `/api/broadcasts` | POST | Créer broadcast + push | requireCoach |

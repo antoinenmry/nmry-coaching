@@ -4,6 +4,7 @@ import { Suspense, useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { createClient } from "@/lib/supabase/client";
 import { capitalizeName } from "@/lib/names";
+import { consentMetadata } from "@/lib/privacy";
 
 const SITE_URL = "https://nmry-coaching.vercel.app";
 
@@ -20,6 +21,7 @@ function LoginForm() {
   const [lastName, setLastName] = useState("");
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
+  const [agree, setAgree] = useState(false); // accord RGPD (données de santé) à l'inscription
   const [msg, setMsg] = useState<{ text: string; ok?: boolean } | null>(
     urlError ? { text: "Le lien de confirmation est invalide ou expiré. Reconnecte-toi." } : null,
   );
@@ -47,12 +49,17 @@ function LoginForm() {
         setBusy(false);
         return;
       }
+      if (!agree) {
+        setMsg({ text: "Accepte la politique de confidentialité pour créer ton compte." });
+        setBusy(false);
+        return;
+      }
       const name = `${first} ${last}`;
       const { data, error } = await supabase.auth.signUp({
         email,
         password,
         options: {
-          data: { name, first_name: first, last_name: last },
+          data: { name, first_name: first, last_name: last, ...consentMetadata() },
           emailRedirectTo: `${SITE_URL}/auth/callback`,
         },
       });
@@ -267,7 +274,21 @@ function LoginForm() {
             </button>
           </p>
         )}
-        {screen === "signup" && <div className="mb-4" />}
+        {screen === "signup" && (
+          <label className="mb-4 mt-3 flex items-start gap-2.5 text-xs text-dim">
+            <input
+              type="checkbox"
+              checked={agree}
+              onChange={(e) => setAgree(e.target.checked)}
+              className="mt-0.5 h-4 w-4 shrink-0 accent-[#ffb300]"
+            />
+            <span>
+              J&apos;accepte la{" "}
+              <a href="/confidentialite" target="_blank" className="font-bold text-accent underline">politique de confidentialité</a>{" "}
+              et le traitement de mes données de santé pour le suivi par mon coach.
+            </span>
+          </label>
+        )}
 
         <button
           type="submit"

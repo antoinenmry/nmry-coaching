@@ -3,6 +3,7 @@ import { createAdminClient } from "@/lib/supabase/admin";
 import { requireRole } from "@/lib/apiAuth";
 import { capitalizeName } from "@/lib/names";
 import { SITE_URL } from "@/lib/mail";
+import { rateLimit } from "@/lib/rateLimit";
 
 const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 
@@ -16,6 +17,9 @@ const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 export async function POST(req: NextRequest) {
   const caller = await requireRole(["coach", "admin"]);
   if (!caller) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  if (!rateLimit(`invite:${caller.user.id}`, 20, 60 * 60_000).ok) {
+    return NextResponse.json({ error: "Trop d'invitations envoyées, réessaie dans une heure." }, { status: 429 });
+  }
 
   const body = await req.json().catch(() => ({}));
   const firstName = capitalizeName(String(body?.firstName ?? "")).slice(0, 60);
