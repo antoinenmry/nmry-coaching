@@ -9,13 +9,16 @@ import NoCoachScreen from "@/components/NoCoachScreen";
  * Les coaches, admins, et le mode local passent toujours.
  */
 export default function NoCoachGate({ children }: { children: React.ReactNode }) {
-  const { role, hasCoach, loading } = useData();
+  const { role, hasCoach, paused, loading } = useData();
 
   // Pendant le chargement, on laisse passer (le layout affiche son propre skeleton)
   if (loading) return <>{children}</>;
 
   // Coaches et admins ont toujours accès
   if (role === "coach" || role === "admin") return <>{children}</>;
+
+  // Sportif mis en pause par son coach → plus aucun accès
+  if (paused) return <NoCoachScreen paused />;
 
   // Client sans coach → écran d'attente
   if (!hasCoach) return <NoCoachScreen />;

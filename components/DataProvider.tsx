@@ -77,6 +77,7 @@ interface DataContextValue {
   previewAsClient: boolean;
   setPreviewAsClient: (v: boolean) => void;
   hasCoach: boolean; // false = client sans coach affecté (accès bloqué)
+  paused: boolean;   // true = sportif mis en pause par son coach (accès bloqué)
   /** Coach : { [clientId]: ISOstring } — dernière notif programme par sportif */
   planNotifSentAt: Record<string, string>;
   /** Enregistre localement qu'une notif vient d'être envoyée (le serveur gère la persistence) */
@@ -108,6 +109,7 @@ export function DataProvider({ children }: { children: React.ReactNode }) {
   const [role, setRoleState] = useState<Role>("client");
   const [previewAsClient, setPreviewAsClient] = useState(false);
   const [hasCoach, setHasCoach] = useState(true); // optimiste par défaut
+  const [paused, setPaused] = useState(false);
   const [planNotifSentAt, setPlanNotifSentAt] = useState<Record<string, string>>({});
 
   const setRole = useCallback((r: Role) => {
@@ -292,7 +294,9 @@ export function DataProvider({ children }: { children: React.ReactNode }) {
         // Fail-closed : en cas d'erreur on affiche l'écran d'attente, qui revérifie toutes les 15 s.
         try {
           const res = await fetch("/api/me/has-coach", { cache: "no-store" });
-          setHasCoach(res.ok ? !!(await res.json()).hasCoach : false);
+          const access = res.ok ? await res.json() : null;
+          setHasCoach(!!access?.hasCoach);
+          setPaused(!!access?.paused);
         } catch {
           setHasCoach(false);
         }
@@ -494,7 +498,7 @@ export function DataProvider({ children }: { children: React.ReactNode }) {
         activeUserId, clients, addClient, switchClient, signOut,
         role: previewAsClient ? "client" : role,
         setRole, previewAsClient, setPreviewAsClient,
-        hasCoach,
+        hasCoach, paused,
         planNotifSentAt, recordPlanNotif,
       }}
     >

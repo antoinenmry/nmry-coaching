@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
+import { isPausedClient, pausedResponse } from "@/lib/apiAuth";
 import { createClient } from "@/lib/supabase/server";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { sendPushToUser } from "@/lib/push";
@@ -20,6 +21,7 @@ export async function POST(req: NextRequest) {
   const supabase = await createClient();
   const { data: { user } } = await supabase.auth.getUser();
   if (!user) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  if (await isPausedClient(user.id)) return pausedResponse();
 
   // Vérifier que l'utilisateur est coach ou admin
   const admin = createAdminClient();
@@ -125,6 +127,7 @@ export async function GET() {
   const supabase = await createClient();
   const { data: { user } } = await supabase.auth.getUser();
   if (!user) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  if (await isPausedClient(user.id)) return pausedResponse();
 
   const admin = createAdminClient();
 

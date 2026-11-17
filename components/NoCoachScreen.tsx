@@ -8,7 +8,7 @@ import { useData } from "@/components/DataProvider";
  * Aucune donnée de l'app n'est accessible tant que le coach n'a pas accepté la demande.
  * Vérifie régulièrement (et au retour sur l'app) : dès l'acceptation, l'app se recharge déverrouillée.
  */
-export default function NoCoachScreen() {
+export default function NoCoachScreen({ paused = false }: { paused?: boolean }) {
   const { me, signOut } = useData();
   const [checking, setChecking] = useState(false);
 
@@ -16,7 +16,8 @@ export default function NoCoachScreen() {
     setChecking(true);
     try {
       const res = await fetch("/api/me/has-coach", { cache: "no-store" });
-      if (res.ok && (await res.json()).hasCoach) window.location.reload();
+      const access = res.ok ? await res.json() : null;
+      if (access?.hasCoach && !access?.paused) window.location.reload();
     } catch {
       /* réseau : on réessaiera */
     } finally {
@@ -34,25 +35,38 @@ export default function NoCoachScreen() {
   return (
     <div className="flex min-h-screen flex-col items-center justify-center bg-bg p-6 text-center">
       <div className="w-full max-w-sm">
-        <div className="mb-6 text-6xl">⏳</div>
-        <h1 className="mb-2 text-2xl font-black">Inscription en attente de validation</h1>
-        <p className="mb-2 text-dim">
-          Merci{me?.name ? ` ${me.name.split(" ")[0]}` : ""}, ta demande a bien été envoyée.
-        </p>
-        <p className="mb-8 text-sm text-dim">
-          Ton coach doit accepter ton profil avant de t&apos;ouvrir l&apos;accès. Dès que c&apos;est fait,
-          l&apos;application se débloque automatiquement.
-        </p>
+        {paused ? (
+          <>
+            <div className="mb-6 text-6xl">⏸️</div>
+            <h1 className="mb-2 text-2xl font-black">Accès en pause</h1>
+            <p className="mb-8 text-dim">
+              Ton coach a mis ton accès en pause. Tes données sont conservées : tu retrouveras tout
+              dès qu&apos;il le réactivera. Pour en savoir plus, contacte-le directement.
+            </p>
+          </>
+        ) : (
+          <>
+          <div className="mb-6 text-6xl">⏳</div>
+          <h1 className="mb-2 text-2xl font-black">Inscription en attente de validation</h1>
+          <p className="mb-2 text-dim">
+            Merci{me?.name ? ` ${me.name.split(" ")[0]}` : ""}, ta demande a bien été envoyée.
+          </p>
+          <p className="mb-8 text-sm text-dim">
+            Ton coach doit accepter ton profil avant de t&apos;ouvrir l&apos;accès. Dès que c&apos;est fait,
+            l&apos;application se débloque automatiquement.
+          </p>
 
-        <div className="mb-8 rounded-2xl border border-line bg-surface p-4 text-left">
-          <p className="mb-2 text-sm font-semibold">Où en est-on ?</p>
-          <ul className="space-y-2 text-sm text-dim">
-            <li>✅ Ton compte est créé</li>
-            <li>🔔 Ton coach a été prévenu</li>
-            <li>⏳ Il doit valider ton profil</li>
-            <li>🔓 L&apos;accès s&apos;ouvre ensuite automatiquement</li>
-          </ul>
-        </div>
+          <div className="mb-8 rounded-2xl border border-line bg-surface p-4 text-left">
+            <p className="mb-2 text-sm font-semibold">Où en est-on ?</p>
+            <ul className="space-y-2 text-sm text-dim">
+              <li>✅ Ton compte est créé</li>
+              <li>🔔 Ton coach a été prévenu</li>
+              <li>⏳ Il doit valider ton profil</li>
+              <li>🔓 L&apos;accès s&apos;ouvre ensuite automatiquement</li>
+            </ul>
+          </div>
+          </>
+        )}
 
         <button
           onClick={check}

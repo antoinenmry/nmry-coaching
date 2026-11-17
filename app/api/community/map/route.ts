@@ -1,4 +1,5 @@
 import { NextResponse } from "next/server";
+import { isPausedClient, pausedResponse } from "@/lib/apiAuth";
 import { createClient } from "@/lib/supabase/server";
 import { createAdminClient } from "@/lib/supabase/admin";
 
@@ -30,6 +31,7 @@ export async function GET() {
   const supabase = await createClient();
   const { data: { user } } = await supabase.auth.getUser();
   if (!user) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  if (await isPausedClient(user.id)) return pausedResponse();
 
   const admin = createAdminClient();
   const { data: me } = await admin.from("profiles").select("role").eq("id", user.id).maybeSingle();

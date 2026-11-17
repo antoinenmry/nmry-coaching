@@ -29,6 +29,77 @@ function fmtDate(iso: string | null): string {
   return d.toLocaleDateString("fr-FR", { day: "numeric", month: "long", ...(sameYear ? {} : { year: "numeric" }) });
 }
 
+// ─── Ajout d'un sportif par le coach (invitation par mail) ───────────────────
+function AddAthleteForm({ onAdded }: { onAdded: () => void }) {
+  const [open, setOpen] = useState(false);
+  const [firstName, setFirstName] = useState("");
+  const [lastName, setLastName] = useState("");
+  const [email, setEmail] = useState("");
+  const [busy, setBusy] = useState(false);
+  const [msg, setMsg] = useState<{ text: string; ok?: boolean } | null>(null);
+
+  async function invite(e: React.FormEvent) {
+    e.preventDefault();
+    setBusy(true);
+    setMsg(null);
+    try {
+      const res = await fetch("/api/coach/athletes/invite", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ firstName, lastName, email }),
+      });
+      const body = await res.json().catch(() => ({}));
+      if (res.ok) {
+        setMsg({ text: `Invitation envoyée à ${email.trim()}. Le sportif choisira son mot de passe depuis le mail.`, ok: true });
+        setFirstName(""); setLastName(""); setEmail("");
+        onAdded();
+      } else {
+        setMsg({ text: body.error ?? "L'invitation n'a pas pu être envoyée. Réessaie." });
+      }
+    } catch {
+      setMsg({ text: "Pas de connexion. Réessaie." });
+    }
+    setBusy(false);
+  }
+
+  if (!open) {
+    return (
+      <div className="mb-3 space-y-2">
+        <button
+          onClick={() => { setOpen(true); setMsg(null); }}
+          className="w-full rounded-2xl bg-gradient-to-br from-[#ffc53d] to-[#ff9f00] py-3 text-sm font-black text-[#1a1500]"
+        >
+          Ajouter un sportif
+        </button>
+        {msg?.ok && <p className="text-center text-[12.5px] font-semibold text-ok">{msg.text}</p>}
+      </div>
+    );
+  }
+
+  return (
+    <form onSubmit={invite} className="mb-3 space-y-2.5 rounded-2xl border border-accent/40 bg-accent/5 p-4">
+      <p className="text-sm font-semibold">Ajouter un sportif</p>
+      <p className="text-[12px] text-dim">Il reçoit un mail pour choisir son mot de passe, et il est directement rattaché à toi.</p>
+      <div className="grid grid-cols-2 gap-2">
+        <input value={firstName} onChange={(e) => setFirstName(e.target.value)} placeholder="Prénom" aria-label="Prénom" autoComplete="off" required />
+        <input value={lastName} onChange={(e) => setLastName(e.target.value)} placeholder="Nom" aria-label="Nom" autoComplete="off" required />
+      </div>
+      <input type="email" value={email} onChange={(e) => setEmail(e.target.value)} placeholder="Email" aria-label="Email" autoComplete="off" required />
+      {msg && !msg.ok && <p role="alert" className="text-[12.5px] font-semibold text-danger">{msg.text}</p>}
+      <div className="flex gap-2">
+        <button type="button" onClick={() => setOpen(false)} className="flex-1 rounded-xl bg-surface2 py-2.5 text-sm font-bold">Annuler</button>
+        <button
+          type="submit"
+          disabled={busy || !firstName.trim() || !lastName.trim() || !email.trim()}
+          className="flex-1 rounded-xl bg-accent py-2.5 text-sm font-black text-[#1a1500] disabled:opacity-50"
+        >
+          {busy ? "Envoi…" : "Envoyer l'invitation"}
+        </button>
+      </div>
+    </form>
+  );
+}
+
 // ─── Vue Gestion des Profils ─────────────────────────────────────────────────
 function AthletesManager() {
   const signupRequests = useSignupRequests();
@@ -65,6 +136,10 @@ function AthletesManager() {
   }, [fetchAthletes]);
 
   async function toggleStatus(id: string, current: AthleteStatus) {
+    const athlete = athletes.find((a) => a.id === id);
+    if (current === "active" && !window.confirm(
+      `Mettre ${athlete?.name || "ce sportif"} en pause ? Il n'aura plus accès à rien dans l'appli jusqu'à ce que tu le réactives. Ses données sont conservées.`,
+    )) return;
     setPendingAction(id + "-status");
     const next: AthleteStatus = current === "active" ? "inactive" : "active";
     await fetch(`/api/coach/athletes/${id}`, {
@@ -94,6 +169,7 @@ function AthletesManager() {
 
   return (
     <>
+      <AddAthleteForm onAdded={fetchAthletes} />
       {athletes.length === 0 && signupRequests.requests.length === 0 && (
         <p className="py-6 text-center text-sm text-dim">Aucun sportif enregistré.</p>
       )}
@@ -103,7 +179,7 @@ function AthletesManager() {
           return (
             <div
               key={a.id}
-              className={`rounded-2xl border p-4 ${isActive ? "border-line bg-surface" : "border-line bg-surface2 opacity-70"}`}
+              className={`rounded-2xl border p-4 ${isActive ? "border-line bg-surface" : "border-danger/40 bg-danger/5"}`}
             >
               {/* En-tête : nom + badges */}
               <div className="mb-3 flex items-start justify-between gap-2">
@@ -121,17 +197,9 @@ function AthletesManager() {
                       </span>
                     ) : null;
                   })()}
-                  <button
-                    onClick={() => toggleStatus(a.id, a.status)}
-                    disabled={pendingAction === a.id + "-status"}
-                    className={`rounded-full px-2.5 py-1 text-[12px] font-bold transition ${
-                      isActive
-                        ? "bg-ok/20 text-ok hover:bg-ok/30"
-                        : "bg-surface text-dim hover:bg-surface2"
-                    }`}
-                  >
-                    {pendingAction === a.id + "-status" ? "…" : isActive ? "Actif" : "Inactif"}
-                  </button>
+                  <span className={`rounded-full px-2.5 py-1 text-[12px] font-bold ${isActive ? "bg-ok/20 text-ok" : "bg-danger/15 text-danger"}`}>
+                    {isActive ? "Actif" : "⏸ En pause"}
+                  </span>
                 </div>
               </div>
 
@@ -151,8 +219,17 @@ function AthletesManager() {
                 </div>
               </div>
 
-              {/* Action suppression */}
-              <div className="mt-3 flex justify-end">
+              {/* Actions : pause / réactivation, suppression */}
+              <div className="mt-3 flex flex-wrap justify-end gap-2">
+                <button
+                  onClick={() => toggleStatus(a.id, a.status)}
+                  disabled={pendingAction === a.id + "-status"}
+                  className={`rounded-lg px-3 py-1.5 text-[12px] font-semibold disabled:opacity-50 ${
+                    isActive ? "bg-surface2 text-ink hover:bg-line" : "bg-ok/20 text-ok hover:bg-ok/30"
+                  }`}
+                >
+                  {pendingAction === a.id + "-status" ? "…" : isActive ? "Mettre en pause" : "Réactiver l'accès"}
+                </button>
                 <button
                   onClick={() => setDeletingId(a.id)}
                   className="rounded-lg bg-danger/10 px-3 py-1.5 text-[12px] font-semibold text-danger hover:bg-danger/20"

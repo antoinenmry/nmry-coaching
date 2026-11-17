@@ -178,6 +178,10 @@ Exposés par `useData()` : `role`, `me`, `clients`, `activeUserId`, `switchClien
   **Demandes d'inscription** (`components/SignupRequests.tsx`) : pop-up unique par demande (`localStorage`
   `nmry_seen_signup_requests:<id>`), puis bloc à bordure dorée dans `/overview` et pastille sur le bandeau d'accueil,
   jusqu'à acceptation ou refus. Accepter affecte le sportif à la personne qui accepte.
+  **Gestion des sportifs** (Réglages → Sportifs) : **ajouter** un sportif (`POST /api/coach/athletes/invite` :
+  mail d'invitation Supabase → le sportif choisit son mot de passe, rattaché d'office au coach), **mettre en pause**
+  (`profiles.status = 'inactive'` : écran « Accès en pause », API chat/broadcasts/carte bloquées via
+  `isPausedClient`, RLS durcie par `supabase/athlete-pause.sql`), **réactiver**, **supprimer**.
   Accès à `/overview` (blessures actives + objectifs agrégés) et à la Vue Gestion des Profils.
   Reçoit un **email + push** quand un sportif envoie un message urgent.
   Peut envoyer un **broadcast popup** à tous ses sportifs (Settings → Sportifs).

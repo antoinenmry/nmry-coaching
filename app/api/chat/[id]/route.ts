@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
+import { isPausedClient, pausedResponse } from "@/lib/apiAuth";
 import { createClient } from "@/lib/supabase/server";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { rowToMessage, type ChatRow } from "@/lib/chat";
@@ -26,6 +27,7 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id
   const supabase = await createClient();
   const { data: { user } } = await supabase.auth.getUser();
   if (!user) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  if (await isPausedClient(user.id)) return pausedResponse();
 
   const { admin, row, allowed } = await loadOwn(id, user.id);
   if (!row) return NextResponse.json({ error: "Introuvable" }, { status: 404 });
@@ -50,6 +52,7 @@ export async function DELETE(_req: NextRequest, { params }: { params: Promise<{ 
   const supabase = await createClient();
   const { data: { user } } = await supabase.auth.getUser();
   if (!user) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  if (await isPausedClient(user.id)) return pausedResponse();
 
   const { admin, row, allowed } = await loadOwn(id, user.id);
   if (!row) return NextResponse.json({ error: "Introuvable" }, { status: 404 });

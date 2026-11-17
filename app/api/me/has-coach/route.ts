@@ -4,7 +4,8 @@ import { createAdminClient } from "@/lib/supabase/admin";
 
 /**
  * GET /api/me/has-coach
- * Retourne { hasCoach: boolean } pour le client connecté : false = inscription en attente de validation.
+ * Retourne { hasCoach, paused } pour le client connecté : hasCoach false = inscription en attente,
+ * paused true = accès mis en pause par son coach.
  * Utilise le client admin pour contourner la RLS de coach_client
  * (qui n'autorise que le coach à lire ses propres lignes).
  */
@@ -16,7 +17,7 @@ export async function GET() {
   // Les coaches et admins ont toujours "accès" (pas de coach requis)
   const { data: profile } = await supabase
     .from("profiles")
-    .select("role")
+    .select("role, status")
     .eq("id", user.id)
     .maybeSingle();
 
@@ -32,5 +33,5 @@ export async function GET() {
     .eq("client_id", user.id)
     .maybeSingle();
   // Aucun coach = inscription non validée : accès refusé jusqu'à l'acceptation par un coach.
-  return NextResponse.json({ hasCoach: !!link?.coach_id });
+  return NextResponse.json({ hasCoach: !!link?.coach_id, paused: profile?.status === "inactive" });
 }

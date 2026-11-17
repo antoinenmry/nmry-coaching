@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
+import { isPausedClient, pausedResponse } from "@/lib/apiAuth";
 import { createClient } from "@/lib/supabase/server";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { sendMail, mailLayout, esc, SITE_URL } from "@/lib/mail";
@@ -22,6 +23,7 @@ export async function POST(req: NextRequest) {
   const supabase = await createClient();
   const { data: { user } } = await supabase.auth.getUser();
   if (!user) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  if (await isPausedClient(user.id)) return pausedResponse();
 
   const { clientId, messageText, clientName } = await req.json().catch(() => ({}));
   if (!clientId) return NextResponse.json({ error: "Missing clientId" }, { status: 400 });

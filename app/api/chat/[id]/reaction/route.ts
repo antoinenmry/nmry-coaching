@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
+import { isPausedClient, pausedResponse } from "@/lib/apiAuth";
 import { createClient } from "@/lib/supabase/server";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { rowToMessage, type ChatRow } from "@/lib/chat";
@@ -14,6 +15,7 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id
   const supabase = await createClient();
   const { data: { user } } = await supabase.auth.getUser();
   if (!user) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  if (await isPausedClient(user.id)) return pausedResponse();
 
   const admin = createAdminClient();
   const { data: row } = await admin.from("chat_messages").select("*").eq("id", id).maybeSingle();

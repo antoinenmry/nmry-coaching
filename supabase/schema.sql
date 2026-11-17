@@ -56,6 +56,8 @@ create policy profiles_self_update  on public.profiles for update
 create policy profiles_coach_select on public.profiles for select using (public.is_coach());
 
 -- 5) POLICIES — app_state
+--    ⚠️ Relancer supabase/athlete-pause.sql après ce fichier : il durcit state_self_all,
+--    chat_self et la lecture de la bibliothèque (sportifs en pause ou non validés).
 --    - chaque sportif gère SES données (user_id = auth.uid())
 --    - un coach gère sa propre ligne + UNIQUEMENT ses sportifs affectés (coach_client)
 --      → défense en profondeur : un bug côté coach ne peut plus écrire hors périmètre
