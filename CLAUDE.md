@@ -153,8 +153,11 @@ d'un autre sportif). **Trois garde-fous** sont en place — ne pas les retirer :
   `lib/userFiles.ts`). La suppression par le coach efface aussi les fichiers.
 - **En-têtes** de sécurité dans `next.config.mjs` (pas de CSP : script anti-flash inline).
 - Migrations `/api/admin/migrate-*` : admin uniquement. `/api/messages/notify` (hérité) supprimé.
-- **Reste à traiter** : buckets `avatars` et `chat-attachments` publics (URL non devinables mais
-  accessibles sans connexion), rate limiting en mémoire (par instance Vercel), suppression des comptes inactifs.
+- **Médias du chat privés** : bucket `chat-attachments` privé (`chat-media-private.sql`). Jamais d'URL publique :
+  afficher via `mediaSrc()` (`lib/media.ts`) → `/api/chat/media?p=<chemin>` (vérifie la conversation, redirige vers
+  une URL signée 1 h). `POST /api/chat` reconstruit les URL depuis les chemins (aucune URL externe acceptée).
+- **Reste à traiter** : bucket `avatars` public (photos de profil), rate limiting en mémoire (par instance Vercel),
+  suppression des comptes inactifs.
 
 ### Guards applicatifs
 - `update()` dans DataProvider refuse si `role=client` et `activeUserId ≠ me.id`.

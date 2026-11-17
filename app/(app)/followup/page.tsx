@@ -1,6 +1,7 @@
 "use client";
 
 import { Fragment, useState, useRef, useEffect, useLayoutEffect, useCallback, type ReactNode } from "react";
+import { mediaSrc } from "@/lib/media";
 import { useData } from "@/components/DataProvider";
 import { createClient } from "@/lib/supabase/client";
 import { type BlockNote, type ChatMessage, type Followup } from "@/lib/types";
@@ -49,7 +50,7 @@ function rowToChatMessage(r: Record<string, unknown>): ChatMessage {
     senderName: (r.sender_name as string) ?? undefined,
     isRead: !!r.is_read,
     type: (r.type as ChatMessage["type"]) ?? undefined,
-    attachmentUrl: (r.attachment_url as string) ?? undefined,
+    attachmentUrl: mediaSrc(r.attachment_url as string | null, r.attachment_path as string | null),
     attachmentType: (r.attachment_type as ChatMessage["attachmentType"]) ?? undefined,
     attachmentPath: (r.attachment_path as string) ?? undefined,
     audioPath: (r.audio_path as string) ?? undefined,
@@ -142,7 +143,7 @@ function VoicePlayer({ audioUrl, messageId, isMe }: { audioUrl?: string; message
   const [speed, setSpeed] = useState<Speed>(1);
   const [error, setError] = useState(false);
   // L'audio n'est pas dans le payload de la liste : on le charge à la demande au play.
-  const [src, setSrc] = useState<string | null>(audioUrl ?? null);
+  const [src, setSrc] = useState<string | null>(mediaSrc(audioUrl) ?? null);
   const [loadingAudio, setLoadingAudio] = useState(false);
   const wantPlayRef = useRef(false);
 
@@ -164,7 +165,7 @@ function VoicePlayer({ audioUrl, messageId, isMe }: { audioUrl?: string; message
     setLoadingAudio(true);
     try {
       const res = await fetch(`/api/chat/audio?id=${encodeURIComponent(messageId)}`);
-      if (res.ok) { const d = await res.json(); if (d.audioUrl) setSrc(d.audioUrl); else setError(true); }
+      if (res.ok) { const d = await res.json(); const u = mediaSrc(d.audioUrl); if (u) setSrc(u); else setError(true); }
       else setError(true);
     } catch { setError(true); }
     finally { setLoadingAudio(false); }

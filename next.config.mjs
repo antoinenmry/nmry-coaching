@@ -7,6 +7,9 @@ const nextConfig = {
         source: "/:path*",
         headers: [
           { key: "X-Frame-Options", value: "DENY" },
+          // CSP partielle : interdit l'intégration de l'appli dans une autre page, les plugins,
+          // le détournement de <base> et l'envoi de formulaires ailleurs. Scripts non restreints.
+          { key: "Content-Security-Policy", value: "frame-ancestors 'none'; base-uri 'self'; object-src 'none'; form-action 'self'" },
           { key: "X-Content-Type-Options", value: "nosniff" },
           { key: "Referrer-Policy", value: "strict-origin-when-cross-origin" },
           { key: "Strict-Transport-Security", value: "max-age=63072000; includeSubDomains" },

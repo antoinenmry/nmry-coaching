@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
+import { isMediaPath, mediaProxyUrl } from "@/lib/media";
 import { isPausedClient, pausedResponse } from "@/lib/apiAuth";
 import { createClient } from "@/lib/supabase/server";
 import { createAdminClient } from "@/lib/supabase/admin";
@@ -135,13 +136,25 @@ export async function POST(req: NextRequest) {
 
   const body = await req.json().catch(() => ({}));
   const text: string = (body?.text ?? "").toString();
-  const audioUrl: string | undefined = body?.audioUrl;
+  const rawAudioUrl: string | undefined = body?.audioUrl;
   const isVoice = !!body?.isVoice;
   const isUrgent = !!body?.isUrgent;
-  const attachmentUrl: string | undefined = body?.attachmentUrl;
+  const rawAttachmentUrl: string | undefined = body?.attachmentUrl;
   const attachmentType: "image" | "video" | undefined = body?.attachmentType;
   const attachmentPath: string | undefined = body?.attachmentPath;
   const audioPath: string | undefined = body?.audioPath;
+  // Les adresses des fichiers sont reconstruites ici à partir des chemins Storage (relais
+  // authentifié) : une URL externe fournie par le navigateur n'est jamais enregistrée.
+  const attachmentUrl = attachmentPath ? mediaProxyUrl(attachmentPath) : undefined;
+  const audioUrl = audioPath
+    ? mediaProxyUrl(audioPath)
+    : typeof rawAudioUrl === "string" && rawAudioUrl.startsWith("data:audio/") && rawAudioUrl.length < 8_000_000
+      ? rawAudioUrl
+      : undefined;
+  if (rawAttachmentUrl && !attachmentUrl) return NextResponse.json({ error: "Pièce jointe invalide" }, { status: 400 });
+  if (attachmentPath !== undefined && attachmentType !== "image" && attachmentType !== "video") return NextResponse.json({ error: "Pièce jointe invalide" }, { status: 400 });
+  if (attachmentPath !== undefined && !isMediaPath(attachmentPath)) return NextResponse.json({ error: "Pièce jointe invalide" }, { status: 400 });
+  if (audioPath !== undefined && !isMediaPath(audioPath)) return NextResponse.json({ error: "Vocal invalide" }, { status: 400 });
   if (!text.trim() && !audioUrl && !attachmentUrl) {
     return NextResponse.json({ error: "Message vide" }, { status: 400 });
   }

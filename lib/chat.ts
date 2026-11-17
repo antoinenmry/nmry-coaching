@@ -1,3 +1,4 @@
+import { mediaSrc } from "@/lib/media";
 import { createAdminClient } from "@/lib/supabase/admin";
 import type { ChatMessage } from "@/lib/types";
 
@@ -32,14 +33,14 @@ export function rowToMessage(r: ChatRow): ChatMessage {
     text: r.body,
     isUrgent: r.is_urgent,
     isVoice: r.is_voice,
-    audioUrl: r.audio_url ?? undefined,
+    audioUrl: mediaSrc(r.audio_url, r.audio_path),
     createdAt: r.created_at,
     editedAt: r.edited_at ?? undefined,
     senderId: r.sender_id,
     senderName: r.sender_name ?? undefined,
     isRead: r.is_read,
     type: (r.type as ChatMessage["type"]) ?? undefined,
-    attachmentUrl: r.attachment_url ?? undefined,
+    attachmentUrl: mediaSrc(r.attachment_url, r.attachment_path),
     attachmentType: (r.attachment_type as ChatMessage["attachmentType"]) ?? undefined,
     attachmentPath: r.attachment_path ?? undefined,
     audioPath: r.audio_path ?? undefined,

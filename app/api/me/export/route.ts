@@ -1,4 +1,6 @@
 import { NextResponse } from "next/server";
+import { mediaSrc } from "@/lib/media";
+import { SITE_URL } from "@/lib/mail";
 import { createClient } from "@/lib/supabase/server";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { rateLimit } from "@/lib/rateLimit";
@@ -22,7 +24,7 @@ export async function GET() {
     admin.from("app_state").select("data, updated_at").eq("user_id", user.id).maybeSingle(),
     admin
       .from("chat_messages")
-      .select("created_at, sender_id, sender_name, body, is_voice, is_urgent, type, attachment_url, attachment_type, edited_at")
+      .select("created_at, sender_id, sender_name, body, is_voice, is_urgent, type, attachment_url, attachment_type, attachment_path, edited_at")
       .or(`client_id.eq.${user.id},sender_id.eq.${user.id}`)
       .order("created_at", { ascending: true }),
   ]);
@@ -32,7 +34,11 @@ export async function GET() {
     account: { email: user.email, createdAt: user.created_at, lastSignInAt: user.last_sign_in_at, metadata: user.user_metadata },
     profile,
     appData: state?.data ?? null,
-    messages: messages ?? [],
+    // Pièces jointes : lien vers le relais (ouvrable une fois connecté), pas d'URL de stockage brute.
+    messages: (messages ?? []).map(({ attachment_path, attachment_url, ...m }) => {
+      const src = mediaSrc(attachment_url, attachment_path);
+      return { ...m, attachment: src && !src.startsWith("data:") ? `${SITE_URL}${src}` : null };
+    }),
   };
 
   return new NextResponse(JSON.stringify(exported, null, 2), {

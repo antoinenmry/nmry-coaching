@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { isPausedClient, pausedResponse } from "@/lib/apiAuth";
 import { createClient } from "@/lib/supabase/server";
 import { createAdminClient } from "@/lib/supabase/admin";
+import { mediaSrc } from "@/lib/media";
 
 /**
  * GET /api/chat/audio?id=<messageId>
@@ -22,7 +23,7 @@ export async function GET(req: NextRequest) {
   const admin = createAdminClient();
   const { data: row } = await admin
     .from("chat_messages")
-    .select("client_id, coach_id, audio_url")
+    .select("client_id, coach_id, audio_url, audio_path")
     .eq("id", id)
     .maybeSingle();
 
@@ -37,5 +38,5 @@ export async function GET(req: NextRequest) {
   }
   if (!allowed) return NextResponse.json({ error: "Forbidden" }, { status: 403 });
 
-  return NextResponse.json({ audioUrl: row.audio_url ?? null });
+  return NextResponse.json({ audioUrl: mediaSrc(row.audio_url, row.audio_path) ?? null });
 }
