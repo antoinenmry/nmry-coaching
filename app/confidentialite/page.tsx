@@ -37,6 +37,7 @@ export default function PrivacyPage() {
           <li><b>Entraînement</b> : séances, charges, répétitions, RPE, ressenti, durées, records, objectifs et compétitions, vacances.</li>
           <li><b>Santé</b> : blessures, douleurs, poids, mensurations, diète. Ce sont des données sensibles, utilisées uniquement avec ton accord explicite.</li>
           <li><b>Messages</b> avec ton coach : textes, vocaux, photos et vidéos.</li>
+          <li><b>Notes de suivi</b> que ton coach garde pour lui (par exemple une douleur à surveiller ou un exercice à remplacer). Tu peux en demander la communication.</li>
           <li><b>Notifications</b> : l&apos;identifiant technique de ton téléphone si tu les actives.</li>
         </ul>
       </Section>

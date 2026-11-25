@@ -8,6 +8,7 @@ import { type BlockNote, type ChatMessage, type Followup } from "@/lib/types";
 import ChatAvatar from "@/components/ChatAvatar";
 import MetricsTab from "./MetricsTab";
 import ConversationList, { type ConversationRow, type ConversationSummary } from "./ConversationList";
+import UnreadSenders, { type UnreadSender } from "./UnreadSenders";
 
 // Cache mémoire des conversations (par sportif) : réafficher instantanément au
 // retour sur l'onglet, puis revalider en arrière-plan. Vit le temps de la session.
@@ -334,10 +335,13 @@ function IconButton({ label, onClick, disabled, pressed, tone, children }: {
   );
 }
 
-function MessagesTab({ initialClientId, focusMsgId, onConversationClosed }: {
+function MessagesTab({ initialClientId, focusMsgId, onConversationClosed, onConversationOpened, openRequest, onOpenRequestHandled }: {
   initialClientId?: string;
   focusMsgId?: string;
   onConversationClosed: () => void;
+  onConversationOpened: (clientId: string) => void;
+  openRequest?: { id: string; nonce: number };
+  onOpenRequestHandled: () => void;
 }) {
   const { me, role, clients } = useData();
   const isElevated = role === "coach" || role === "admin";
@@ -363,8 +367,11 @@ function MessagesTab({ initialClientId, focusMsgId, onConversationClosed }: {
   // Lien direct (message urgent de la vue d'ensemble) : ouvre la conversation concernée.
   useEffect(() => {
     if (!isElevated || chatClientId || !initialClientId) return;
-    if (clientList.some((c) => c.id === initialClientId)) setChatClientId(initialClientId);
-  }, [isElevated, chatClientId, clientList, initialClientId]);
+    if (clientList.some((c) => c.id === initialClientId)) {
+      setChatClientId(initialClientId);
+      onConversationOpened(initialClientId);
+    }
+  }, [isElevated, chatClientId, clientList, initialClientId, onConversationOpened]);
 
   // Liste des conversations : dernier message et non-lus par sportif.
   const loadConversations = useCallback(async () => {
@@ -433,7 +440,17 @@ function MessagesTab({ initialClientId, focusMsgId, onConversationClosed }: {
     }
     markConversationRead(id);
     setChatClientId(id);
+    onConversationOpened(id);
   }
+  // Toucher un sportif dans « Nouveaux messages » (en haut de Mon suivi) ouvre sa conversation.
+  const handledOpenRef = useRef(0);
+  useEffect(() => {
+    if (!isElevated || !openRequest || handledOpenRef.current === openRequest.nonce) return;
+    handledOpenRef.current = openRequest.nonce;
+    onOpenRequestHandled();
+    if (openRequest.id === chatClientId) return;
+    openConversation(openRequest.id);
+  });
   function closeConversation() {
     if (pushedHistoryRef.current) { window.history.back(); return; }
     window.history.replaceState(window.history.state, "", "/followup");
@@ -1701,7 +1718,7 @@ function BlocNotesTab() {
 
 // ─── Page principale ──────────────────────────────────────────────────────────
 export default function FollowupPage() {
-  const { loading } = useData();
+  const { loading, role } = useData();
   const [tab, setTab] = useState<"messages" | "sante" | "notes">("messages");
   // ?client=<id>&msg=<id> — arrivée depuis un message urgent de la vue d'ensemble.
   // Lu depuis window (pas useSearchParams : évite d'imposer un <Suspense> au build).
@@ -1712,12 +1729,29 @@ export default function FollowupPage() {
     const msg = p.get("msg") ?? undefined;
     if (client || msg) { setDeepLink({ client, msg }); setTab("messages"); }
   }, []);
+  const isElevated = role === "coach" || role === "admin";
   const [unreadCount, setUnreadCount] = useState(0);
+  const [senders, setSenders] = useState<UnreadSender[]>([]);
+  const sendersRef = useRef<UnreadSender[]>([]);
+  sendersRef.current = senders;
   const [unreadRefresh, setUnreadRefresh] = useState(0);
+  const [openRequest, setOpenRequest] = useState<{ id: string; nonce: number }>();
   const onConversationClosed = useCallback(() => {
     setDeepLink({});
     setUnreadRefresh(n => n + 1);
   }, []);
+  // Conversation ouverte = messages lus : le repère et le compteur se mettent à jour sans attendre.
+  const onConversationOpened = useCallback((clientId: string) => {
+    const gone = sendersRef.current.find(s => s.id === clientId);
+    if (!gone) return;
+    setUnreadCount(c => Math.max(0, c - gone.count));
+    setSenders(prev => prev.filter(s => s.id !== clientId));
+  }, []);
+  const clearOpenRequest = useCallback(() => setOpenRequest(undefined), []);
+  function openFromSenders(clientId: string) {
+    setTab("messages");
+    setOpenRequest({ id: clientId, nonce: Date.now() });
+  }
 
   // Ouvre TOUJOURS la page en haut (onglets Messages/Santé/Bloc-notes visibles),
   // jamais scrollée dans le chat comme avant. Sans le `scrollRestoration = "manual"`,
@@ -1736,7 +1770,11 @@ export default function FollowupPage() {
     let cancelled = false;
     fetch("/api/chat/unread")
       .then(r => r.ok ? r.json() : { count: 0 })
-      .then(d => { if (!cancelled) setUnreadCount(d.count ?? 0); })
+      .then(d => {
+        if (cancelled) return;
+        setUnreadCount(d.count ?? 0);
+        setSenders(Array.isArray(d.senders) ? d.senders : []);
+      })
       .catch(() => {});
     return () => { cancelled = true; };
   }, [tab, unreadRefresh]);
@@ -1771,7 +1809,18 @@ export default function FollowupPage() {
         ))}
       </div>
 
-      {tab === "messages" && <MessagesTab initialClientId={deepLink.client} focusMsgId={deepLink.msg} onConversationClosed={onConversationClosed} />}
+      {isElevated && <UnreadSenders senders={senders} onOpen={openFromSenders} />}
+
+      {tab === "messages" && (
+        <MessagesTab
+          initialClientId={deepLink.client}
+          focusMsgId={deepLink.msg}
+          onConversationClosed={onConversationClosed}
+          onConversationOpened={onConversationOpened}
+          openRequest={openRequest}
+          onOpenRequestHandled={clearOpenRequest}
+        />
+      )}
       {tab === "sante"    && <SanteTab />}
       {tab === "notes"    && <BlocNotesTab />}
     </div>

@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useRef, useState } from "react";
+import CoachNotesBubble from "@/components/plan/CoachNotesBubble";
 import dynamic from "next/dynamic";
 import { useData } from "@/components/DataProvider";
 
@@ -526,6 +527,8 @@ export default function PlanPage() {
           onClose={() => setInjecting(false)}
         />
       )}
+
+      <CoachNotesBubble />
     </div>
   );
 }

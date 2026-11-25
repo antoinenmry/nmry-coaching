@@ -260,6 +260,11 @@ Document unique par sportif (JSON dans `app_state.data` Supabase) :
   `{ id, text, createdAt, updatedAt?, authorId, authorName, authorRole }`.
   Les deux peuvent ajouter des notes. Modifier/supprimer : auteur seulement.
 
+- **Notes privées du coach** (pas dans `app_state`, que le sportif lit) : table `coach_notes` sans policy
+  (`supabase/coach-notes.sql`), accès via `/api/coach/notes` (GET/POST/DELETE, coach affecté ou admin).
+  Bulle flottante `components/plan/CoachNotesBubble.tsx` dans Programmation (coach sur le profil d'un sportif) :
+  notes datées, suppression manuelle uniquement, supprimées avec le compte du sportif (cascade).
+
 - `metrics?: Metric[]` : métriques corporelles personnalisables (Poids, Taille, Tour de taille…).
   `Metric { id, name, unit, emoji?, entries: MetricEntry[], visible }`,
   `MetricEntry { id, date, value }`. Affiché dans **`/followup` → Santé → sous-onglet Métriques**
@@ -488,7 +493,9 @@ sportif → re-upsert du blob entier à chaque envoi → **contamination croisé
   non-lus, puis tous les sportifs ; données via `GET /api/chat/conversations`, à jour en Realtime). Toucher une
   ligne ouvre la conversation en plein écran sur téléphone (`?client=<id>` dans l'historique : le retour système
   revient à la liste), à droite de la liste sur ordinateur (≥ 768 px). Le sportif arrive directement sur sa
-  conversation. Actions d'une bulle (Réagir, Modifier, Supprimer) : au toucher, au survol sur ordinateur.
+  conversation. **Repère « Nouveaux messages »** (`followup/UnreadSenders.tsx`) sous les onglets de Mon suivi, sur
+  les 3 onglets : avatar + prénom + non-lus par sportif (urgent en rouge), données `senders` de `GET /api/chat/unread`
+  (même source que le compteur) ; toucher = ouvre la conversation. Actions d'une bulle (Réagir, Modifier, Supprimer) : au toucher, au survol sur ordinateur.
 - **Front** (`MessagesTab` dans `/followup`) : fetch via API, **avatars chargés séparément** des
   messages (photo réelle via `/api/chat/avatars` ou initiales colorées en attendant, dans l'en-tête
   de la conversation), groupement des messages consécutifs et séparateurs de jour.
