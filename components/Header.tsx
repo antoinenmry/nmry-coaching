@@ -6,6 +6,7 @@ import { usePathname, useRouter } from "next/navigation";
 import { useData } from "./DataProvider";
 import { useTheme } from "./ThemeProvider";
 import ClientSelector from "./ClientSelector";
+import HomeTicker from "./HomeTicker";
 
 export const SHARE_WEEK_EVENT = "nmry:share-week";
 
@@ -42,6 +43,7 @@ export default function Header() {
   // Partager ma semaine (Programmation) : liseré aurora permanent autour du bouton.
   const isPlan = pathname === "/plan";
   const openShare = () => window.dispatchEvent(new Event(SHARE_WEEK_EVENT));
+  const bandIsCoach = role === "coach" || role === "admin";
 
   return (
     <header className="sticky top-0 z-10 border-b border-line bg-bg/90 backdrop-blur">
@@ -77,9 +79,9 @@ export default function Header() {
       </div>
 
       {/* Bandeau inférieur : sélecteur client à gauche, aperçu + ⚙ à droite */}
-      <div className="flex items-center justify-between border-t border-line/50 px-4 py-2">
-        {(role === "coach" || role === "admin") ? <ClientSelector /> : <div />}
-        <div className="flex items-center gap-2">
+      <div className="flex items-center justify-between gap-2 border-t border-line/50 px-4 py-2">
+        {bandIsCoach ? <ClientSelector /> : <div className="flex min-w-0 flex-1">{isHome && <HomeTicker />}</div>}
+        <div className="flex shrink-0 items-center gap-2">
           {showPreview && (
             <button
               onClick={() => setPreviewAsClient(!previewAsClient)}
@@ -141,6 +143,12 @@ export default function Header() {
         </div>
       </div>
 
+      {/* Coach : le choix du sportif occupe la gauche du bandeau → infos sur une ligne fine en dessous. */}
+      {bandIsCoach && isHome && (
+        <div className="flex px-4 pb-2">
+          <HomeTicker compact />
+        </div>
+      )}
     </header>
   );
 }

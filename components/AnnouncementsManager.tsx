@@ -5,7 +5,7 @@ import { createPortal } from "react-dom";
 import { useData } from "@/components/DataProvider";
 import type { Announcement } from "@/lib/types";
 import { sportsOf, sportTarget } from "@/lib/sports";
-import { AUTO_SLOTS, DEFAULT_INTERVAL_SEC, orderedSlots } from "@/lib/carousel";
+import { AUTO_SLOTS, DEFAULT_INTERVAL_SEC, DEFAULT_TICKER_SPEED, TICKER_SPEEDS, orderedSlots } from "@/lib/carousel";
 
 const COLORS = ["#ab47bc", "#42a5f5", "#66bb6a", "#ffb300", "#ef5350", "#26c6da"];
 const LABEL = "mb-1.5 block text-[10.5px] font-black uppercase tracking-[0.12em] text-dim";
@@ -41,7 +41,8 @@ export default function AnnouncementsManager() {
   const cfg = library.carousel ?? {};
   const [editing, setEditing] = useState<Announcement | "new" | null>(null);
 
-  const order = orderedSlots(library);
+  // Carrousel = annonces seulement ; les infos automatiques ont leur propre bloc (bandeau défilant).
+  const order = orderedSlots(library).filter((id) => !AUTO_SLOTS.some((x) => x.id === id));
   const hidden = new Set(cfg.hidden ?? []);
   const annById = new Map(anns.map((a) => [a.id, a]));
   const autoById = new Map(AUTO_SLOTS.map((x) => [x.id, x]));
@@ -105,7 +106,7 @@ export default function AnnouncementsManager() {
         </button>
       </div>
       <p className="mb-4 text-[12px] text-dim">
-        Les pages défilent en haut de l&apos;accueil de tous les sportifs. Change leur ordre, masque-les ou crée-en de nouvelles.
+        Tes infos défilent en haut de l&apos;accueil de tous les sportifs. Change leur ordre, masque-les ou crée-en de nouvelles.
       </p>
 
       {/* Défilement */}
@@ -171,9 +172,45 @@ export default function AnnouncementsManager() {
           );
         })}
       </div>
-      <p className="mt-3 text-[11.5px] text-dim">
-        Une page automatique n&apos;apparaît que s&apos;il y a du contenu. L&apos;œil la masque pour tout le monde.
-      </p>
+      {order.length === 0 && <p className="text-[12px] text-dim">Aucune annonce. Le bouton « Page » en crée une.</p>}
+
+      {/* Bandeau défilant (en-tête de l'accueil) : infos automatiques + vitesse */}
+      <div className="mt-5 border-t border-line pt-4">
+        <h3 className="font-black">Bandeau défilant</h3>
+        <p className="mb-3 text-[12px] text-dim">
+          En haut de l&apos;accueil, à côté des icônes : le texte défile en continu. Une info n&apos;apparaît que s&apos;il y a du contenu ; l&apos;œil la masque pour tout le monde.
+        </p>
+        <div className="mb-3 flex flex-wrap items-center gap-1.5">
+          <span className="mr-1 text-[11px] font-black uppercase tracking-[0.12em] text-dim">Vitesse</span>
+          {TICKER_SPEEDS.map((s) => (
+            <button
+              key={s.value}
+              type="button"
+              onClick={() => patch((c) => { c.tickerSpeed = s.value; })}
+              className={chip((cfg.tickerSpeed ?? DEFAULT_TICKER_SPEED) === s.value)}
+            >
+              {s.label}
+            </button>
+          ))}
+        </div>
+        <div className="space-y-2">
+          {AUTO_SLOTS.map((x) => {
+            const off = hidden.has(x.id);
+            return (
+              <div key={x.id} className={`relative flex items-center gap-2 overflow-hidden rounded-xl border border-line bg-surface2 py-2 pl-4 pr-2 ${off ? "opacity-55" : ""}`}>
+                <span aria-hidden className="absolute inset-y-0 left-0 w-1" style={{ background: x.color }} />
+                <span className="min-w-0 flex-1">
+                  <span className="block truncate text-[14px] font-black">{x.label}</span>
+                  <span className="block truncate text-[11.5px] text-dim">{x.desc}</span>
+                </span>
+                <button type="button" onClick={() => toggle(x.id)} aria-label={off ? `Afficher ${x.label}` : `Masquer ${x.label}`} aria-pressed={!off} className={`grid h-8 w-8 shrink-0 place-items-center rounded-lg ${off ? "text-dim" : "text-accent"}`}>
+                  <Ico d={off ? P.eyeOff : P.eye} className="text-lg" />
+                </button>
+              </div>
+            );
+          })}
+        </div>
+      </div>
 
       {editing && (
         <AnnouncementForm

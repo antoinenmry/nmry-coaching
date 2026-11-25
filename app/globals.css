@@ -168,3 +168,13 @@ input[type="number"]::-webkit-inner-spin-button { -webkit-appearance: none; marg
   pointer-events: none;
 }
 @media (prefers-reduced-motion: reduce) { .nmry-gold-ring::before { animation: none; } }
+
+/* Bandeau d'infos de l'accueil : défilement continu (2 copies, translation de la moitié). */
+@keyframes nmry-marquee { to { transform: translateX(-50%); } }
+.nmry-ticker-rail { animation: nmry-marquee linear infinite; will-change: transform; }
+.nmry-ticker { mask-image: linear-gradient(90deg, transparent, #000 10px, #000 calc(100% - 14px), transparent); }
+@media (prefers-reduced-motion: reduce) {
+  .nmry-ticker { overflow-x: auto; }
+  .nmry-ticker-rail { animation: none; position: relative; padding-left: 10px; }
+  .nmry-ticker-dup { display: none; }
+}

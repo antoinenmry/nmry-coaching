@@ -312,7 +312,7 @@ export interface ExerciseLibrary {
   challengesVisible?: boolean;  // true = carte visible côté client sur l'accueil
   customBadgeColors?: string[]; // couleurs de badge personnalisées sauvegardées (hex), en plus des presets fixes
   mapVisible?: boolean;         // true = onglet "Ma carte" visible côté sportif (off par défaut → coach/admin seulement)
-  carousel?: { order?: string[]; hidden?: string[]; intervalSec?: number; auto?: boolean }; // pages du carrousel d'accueil : ordre, pages masquées, vitesse
+  carousel?: { order?: string[]; hidden?: string[]; intervalSec?: number; auto?: boolean; tickerSpeed?: number }; // carrousel d'accueil (annonces : ordre, masquées, vitesse) + bandeau défilant (infos auto masquées dans hidden, vitesse px/s)
   sports?: string[];            // sports proposés dans le profil (éditeurs : Simon et Antoine) ; absent = liste par défaut
   announcements?: Announcement[]; // cartes d'annonce du carrousel de l'accueil (créées par le coach, visibles par tous)
   cardIcons?: Record<string, string>; // href → emoji ou URL Storage (icône personnalisée des cartes d'accueil, admin uniquement)

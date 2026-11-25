@@ -337,6 +337,15 @@ type CardInfoOption =
 - La bibliothèque affiche un bouton ⭐/☆ sur chaque exercice (coach et sportif)
 - `cardColorMode` défaut : `"full"` (fond complet)
 
+### Accueil : carrousel (annonces de Simon) + bandeau défilant (infos automatiques)
+- `AnnouncementCarousel` : **uniquement les annonces** (`library.announcements` : message, promo/lien, sondage),
+  page par page, ordre/masquage/intervalle dans Réglages → « Carrousel de l'accueil ».
+- `HomeTicker` (dans `Header`, accueil seulement) : texte en **défilement continu** (2 copies + `translateX(-50%)`,
+  durée = largeur / `library.carousel.tickerSpeed` px/s, défaut 40, réglable Lent/Normal/Rapide). Anniversaires du
+  jour (+ feu d'artifice), rappels perso, compétitions et anniversaires à venir (`/api/home/feed`). Masquage par info
+  via `carousel.hidden` (`AUTO_SLOTS` de `lib/carousel.ts`). Sportif : à gauche des icônes ; coach : ligne fine sous
+  le bandeau (le sélecteur de sportif occupe la gauche). Toucher/survol = pause ; mouvement réduit = liste glissable.
+
 ### Templates (coach/admin uniquement)
 Stockés dans `template_state` (singleton Supabase, RLS `is_coach()`).
 Chargés dans `DataProvider` → `templates: TemplateLibrary`.

@@ -3,15 +3,13 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { useData } from "@/components/DataProvider";
 import type { Announcement } from "@/lib/types";
-import Fireworks from "@/components/Fireworks";
 import { sportTarget } from "@/lib/sports";
-import { orderedSlots, slotOf, DEFAULT_INTERVAL_SEC } from "@/lib/carousel";
+import { orderedSlots, DEFAULT_INTERVAL_SEC } from "@/lib/carousel";
 
-/** Carte affichable : annonce du coach, carte automatique (anniversaire, compétition) ou rappel. */
+/** Carte affichable : annonce de Simon (message, promo ou lien, sondage). */
 type Item = {
   id: string; label: string; title: string; text: string; color: string;
   code?: string; link?: string; poll?: { options: string[] };
-  rows?: { who: string; what: string; when: string }[]; // liste défilante (compétitions, anniversaires)
 };
 
 
@@ -31,107 +29,22 @@ export function activeAnnouncements(
   );
 }
 
-/** Liste qui défile à l'horizontale, une entrée à la fois (même hauteur qu'une carte d'annonce). */
-function TickerRows({ rows, color }: { rows: { who: string; what: string; when: string }[]; color: string }) {
-  const [i, setI] = useState(0);
-  useEffect(() => {
-    if (rows.length < 2) return;
-    const id = setInterval(() => {
-      if (document.hidden) return;
-      setI((n) => (n + 1) % rows.length);
-    }, 3000);
-    return () => clearInterval(id);
-  }, [rows.length]);
-  const cur = Math.min(i, rows.length - 1);
-  return (
-    <span className="mt-0.5 block">
-      <span className="block overflow-hidden">
-        <span className="flex transition-transform duration-500 ease-out" style={{ transform: `translateX(-${cur * 100}%)` }}>
-          {rows.map((r, k) => (
-            <span key={k} className="block w-full shrink-0 pr-2" aria-hidden={k !== cur}>
-              <span className="block truncate text-[17px] font-black leading-tight">{r.what}</span>
-              <span className="mt-1 flex items-center gap-2 text-[13px] leading-snug">
-                <b className="font-black">{r.who}</b>
-                <span className="rounded-full px-2 py-0.5 text-[11.5px] font-black" style={{ background: `color-mix(in srgb, ${color} 22%, transparent)`, color: `color-mix(in srgb, ${color} 70%, var(--color-ink))` }}>{r.when}</span>
-                {rows.length > 1 && <span className="ml-auto text-[11px] font-bold tabular-nums text-dim">{k + 1}/{rows.length}</span>}
-              </span>
-            </span>
-          ))}
-        </span>
-      </span>
-    </span>
-  );
-}
-
 /**
- * Carrousel d'annonces de l'accueil : cartes en dégradé qui défilent seules toutes les
+ * Carrousel des annonces de Simon sur l'accueil : cartes en dégradé qui défilent seules toutes les
  * 5 s (pause pendant que le doigt touche la carte), glissables, avec points de progression.
  * Un tap copie le code promo (s'il y en a un) ou ouvre le lien.
  */
 export default function AnnouncementCarousel() {
   const { library, state, update, me, activeUserId } = useData();
-  const [feed, setFeed] = useState<Item[]>([]);
-
-  // Cartes automatiques du groupe (anniversaires, compétitions) — calculées côté serveur.
-  useEffect(() => {
-    if (!me) return;
-    let cancelled = false;
-    fetch("/api/home/feed")
-      .then((r) => (r.ok ? r.json() : { cards: [] }))
-      .then((d) => { if (!cancelled) setFeed(d.cards ?? []); })
-      .catch(() => {});
-    return () => { cancelled = true; };
-  }, [me]);
-
-  // Rappels personnels : calculés ici, sur SES données (jamais sur le profil d'un sportif consulté).
-  const reminders: Item[] = [];
-  if (me && activeUserId === me.id) {
-    const today = todayKey();
-    const d = new Date();
-    const mon = new Date(d); mon.setDate(d.getDate() - ((d.getDay() + 6) % 7));
-    const sun = new Date(mon); sun.setDate(mon.getDate() + 6);
-    const key = (x: Date) => `${x.getFullYear()}-${String(x.getMonth() + 1).padStart(2, "0")}-${String(x.getDate()).padStart(2, "0")}`;
-    const todayLocal = key(d);
-    const todo = state.sessions.filter((s) => s.date && !s.done && s.date >= todayLocal && s.date <= key(sun));
-    const todays = todo.filter((s) => s.date === todayLocal);
-    if (todays.length > 0) {
-      reminders.push({ id: "rem-today", label: "Aujourd'hui", color: "#42a5f5", title: `Séance du jour : ${todays.map((s) => s.name).join(", ")}`, text: "Bonne séance !" });
-    }
-    for (const g of state.goals) {
-      if (!g.date) continue;
-      const n = Math.round((new Date(g.date + "T00:00:00").getTime() - new Date(todayLocal + "T00:00:00").getTime()) / 86_400_000);
-      if (n >= 0 && n <= 7) {
-        reminders.push({ id: `rem-goal-${g.id}`, label: "Objectif", color: "#66bb6a", title: n === 0 ? `C'est aujourd'hui : ${g.competition}` : `J-${n} · ${g.competition}`, text: g.place ?? "" });
-      }
-    }
-    void today;
-  }
 
   // Pages : ordre et visibilité réglés par les éditeurs (library.carousel).
   const cfg = library.carousel;
   const hidden = new Set(cfg?.hidden ?? []);
-  const allItems: (Item & { slot: string })[] = [
-    ...feed,
-    ...activeAnnouncements(library.announcements, me?.id, activeUserId === me?.id ? state.profile.sports ?? [] : []),
-    ...reminders,
-  ].map((it) => ({ ...it, slot: slotOf(it.id) }));
+  // Les infos automatiques (anniversaires, compétitions, rappels) sont dans le bandeau défilant de l'en-tête.
   const order = orderedSlots(library);
-  const items = allItems
-    .filter((it) => !hidden.has(it.slot))
-    .sort((a, b) => order.indexOf(a.slot) - order.indexOf(b.slot));
-
-  // Feu d'artifice : une fois par jour et par anniversaire, ou à chaque tap sur la carte.
-  const [fireworks, setFireworks] = useState(false);
-  const birthdayIds = items.filter((c) => c.id.startsWith("bd-")).map((c) => c.id).join(",");
-  useEffect(() => {
-    if (!birthdayIds) return;
-    try {
-      const k = `nmry_fireworks_${todayKey()}_${birthdayIds}`;
-      if (localStorage.getItem(k)) return;
-      localStorage.setItem(k, "1");
-    } catch { /* stockage indisponible : on lance quand même */ }
-    setFireworks(true);
-  }, [birthdayIds]);
+  const items: Item[] = activeAnnouncements(library.announcements, me?.id, activeUserId === me?.id ? state.profile.sports ?? [] : [])
+    .filter((it) => !hidden.has(it.id))
+    .sort((a, b) => order.indexOf(a.id) - order.indexOf(b.id));
 
   const autoMs = Math.min(30, Math.max(2, cfg?.intervalSec ?? DEFAULT_INTERVAL_SEC)) * 1000;
   const autoOn = cfg?.auto !== false;
@@ -179,7 +92,6 @@ export default function AnnouncementCarousel() {
 
   return (
     <div className="mb-3">
-      {fireworks && <Fireworks onDone={() => setFireworks(false)} />}
       <div
         ref={trackRef}
         onScroll={onScroll}
@@ -195,9 +107,9 @@ export default function AnnouncementCarousel() {
           return (
             <div
               key={a.id}
-              role={actionable || a.id.startsWith("bd-") ? "button" : undefined}
+              role={actionable ? "button" : undefined}
               tabIndex={actionable ? 0 : undefined}
-              onClick={() => { if (a.id.startsWith("bd-")) setFireworks(true); else if (actionable) activate(a); }}
+              onClick={() => { if (actionable) activate(a); }}
               className="relative w-full shrink-0 snap-center overflow-hidden rounded-[20px] border px-4 py-3 text-left"
               style={{
                 background: `linear-gradient(120deg, color-mix(in srgb, ${a.color} 32%, var(--color-surface)), var(--color-surface) 78%)`,
@@ -211,7 +123,6 @@ export default function AnnouncementCarousel() {
                   {a.label}
                 </span>
               )}
-              {a.rows && <TickerRows rows={a.rows} color={a.color} />}
               {a.title && <span className="mt-0.5 block text-[17px] font-black leading-tight">{a.title}</span>}
               {a.text && <span className="mt-1 block whitespace-pre-wrap text-[13px] leading-snug text-dim">{a.text}</span>}
               {a.code && (
