@@ -5,7 +5,7 @@ import { createClient } from "@/lib/supabase/server";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { sendPushToUser } from "@/lib/push";
 import { getUserNotifPrefs } from "@/lib/notifPrefs";
-import { insertChatMessage, rowToMessage, getCoachOf, type ChatRow } from "@/lib/chat";
+import { insertChatMessage, rowToMessage, getCoachOf, type ChatRow, loadReplyPreviews } from "@/lib/chat";
 
 /**
  * GET  /api/chat?clientId=…   → messages d'une conversation + participants
@@ -80,13 +80,16 @@ export async function GET(req: NextRequest) {
   // Charger une page : les N+1 plus récents (décroissant) pour détecter s'il en reste.
   // ⚡ On EXCLUT audio_url (vocaux base64, lourds) : il est chargé à la demande au play
   //    via GET /api/chat/audio?id=… → payload du chat très allégé.
-  let query = admin
-    .from("chat_messages")
-    .select("id,coach_id,client_id,sender_id,sender_name,body,is_voice,is_urgent,type,is_read,created_at,edited_at,attachment_url,attachment_type,attachment_path,reaction")
-    .eq("client_id", clientId)
-    .order("created_at", { ascending: false })
-    .limit(PAGE_SIZE + 1);
-  if (before) query = query.lt("created_at", before);
+  const BASE_COLS = "id,coach_id,client_id,sender_id,sender_name,body,is_voice,is_urgent,type,is_read,created_at,edited_at,attachment_url,attachment_type,attachment_path,reaction";
+  const pageQuery = (cols: string) => {
+    let q = admin.from("chat_messages").select(cols).eq("client_id", clientId)
+      .order("created_at", { ascending: false }).limit(PAGE_SIZE + 1);
+    if (before) q = q.lt("created_at", before);
+    return q;
+  };
+  // reply_to n'existe qu'après chat-replies.sql : sans la colonne, on relit sans elle.
+  const query = pageQuery(`${BASE_COLS},reply_to`).then(async (res) =>
+    res.error?.code === "42703" ? await pageQuery(BASE_COLS) : res);
 
   // ⚡ Parallélisation : marquage lu (1ère page) + messages + résolution du coach.
   const [, { data: rows }, coachId] = await Promise.all([
@@ -109,6 +112,16 @@ export async function GET(req: NextRequest) {
   const safeRows = page.filter(r => legitimateSenders.has(r.sender_id));
   // Remettre en ordre chronologique croissant pour l'affichage.
   const messages = safeRows.reverse().map(rowToMessage);
+
+  // Réponses : aperçu du message cité (même s'il est sur une page plus ancienne).
+  const replyIds = messages.map(m => m.replyToId).filter((x): x is string => !!x);
+  if (replyIds.length) {
+    const previews = await loadReplyPreviews(admin, clientId, replyIds);
+    for (const m of messages) {
+      if (!m.replyToId) continue;
+      m.reply = previews.get(m.replyToId) ?? { id: m.replyToId, text: "", kind: "text", missing: true };
+    }
+  }
 
   // Participants (avatars/noms) : utiles seulement à la première page.
   if (!isFirstPage) {
@@ -143,6 +156,7 @@ export async function POST(req: NextRequest) {
   const attachmentType: "image" | "video" | undefined = body?.attachmentType;
   const attachmentPath: string | undefined = body?.attachmentPath;
   const audioPath: string | undefined = body?.audioPath;
+  const rawReplyTo = typeof body?.replyTo === "string" ? body.replyTo : undefined;
   // Les adresses des fichiers sont reconstruites ici à partir des chemins Storage (relais
   // authentifié) : une URL externe fournie par le navigateur n'est jamais enregistrée.
   const attachmentUrl = attachmentPath ? mediaProxyUrl(attachmentPath) : undefined;
@@ -185,6 +199,15 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: "Vocal invalide" }, { status: 400 });
   }
 
+  // Réponse : le message cité doit appartenir à CETTE conversation.
+  let replyTo: string | undefined;
+  if (rawReplyTo) {
+    if (!/^[0-9a-f-]{36}$/i.test(rawReplyTo)) return NextResponse.json({ error: "Réponse invalide" }, { status: 400 });
+    const { data: quoted } = await admin.from("chat_messages").select("id").eq("id", rawReplyTo).eq("client_id", clientId).maybeSingle();
+    if (!quoted) return NextResponse.json({ error: "Message cité introuvable" }, { status: 400 });
+    replyTo = rawReplyTo;
+  }
+
   // coach_id = coach affecté au client (sinon, si l'envoyeur est élevé, lui-même)
   const assignedCoach = await getCoachOf(admin, clientId);
   const coachId = assignedCoach ?? (isElevated ? user.id : "");
@@ -205,6 +228,7 @@ export async function POST(req: NextRequest) {
     attachmentType,
     attachmentPath,
     audioPath,
+    replyTo,
   });
   if (!row) return NextResponse.json({ error: "Erreur d'enregistrement" }, { status: 500 });
 

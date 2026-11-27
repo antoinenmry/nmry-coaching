@@ -504,7 +504,13 @@ sportif → re-upsert du blob entier à chaque envoi → **contamination croisé
   revient à la liste), à droite de la liste sur ordinateur (≥ 768 px). Le sportif arrive directement sur sa
   conversation. **Repère « Nouveaux messages »** (`followup/UnreadSenders.tsx`) sous les onglets de Mon suivi, sur
   les 3 onglets : avatar + prénom + non-lus par sportif (urgent en rouge), données `senders` de `GET /api/chat/unread`
-  (même source que le compteur) ; toucher = ouvre la conversation. Actions d'une bulle (Réagir, Modifier, Supprimer) : au toucher, au survol sur ordinateur.
+  (même source que le compteur) ; toucher = ouvre la conversation. Actions d'une bulle (Réagir, **Répondre**, Modifier, Supprimer) : au toucher, au survol sur
+  ordinateur ; les médias (vidéo, photo, vocal) ont un **bouton emoji à côté de la bulle** (le toucher du lecteur ne
+  sert qu'à la lecture). Réactions : 👍 ❤️ 🔥 💪 👏 😂 👎 (une par message).
+  **Réponses** : colonne `reply_to` (`supabase/chat-replies.sql`, même conversation vérifiée par `POST /api/chat`
+  `{ replyTo }`), aperçu `reply` du message cité fourni par `GET /api/chat` (`loadReplyPreviews`, `lib/chat.ts`),
+  citation dans la bulle (vignette + « Vidéo de 14:32 » pour distinguer plusieurs vidéos), toucher = saut au message
+  cité (remonte l'historique). Sans la colonne, l'API relit/écrit sans la citation (pas de panne).
 - **Front** (`MessagesTab` dans `/followup`) : fetch via API, **avatars chargés séparément** des
   messages (photo réelle via `/api/chat/avatars` ou initiales colorées en attendant, dans l'en-tête
   de la conversation), groupement des messages consécutifs et séparateurs de jour.

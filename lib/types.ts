@@ -155,6 +155,20 @@ export interface ChatMessage {
   attachmentPath?: string;    // chemin Storage pour la suppression
   audioPath?: string;         // chemin Storage pour les vocaux (vide si encore base64 legacy)
   reaction?: string;          // emoji de réaction (tapback), affecté par n'importe quel participant de la conversation
+  replyToId?: string;         // message cité (réponse) — même conversation
+  reply?: ChatReplyPreview;   // aperçu du message cité, fourni par GET /api/chat
+}
+
+/** Aperçu d'un message cité dans une réponse. `missing` = message cité supprimé. */
+export interface ChatReplyPreview {
+  id: string;
+  senderId?: string;
+  senderName?: string;
+  text: string;
+  kind: "text" | "image" | "video" | "voice";
+  mediaUrl?: string;
+  createdAt?: string;
+  missing?: boolean;
 }
 
 /** Une note du bloc-notes partagé sportif ↔ coach (stocké dans app_state du sportif). */

@@ -4,7 +4,7 @@ import { Fragment, useState, useRef, useEffect, useLayoutEffect, useCallback, ty
 import { mediaSrc } from "@/lib/media";
 import { useData } from "@/components/DataProvider";
 import { createClient } from "@/lib/supabase/client";
-import { type BlockNote, type ChatMessage, type Followup } from "@/lib/types";
+import { type BlockNote, type ChatMessage, type ChatReplyPreview, type Followup } from "@/lib/types";
 import ChatAvatar from "@/components/ChatAvatar";
 import MetricsTab from "./MetricsTab";
 import ConversationList, { type ConversationRow, type ConversationSummary } from "./ConversationList";
@@ -21,7 +21,7 @@ type ConvCache = {
 const chatCache = new Map<string, ConvCache>();
 
 // Emojis de réaction (tapback) proposés sur un message : pouce en l'air, pouce en bas, cœur, rire.
-const REACTION_EMOJIS = ["👍", "👎", "❤️", "😂"];
+const REACTION_EMOJIS = ["👍", "❤️", "🔥", "💪", "👏", "😂", "👎"];
 
 // Emojis proposés dans la barre de saisie (les claviers d'ordinateur n'en ont pas).
 const COMPOSER_EMOJIS = [
@@ -56,7 +56,61 @@ function rowToChatMessage(r: Record<string, unknown>): ChatMessage {
     attachmentPath: (r.attachment_path as string) ?? undefined,
     audioPath: (r.audio_path as string) ?? undefined,
     reaction: (r.reaction as string) ?? undefined,
+    replyToId: (r.reply_to as string) ?? undefined,
   };
+}
+
+/** Aperçu d'un message chargé, pour le citer dans une réponse. */
+function previewOf(m: ChatMessage): ChatReplyPreview {
+  return {
+    id: m.id,
+    senderId: m.senderId,
+    senderName: m.senderName,
+    text: m.text.slice(0, 140),
+    kind: m.isVoice ? "voice" : m.attachmentType ?? "text",
+    mediaUrl: m.attachmentUrl,
+    createdAt: m.createdAt,
+  };
+}
+const KIND_LABEL: Record<ChatReplyPreview["kind"], string> = { text: "Message", image: "Photo", video: "Vidéo", voice: "Message vocal" };
+
+/** Citation d'un message (dans une bulle de réponse ou au-dessus de la saisie). */
+function ReplyQuote({ q, meId, onClick, tone }: { q: ChatReplyPreview; meId?: string; onClick?: () => void; tone: "mine" | "theirs" | "composer" }) {
+  const who = q.missing ? "" : q.senderId && q.senderId === meId ? "Toi" : q.senderName || "Message";
+  const time = q.createdAt ? new Date(q.createdAt).toLocaleTimeString("fr-FR", { hour: "2-digit", minute: "2-digit" }) : "";
+  const label = q.missing
+    ? "Message supprimé"
+    : q.kind === "text"
+    ? q.text || "Message"
+    : `${KIND_LABEL[q.kind]}${time ? ` de ${time}` : ""}${q.text ? ` · ${q.text}` : ""}`;
+  const box = tone === "mine"
+    ? "bg-black/10 border-[#1a1500]/40 text-[#1a1500]"
+    : tone === "theirs"
+    ? "bg-bg/50 border-accent text-ink"
+    : "bg-surface2 border-accent text-ink";
+  const Tag = onClick ? "button" : "div";
+  return (
+    <Tag
+      type={onClick ? "button" : undefined}
+      onClick={onClick}
+      aria-label={onClick ? `Voir le message cité : ${label}` : undefined}
+      className={`flex w-full min-w-0 items-center gap-2 rounded-lg border-l-[3px] px-2 py-1.5 text-left ${box}`}
+    >
+      <span className="min-w-0 flex-1">
+        {who && <span className={`block truncate text-[11px] font-black ${tone === "mine" ? "" : "text-accent"}`}>{who}</span>}
+        <span className={`line-clamp-2 text-[12px] leading-snug ${tone === "mine" ? "opacity-80" : "text-dim"}`}>{label}</span>
+      </span>
+      {!q.missing && q.mediaUrl && q.kind === "image" && (
+        <img src={q.mediaUrl} alt="" className="h-9 w-9 shrink-0 rounded-md object-cover" />
+      )}
+      {!q.missing && q.mediaUrl && q.kind === "video" && (
+        <span className="relative h-9 w-9 shrink-0 overflow-hidden rounded-md bg-black">
+          <video src={`${q.mediaUrl}#t=0.5`} muted playsInline preload="metadata" className="h-full w-full object-cover" />
+          <svg aria-hidden width="14" height="14" viewBox="0 0 24 24" fill="white" className="absolute inset-0 m-auto"><path d="M8 5v14l11-7z" /></svg>
+        </span>
+      )}
+    </Tag>
+  );
 }
 
 // ─── Utils ────────────────────────────────────────────────────────────────────
@@ -615,6 +669,17 @@ function MessagesTab({ initialClientId, focusMsgId, onConversationClosed, onConv
 
   const [text, setText] = useState("");
   const [isUrgent, setIsUrgent] = useState(false);
+  // Réponse en cours : message cité par le prochain envoi (texte, vocal, photo ou vidéo).
+  const [replyingTo, setReplyingTo] = useState<ChatMessage | null>(null);
+  const replyRef = useRef<ChatMessage | null>(null);
+  replyRef.current = replyingTo;
+  useEffect(() => { setReplyingTo(null); }, [convClientId]);
+  function startReply(m: ChatMessage) {
+    setReplyingTo(m);
+    setActionsId(null);
+    setReactingId(null);
+    requestAnimationFrame(() => inputRef.current?.focus());
+  }
   const [emojiOpen, setEmojiOpen] = useState(false);
   const [notifyDebug, setNotifyDebug] = useState<string | null>(null);
   const [recording, setRecording] = useState(false);
@@ -659,6 +724,29 @@ function MessagesTab({ initialClientId, focusMsgId, onConversationClosed, onConv
     return () => clearTimeout(t);
   }, [focusMsgId, messages, hasMore, loadingMore, loadMore]);
 
+  // Toucher une citation : amène le message cité à l'écran (remonte l'historique si besoin) et le fait briller.
+  const [jumpTarget, setJumpTarget] = useState<string | null>(null);
+  const [flashId, setFlashId] = useState<string | null>(null);
+  const jumpTriesRef = useRef(0);
+  function jumpTo(id: string) { jumpTriesRef.current = 0; setJumpTarget(id); }
+  useEffect(() => {
+    if (!jumpTarget) return;
+    const scroller = scrollRef.current;
+    const el = scroller?.querySelector<HTMLElement>(`[data-msg-id="${jumpTarget}"]`);
+    if (!scroller) return;
+    if (!el) {
+      if (hasMore && !loadingMore && jumpTriesRef.current < 8) { jumpTriesRef.current += 1; loadMore(); }
+      else if (!hasMore || jumpTriesRef.current >= 8) setJumpTarget(null);
+      return;
+    }
+    isPrependingRef.current = false;
+    scroller.scrollTo({ top: Math.max(0, el.offsetTop - scroller.clientHeight / 2 + el.clientHeight / 2), behavior: "smooth" });
+    setFlashId(jumpTarget);
+    setJumpTarget(null);
+    const t = setTimeout(() => setFlashId(null), 1800);
+    return () => clearTimeout(t);
+  }, [jumpTarget, messages, hasMore, loadingMore, loadMore]);
+
   // Envoie un message (texte, vocal ou media) via l'API chat, puis recharge la conversation.
   // Renvoie true si l'enregistrement a réussi (utile pour nettoyer un média orphelin).
   async function postMessage(payload: { text?: string; audioUrl?: string; audioPath?: string; isVoice?: boolean; isUrgent?: boolean; attachmentUrl?: string; attachmentType?: string; attachmentPath?: string }): Promise<boolean> {
@@ -667,7 +755,7 @@ function MessagesTab({ initialClientId, focusMsgId, onConversationClosed, onConv
       const res = await fetch("/api/chat", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ clientId: convClientId, ...payload }),
+        body: JSON.stringify({ clientId: convClientId, ...payload, replyTo: replyRef.current?.id }),
       });
       if (!res.ok) {
         setNotifyDebug("Envoi impossible (HTTP " + res.status + ")");
@@ -682,6 +770,7 @@ function MessagesTab({ initialClientId, focusMsgId, onConversationClosed, onConv
           body: JSON.stringify({ clientId: me.id, messageText: payload.text ?? "", clientName: me.name || me.email }),
         }).catch(() => {});
       }
+      setReplyingTo(null);
       await loadMessages(convClientId);
       if (isElevated) loadConversations();
       return true;
@@ -927,6 +1016,11 @@ function MessagesTab({ initialClientId, focusMsgId, onConversationClosed, onConv
     // ── Message normal ────────────────────────────────────────────
     const isMe = msg.senderId === me?.id;
     const isEditing = editingMsgId === msg.id;
+    const loadedQuoted = msg.replyToId ? messages.find(x => x.id === msg.replyToId) : undefined;
+    const quote: ChatReplyPreview | null = msg.replyToId
+      ? msg.reply ?? (loadedQuoted ? previewOf(loadedQuoted) : { id: msg.replyToId, text: "", kind: "text" })
+      : null;
+    const isMedia = !!(msg.isVoice || msg.attachmentUrl);
     const prev = messages[i - 1];
     const startsGroup =
       !prev || prev.type === "broadcast" || prev.type === "plan_update" || prev.senderId !== msg.senderId;
@@ -936,7 +1030,7 @@ function MessagesTab({ initialClientId, focusMsgId, onConversationClosed, onConv
         data-msg-id={msg.id}
         className={`flex items-end gap-2 ${isMe ? "flex-row-reverse" : ""} ${startsGroup ? "mt-2" : ""} ${
           highlightId === msg.id ? "rounded-2xl ring-2 ring-danger ring-offset-2 ring-offset-surface" : ""
-        }`}
+        } ${flashId === msg.id ? "rounded-2xl ring-2 ring-accent ring-offset-2 ring-offset-surface transition" : ""}`}
       >
         <div
           className={`group flex max-w-[78%] flex-col ${isMe ? "items-end" : "items-start"}`}
@@ -961,6 +1055,11 @@ function MessagesTab({ initialClientId, focusMsgId, onConversationClosed, onConv
           )}
           {msg.isUrgent && (
             <p className="mb-1 text-[11px] font-bold text-danger">URGENCE</p>
+          )}
+          {quote && (
+            <div className="mb-1.5 min-w-[160px]">
+              <ReplyQuote q={quote} meId={me?.id} tone={isMe && !msg.isUrgent ? "mine" : "theirs"} onClick={quote.missing ? undefined : () => jumpTo(quote.id)} />
+            </div>
           )}
           {/* Mode édition inline */}
           {isEditing && !msg.isVoice ? (
@@ -1029,6 +1128,10 @@ function MessagesTab({ initialClientId, focusMsgId, onConversationClosed, onConv
               onClick={() => setReactingId(id => (id === msg.id ? null : msg.id))}
               className="text-[11px] text-dim hover:text-ink"
             >Réagir</button>
+            <button
+              onClick={() => startReply(msg)}
+              className="text-[11px] font-bold text-accent"
+            >Répondre</button>
           </div>
         )}
 
@@ -1047,6 +1150,23 @@ function MessagesTab({ initialClientId, focusMsgId, onConversationClosed, onConv
           </div>
         )}
         </div>
+        {isMedia && !isEditing && (
+          <button
+            type="button"
+            onClick={() => {
+              const open = !(actionsId === msg.id && reactingId === msg.id);
+              setActionsId(open ? msg.id : null);
+              setReactingId(open ? msg.id : null);
+            }}
+            aria-label={`Réagir ou répondre à ${msg.attachmentType === "video" ? "cette vidéo" : msg.attachmentType === "image" ? "cette photo" : "ce vocal"}`}
+            aria-expanded={actionsId === msg.id && reactingId === msg.id}
+            className={`mb-5 grid h-9 w-9 shrink-0 place-items-center self-center rounded-full border transition active:scale-90 ${
+              actionsId === msg.id && reactingId === msg.id ? "border-accent bg-accent/15 text-accent" : "border-line bg-surface2 text-dim"
+            }`}
+          >
+            <svg aria-hidden width="19" height="19" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="9" /><path d="M8.5 14.5a4.5 4.5 0 0 0 7 0M9 9.5h.01M15 9.5h.01" /></svg>
+          </button>
+        )}
       </div>
     );
   };
@@ -1138,6 +1258,21 @@ function MessagesTab({ initialClientId, focusMsgId, onConversationClosed, onConv
           <p className="px-2 pb-1.5 text-xs font-bold text-danger">
             Message urgent : {isElevated ? "ton sportif reçoit une alerte." : "ton coach reçoit une alerte par mail."}
           </p>
+        )}
+        {replyingTo && (
+          <div className="mb-2 flex items-center gap-1.5">
+            <div className="min-w-0 flex-1">
+              <ReplyQuote q={previewOf(replyingTo)} meId={me?.id} tone="composer" onClick={() => jumpTo(replyingTo.id)} />
+            </div>
+            <button
+              type="button"
+              onClick={() => setReplyingTo(null)}
+              aria-label="Annuler la réponse"
+              className="grid h-9 w-9 shrink-0 place-items-center rounded-full text-dim"
+            >
+              <svg aria-hidden width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round"><path d="M6 6l12 12M18 6L6 18" /></svg>
+            </button>
+          </div>
         )}
         {emojiOpen && !recording && (
           <div role="group" aria-label="Emojis" className="mb-2 grid grid-cols-8 gap-0.5 rounded-2xl bg-surface2 p-1.5">
